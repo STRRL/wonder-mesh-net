@@ -4,7 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-wonder-mesh-net is a Go-based mesh networking project that provides L3 virtual networking with NAT traversal using pure socket APIs (no TUN device permissions required).
+Wonder Mesh Net is a **networking layer** that connects homelab machines (behind NAT, dynamic IPs, firewalls) to the internet, making them accessible to PaaS platforms and orchestration tools.
+
+**Core Purpose**: Make homelab/mini-PC infrastructure reachable as if they were cloud VMs, enabling deployment platforms to use user-owned hardware.
+
+**We solve one problem well: network connectivity.** App management is left to:
+- Kubernetes (k3s, k8s)
+- PaaS platforms: Zeabur, Railway, Fly.io, Supabase
+- Self-hosted PaaS: Coolify, Dokploy
 
 **Primary Technology Choice**: Tailscale/Headscale + tsnet for Go-native socket API with WireGuard-based L3 overlay network and DERP relay fallback.
 

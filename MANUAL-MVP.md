@@ -2,14 +2,59 @@
 
 This guide walks through setting up the MVP mesh network using Lima VMs.
 
-## Architecture
+## What is Wonder Mesh Net?
+
+Wonder Mesh Net is a **networking layer** that connects homelab machines (behind NAT, dynamic IPs, firewalls) to the internet, making them accessible to PaaS platforms and orchestration tools.
+
+**We solve one problem well: network connectivity for homelab infrastructure.**
+
+App management is left to:
+- **Kubernetes** (k3s, k8s)
+- **PaaS platforms**: Zeabur, Railway, Fly.io, Supabase
+- **Self-hosted PaaS**: Coolify, Dokploy
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    PaaS / Orchestration Layer                       │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  Kubernetes / Zeabur / Railway / Fly.io / Coolify / Dokploy │   │
+│  │                  (app management - not our scope)            │   │
+│  └──────────────────────────────┬──────────────────────────────┘   │
+└─────────────────────────────────┼───────────────────────────────────┘
+                                  │ needs network access
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                      WONDER-MESH-NET (this project)                 │
+│                                                                     │
+│   "Make homelab machines reachable as if they were cloud VMs"       │
+│                                                                     │
+│   - NAT traversal (WireGuard + DERP relay fallback)                 │
+│   - Mesh networking (Headscale control plane)                       │
+│   - HTTP gateway for inbound traffic                                │
+│   - No TUN device required (userspace networking / tsnet)           │
+│                                                                     │
+└─────────────────────────────────┬───────────────────────────────────┘
+                                  │ overlay network
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    HOMELAB MACHINES (user-owned)                    │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐            │
+│  │ mini-pc  │  │ mini-pc  │  │   old    │  │   NAS    │   ...      │
+│  │ (ARM64)  │  │  (x86)   │  │  laptop  │  │          │            │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘            │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+## MVP Architecture
+
+This MVP demonstrates the networking layer using Lima VMs:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    CLOUD PROVIDER                           │
+│                    CONTROL PLANE (cloud)                    │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
 │  │  Headscale  │  │   nginx     │  │   deploy-manager    │ │
-│  │  (control)  │  │  (gateway)  │  │ (SOCKS5 + CLI)      │ │
+│  │  (mesh)     │  │  (gateway)  │  │ (userspace network) │ │
 │  └──────┬──────┘  └──────┬──────┘  └──────────┬──────────┘ │
 └─────────┼────────────────┼───────────────────┼─────────────┘
           │                │                    │
@@ -17,10 +62,10 @@ This guide walks through setting up the MVP mesh network using Lima VMs.
           │         │      tailnet (WireGuard)
           │         │
 ┌─────────┼─────────┼────────────────────────────────────────┐
-│         │         │           USER SIDE                    │
+│         │         │           HOMELAB (user side)          │
 │  ┌──────┴─────┐  ┌┴────────────┐  ┌─────────────────────┐ │
 │  │ worker-1   │  │  worker-2   │  │      (more...)      │ │
-│  │ Cockpit    │  │  Cockpit    │  │                     │ │
+│  │            │  │             │  │                     │ │
 │  └────────────┘  └─────────────┘  └─────────────────────┘ │
 └────────────────────────────────────────────────────────────┘
 ```
