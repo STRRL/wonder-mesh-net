@@ -80,20 +80,8 @@ alias tailscale='sudo tailscale --socket=/var/run/tailscale-userspace/tailscaled
 export PATH=$PATH:/usr/local/go/bin
 BASH_EOF
 
-# Install Go for building deploy-cli (detect architecture)
-GO_VERSION="1.22.0"
-ARCH=$(dpkg --print-architecture)
-if [ "$ARCH" = "arm64" ]; then
-    GO_ARCH="arm64"
-else
-    GO_ARCH="amd64"
-fi
-wget -q "https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz"
-sudo tar -C /usr/local -xzf "go${GO_VERSION}.linux-${GO_ARCH}.tar.gz"
-rm "go${GO_VERSION}.linux-${GO_ARCH}.tar.gz"
-export PATH=$PATH:/usr/local/go/bin
-
 echo "=== Deploy Manager setup complete ==="
 echo "SOCKS5 proxy listening on localhost:1080"
+echo "Deploy server will be installed separately"
 sudo tailscale --socket=/var/run/tailscale-userspace/tailscaled.sock status
 sudo tailscale --socket=/var/run/tailscale-userspace/tailscaled.sock ip -4

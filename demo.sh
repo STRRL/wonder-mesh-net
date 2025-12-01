@@ -50,7 +50,7 @@ echo ""
 echo "This script will guide you through setting up the MVP using Lima VMs:"
 echo ""
 echo "  Phase 1: Bootstrap all VMs"
-echo "    1. Check prerequisites (Lima)"
+echo "    1. Check prerequisites (Lima, Go)"
 echo "    2. Create shared directory for keys"
 echo "    3. Start all 5 VMs (base OS only)"
 echo ""
@@ -59,7 +59,8 @@ echo "    4. Setup network-coordinator (Headscale)"
 echo "    5. Setup traffic-gateway (nginx + Tailscale)"
 echo "    6. Setup deploy-manager (tailscaled userspace + SOCKS)"
 echo "    7. Setup worker nodes (Tailscale + Cockpit)"
-echo "    8. Update nginx config with worker IPs"
+echo "    8. Build and install deploy-server"
+echo "    9. Update nginx config with worker IPs"
 echo ""
 
 wait_for_enter
@@ -164,7 +165,30 @@ sleep 3
 log_info "Headscale node list:"
 limactl shell network-coordinator -- sudo headscale nodes list
 
-log_step "8" "Update nginx Config with Worker IPs"
+log_step "8" "Build and Install Deploy Server"
+
+wait_for_enter
+
+ARCH=$(uname -m)
+if [ "$ARCH" = "arm64" ]; then
+    GOARCH="arm64"
+else
+    GOARCH="amd64"
+fi
+
+log_info "Building deploy-server for linux/$GOARCH..."
+cd "${SCRIPT_DIR}"
+GOOS=linux GOARCH=$GOARCH go build -o /tmp/deploy-server ./cmd/deploy-server/
+
+log_info "Copying deploy-server to deploy-manager..."
+limactl copy /tmp/deploy-server deploy-manager:/tmp/deploy-server
+
+log_info "Installing deploy-server on deploy-manager..."
+limactl shell deploy-manager < "${SCRIPT_DIR}/scripts/install-deploy-server.sh"
+
+log_success "Deploy server installed and running on port 8082"
+
+log_step "9" "Update nginx Config with Worker IPs"
 
 wait_for_enter
 
@@ -176,9 +200,10 @@ log_success "nginx config updated"
 # Get IPs for summary
 WORKER1_IP=$(limactl shell worker-node-1 -- tailscale ip -4 2>/dev/null | tr -d '\r\n')
 WORKER2_IP=$(limactl shell worker-node-2 -- tailscale ip -4 2>/dev/null | tr -d '\r\n')
+DEPLOY_MANAGER_IP=$(limactl shell deploy-manager -- sudo tailscale --socket=/var/run/tailscale-userspace/tailscaled.sock ip -4 2>/dev/null | tr -d '\r\n')
 
 # Final summary
-log_step "9" "Demo Complete!"
+log_step "10" "Demo Complete!"
 echo ""
 log_success "All components are set up and running!"
 echo ""
@@ -192,9 +217,16 @@ echo ""
 echo "Headscale (control plane):"
 echo "  http://localhost:8080/health"
 echo ""
+echo "Deploy Server API (execute SSH commands on workers):"
+echo "  Health check: limactl shell deploy-manager -- curl -s http://localhost:8082/health"
+echo "  Execute command:"
+echo "    limactl shell deploy-manager -- curl -s -X POST http://localhost:8082/exec \\"
+echo "      -H 'Content-Type: application/json' \\"
+echo "      -d '{\"host\":\"$WORKER1_IP\",\"user\":\"$(whoami)\",\"password\":\"$(whoami)\",\"command\":\"hostname\"}'"
+echo ""
 echo "Tailnet IPs:"
 echo "  traffic-gateway: 100.64.0.1"
-echo "  deploy-manager:  100.64.0.2"
+echo "  deploy-manager:  $DEPLOY_MANAGER_IP"
 echo "  worker-node-1:   $WORKER1_IP"
 echo "  worker-node-2:   $WORKER2_IP"
 echo ""
