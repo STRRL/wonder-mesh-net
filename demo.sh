@@ -36,12 +36,6 @@ log_step() {
     echo ""
 }
 
-wait_for_enter() {
-    echo ""
-    echo -e "${YELLOW}Press Enter to continue...${NC}"
-    read -r
-}
-
 echo ""
 echo -e "${BOLD}================================================${NC}"
 echo -e "${BOLD}    Wonder Mesh Net - MVP Demo Script (Lima)${NC}"
@@ -62,8 +56,6 @@ echo "    7. Setup worker nodes (Tailscale + Cockpit)"
 echo "    8. Build and install deploy-server"
 echo "    9. Update nginx config with worker IPs"
 echo ""
-
-wait_for_enter
 
 # ============================================================================
 # PHASE 1: Bootstrap all VMs
@@ -93,8 +85,6 @@ log_step "3" "Bootstrap All VMs"
 echo "Starting all 5 VMs with base Ubuntu OS..."
 echo ""
 
-wait_for_enter
-
 log_info "Starting network-coordinator VM..."
 limactl start --name=network-coordinator "${SCRIPT_DIR}/lima/network-coordinator-vm.yaml" --tty=false || true
 
@@ -122,8 +112,6 @@ log_success "All VMs bootstrapped!"
 
 log_step "4" "Setup Network Coordinator (Headscale)"
 
-wait_for_enter
-
 log_info "Running setup script on network-coordinator..."
 limactl shell network-coordinator < "${SCRIPT_DIR}/scripts/setup-network-coordinator.sh"
 
@@ -133,8 +121,6 @@ ls -la /tmp/lima/keys/
 
 log_step "5" "Setup Traffic Gateway (nginx + Tailscale)"
 
-wait_for_enter
-
 log_info "Running setup script on traffic-gateway..."
 limactl shell traffic-gateway < "${SCRIPT_DIR}/scripts/setup-traffic-gateway.sh"
 
@@ -142,16 +128,12 @@ log_success "Traffic Gateway setup complete"
 
 log_step "6" "Setup Deploy Manager (tailscaled userspace + SOCKS)"
 
-wait_for_enter
-
 log_info "Running setup script on deploy-manager..."
 limactl shell deploy-manager < "${SCRIPT_DIR}/scripts/setup-deploy-manager.sh"
 
 log_success "Deploy Manager setup complete"
 
 log_step "7" "Setup Worker Nodes (Tailscale + Cockpit)"
-
-wait_for_enter
 
 log_info "Running setup script on worker-node-1..."
 limactl shell worker-node-1 < "${SCRIPT_DIR}/scripts/setup-worker-node.sh"
@@ -166,8 +148,6 @@ log_info "Headscale node list:"
 limactl shell network-coordinator -- sudo headscale nodes list
 
 log_step "8" "Build and Install Deploy Server"
-
-wait_for_enter
 
 ARCH=$(uname -m)
 if [ "$ARCH" = "arm64" ]; then
@@ -189,8 +169,6 @@ limactl shell deploy-manager < "${SCRIPT_DIR}/scripts/install-deploy-server.sh"
 log_success "Deploy server installed and running on port 8082"
 
 log_step "9" "Update nginx Config with Worker IPs"
-
-wait_for_enter
 
 log_info "Updating traffic gateway nginx config..."
 limactl shell traffic-gateway -- sudo /usr/local/bin/update-gateway-config.sh
@@ -217,8 +195,9 @@ echo ""
 echo "Headscale (control plane):"
 echo "  http://localhost:8080/health"
 echo ""
-echo "Deploy Server API (execute SSH commands on workers):"
-echo "  Health check: limactl shell deploy-manager -- curl -s http://localhost:8082/health"
+echo "Deploy Server API:"
+echo "  List nodes:    limactl shell deploy-manager -- curl -s http://localhost:8082/nodes"
+echo "  Health check:  limactl shell deploy-manager -- curl -s http://localhost:8082/health"
 echo "  Execute command:"
 echo "    limactl shell deploy-manager -- curl -s -X POST http://localhost:8082/exec \\"
 echo "      -H 'Content-Type: application/json' \\"

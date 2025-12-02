@@ -5,29 +5,29 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
-	"strings"
+	"os/exec"
 	"time"
 
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/net/proxy"
 )
 
 const (
-	defaultListenAddr = ":8082"
-	defaultSOCKSAddr  = "localhost:1080"
-	defaultSSHPort    = 22
-	defaultTimeout    = 60 * time.Second
+	defaultListenAddr      = ":8082"
+	defaultTailscaleSocket = "/var/run/tailscale-userspace/tailscaled.sock"
+	defaultSSHPort         = 22
+	defaultTimeout         = 60 * time.Second
 )
 
 type Config struct {
-	ListenAddr string
-	SOCKSAddr  string
-	SSHPort    int
-	Timeout    time.Duration
+	ListenAddr      string
+	TailscaleSocket string
+	SSHPort         int
+	Timeout         time.Duration
 }
 
 type ExecRequest struct {
@@ -44,26 +44,54 @@ type ExecResponse struct {
 	Error    string `json:"error,omitempty"`
 }
 
-var config Config
-
-type dialerFunc func(network, addr string) (net.Conn, error)
-
-func (d dialerFunc) Dial(network, addr string) (net.Conn, error) {
-	return d(network, addr)
+type Node struct {
+	Hostname  string   `json:"hostname"`
+	IPs       []string `json:"ips"`
+	Online    bool     `json:"online"`
+	ExitNode  bool     `json:"exit_node"`
+	OS        string   `json:"os,omitempty"`
+	TailnetIP string   `json:"tailnet_ip,omitempty"`
 }
+
+type NodesResponse struct {
+	Nodes []Node `json:"nodes"`
+	Self  *Node  `json:"self,omitempty"`
+	Error string `json:"error,omitempty"`
+}
+
+type TailscaleStatus struct {
+	Self  TailscalePeer            `json:"Self"`
+	Peer  map[string]TailscalePeer `json:"Peer"`
+	Peers []TailscalePeer          `json:"-"`
+}
+
+type TailscalePeer struct {
+	ID             string   `json:"ID"`
+	PublicKey      string   `json:"PublicKey"`
+	HostName       string   `json:"HostName"`
+	DNSName        string   `json:"DNSName"`
+	OS             string   `json:"OS"`
+	TailscaleIPs   []string `json:"TailscaleIPs"`
+	Online         bool     `json:"Online"`
+	ExitNode       bool     `json:"ExitNode"`
+	ExitNodeOption bool     `json:"ExitNodeOption"`
+}
+
+var config Config
 
 func main() {
 	flag.StringVar(&config.ListenAddr, "listen", defaultListenAddr, "HTTP server listen address")
-	flag.StringVar(&config.SOCKSAddr, "socks", defaultSOCKSAddr, "SOCKS5 proxy address")
+	flag.StringVar(&config.TailscaleSocket, "tailscale-socket", defaultTailscaleSocket, "Tailscale socket path")
 	flag.IntVar(&config.SSHPort, "ssh-port", defaultSSHPort, "Default SSH port")
 	flag.DurationVar(&config.Timeout, "timeout", defaultTimeout, "SSH command timeout")
 	flag.Parse()
 
 	http.HandleFunc("/health", healthHandler)
+	http.HandleFunc("/nodes", nodesHandler)
 	http.HandleFunc("/exec", execHandler)
 
 	log.Printf("Deploy Server starting on %s", config.ListenAddr)
-	log.Printf("SOCKS5 proxy: %s", config.SOCKSAddr)
+	log.Printf("Tailscale socket: %s", config.TailscaleSocket)
 	log.Printf("Default SSH port: %d", config.SSHPort)
 
 	if err := http.ListenAndServe(config.ListenAddr, nil); err != nil {
@@ -75,6 +103,133 @@ func main() {
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func nodesHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	status, err := getTailscaleStatus()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(NodesResponse{
+			Error: fmt.Sprintf("Failed to get tailscale status: %v", err),
+		})
+		return
+	}
+
+	resp := NodesResponse{
+		Nodes: make([]Node, 0, len(status.Peer)),
+	}
+
+	selfNode := peerToNode(status.Self)
+	resp.Self = &selfNode
+
+	for _, peer := range status.Peer {
+		node := peerToNode(peer)
+		resp.Nodes = append(resp.Nodes, node)
+	}
+
+	json.NewEncoder(w).Encode(resp)
+}
+
+func peerToNode(peer TailscalePeer) Node {
+	node := Node{
+		Hostname: peer.HostName,
+		IPs:      peer.TailscaleIPs,
+		Online:   peer.Online,
+		ExitNode: peer.ExitNode,
+		OS:       peer.OS,
+	}
+	if len(peer.TailscaleIPs) > 0 {
+		node.TailnetIP = peer.TailscaleIPs[0]
+	}
+	return node
+}
+
+func getTailscaleStatus() (*TailscaleStatus, error) {
+	cmd := exec.Command("tailscale", "--socket", config.TailscaleSocket, "status", "--json")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("tailscale status failed: %w", err)
+	}
+
+	var status TailscaleStatus
+	if err := json.Unmarshal(output, &status); err != nil {
+		return nil, fmt.Errorf("failed to parse tailscale status: %w", err)
+	}
+
+	return &status, nil
+}
+
+func dialViaTailscale(addr string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid address: %w", err)
+	}
+
+	cmd := exec.Command("tailscale", "--socket", config.TailscaleSocket, "nc", host, port)
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get stdin pipe: %w", err)
+	}
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		stdin.Close()
+		return nil, fmt.Errorf("failed to get stdout pipe: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		stdin.Close()
+		stdout.Close()
+		return nil, fmt.Errorf("failed to start tailscale nc: %w", err)
+	}
+
+	return &pipeConn{
+		cmd:    cmd,
+		reader: stdout,
+		writer: stdin,
+	}, nil
+}
+
+type pipeConn struct {
+	cmd    *exec.Cmd
+	reader io.Reader
+	writer io.WriteCloser
+}
+
+func (c *pipeConn) Read(b []byte) (int, error) {
+	return c.reader.Read(b)
+}
+
+func (c *pipeConn) Write(b []byte) (int, error) {
+	return c.writer.Write(b)
+}
+
+func (c *pipeConn) Close() error {
+	c.writer.Close()
+	return c.cmd.Wait()
+}
+
+func (c *pipeConn) LocalAddr() net.Addr {
+	return &net.TCPAddr{}
+}
+
+func (c *pipeConn) RemoteAddr() net.Addr {
+	return &net.TCPAddr{}
+}
+
+func (c *pipeConn) SetDeadline(t time.Time) error {
+	return nil
+}
+
+func (c *pipeConn) SetReadDeadline(t time.Time) error {
+	return nil
+}
+
+func (c *pipeConn) SetWriteDeadline(t time.Time) error {
+	return nil
 }
 
 func execHandler(w http.ResponseWriter, r *http.Request) {
@@ -126,29 +281,10 @@ func sendError(w http.ResponseWriter, status int, message string) {
 func executeSSHCommand(req ExecRequest) ExecResponse {
 	resp := ExecResponse{ExitCode: -1}
 
-	var dialer proxy.Dialer
-	var err error
-
-	if strings.HasPrefix(config.SOCKSAddr, "/") {
-		unixDialer := &net.Dialer{}
-		baseDialer := proxy.FromEnvironmentUsing(
-			dialerFunc(func(network, addr string) (net.Conn, error) {
-				return unixDialer.Dial("unix", config.SOCKSAddr)
-			}),
-		)
-		dialer, err = proxy.SOCKS5("tcp", "", nil, baseDialer)
-	} else {
-		dialer, err = proxy.SOCKS5("tcp", config.SOCKSAddr, nil, proxy.Direct)
-	}
-	if err != nil {
-		resp.Error = fmt.Sprintf("Failed to create SOCKS5 dialer: %v", err)
-		return resp
-	}
-
 	addr := fmt.Sprintf("%s:%d", req.Host, config.SSHPort)
-	conn, err := dialer.Dial("tcp", addr)
+	conn, err := dialViaTailscale(addr)
 	if err != nil {
-		resp.Error = fmt.Sprintf("Failed to dial through SOCKS5: %v", err)
+		resp.Error = fmt.Sprintf("Failed to dial through tailscale: %v", err)
 		return resp
 	}
 	defer conn.Close()

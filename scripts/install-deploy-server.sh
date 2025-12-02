@@ -22,7 +22,7 @@ After=network.target tailscaled-userspace.service
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/deploy-server -listen :8082 -socks localhost:1080
+ExecStart=/usr/local/bin/deploy-server -listen :8082 -tailscale-socket /var/run/tailscale-userspace/tailscaled.sock
 Restart=on-failure
 RestartSec=5
 
@@ -45,7 +45,14 @@ echo ""
 echo "=== Deploy Server installed ==="
 echo "HTTP API listening on port 8082"
 echo ""
-echo "Usage example:"
+echo "Endpoints:"
+echo "  GET  /health  - Health check"
+echo "  GET  /nodes   - List all nodes in the mesh network"
+echo "  POST /exec    - Execute SSH command on a node"
+echo ""
+echo "Usage examples:"
+echo "  curl http://localhost:8082/nodes"
+echo ""
 echo '  curl -X POST http://localhost:8082/exec \'
 echo '    -H "Content-Type: application/json" \'
 echo '    -d '"'"'{"host":"100.64.0.3","user":"strrl","password":"strrl","command":"hostname"}'"'"
