@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebSearch",
+      "mcp__context7__resolve-library-id",
+      "WebFetch(domain:api.github.com)",
+      "mcp__context7__get-library-docs",
+      "WebFetch(domain:headscale.net)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:tailscale.com)",
+      "Bash(cat:*)",
+      "Bash(git clone:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
