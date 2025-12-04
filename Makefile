@@ -1,4 +1,4 @@
-.PHONY: help build clean check test fmt lint vet tidy
+.PHONY: help build build-all clean test
 
 # Build variables
 BINARY_NAME := wonder
@@ -35,29 +35,5 @@ clean: ## Remove build artifacts
 	rm -rf $(BUILD_DIR)
 	rm -f coverage.out
 
-check: fmt vet lint test ## Run all checks (fmt, vet, lint, test)
-
 test: ## Run tests
 	$(GO) test -race -coverprofile=coverage.out ./...
-
-fmt: ## Format code
-	$(GO) fmt ./...
-
-vet: ## Run go vet
-	$(GO) vet ./...
-
-lint: ## Run golangci-lint (requires golangci-lint installed)
-	@if command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run ./...; \
-	else \
-		echo "golangci-lint not installed, skipping..."; \
-	fi
-
-tidy: ## Tidy go modules
-	$(GO) mod tidy
-
-run-coordinator: build ## Run coordinator server (requires HEADSCALE_API_KEY)
-	$(BUILD_DIR)/$(BINARY_NAME) coordinator
-
-install: build ## Install wonder to GOPATH/bin
-	cp $(BUILD_DIR)/$(BINARY_NAME) $(shell $(GO) env GOPATH)/bin/

@@ -52,11 +52,11 @@ func (tm *TenantManager) GetOrCreateTenant(ctx context.Context, issuer, subject 
 }
 
 // CreateAuthKey creates a pre-auth key for a tenant
-func (tm *TenantManager) CreateAuthKey(ctx context.Context, userID uint64, ttl time.Duration, reusable bool) (*PreAuthKey, error) {
+func (tm *TenantManager) CreateAuthKey(ctx context.Context, username string, ttl time.Duration, reusable bool) (*PreAuthKey, error) {
 	expiration := time.Now().Add(ttl)
 
 	key, err := tm.client.CreatePreAuthKey(ctx, &CreatePreAuthKeyRequest{
-		UserID:     userID,
+		User:       username,
 		Reusable:   reusable,
 		Ephemeral:  false,
 		Expiration: expiration,

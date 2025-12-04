@@ -30,7 +30,7 @@ func NewClient(baseURL, apiKey string) *Client {
 
 // User represents a Headscale user (tenant)
 type User struct {
-	ID            uint64    `json:"id,omitempty"`
+	ID            uint64    `json:"id,omitempty,string"`
 	Name          string    `json:"name"`
 	DisplayName   string    `json:"displayName,omitempty"`
 	Email         string    `json:"email,omitempty"`
@@ -42,9 +42,9 @@ type User struct {
 
 // PreAuthKey represents a pre-authentication key
 type PreAuthKey struct {
-	ID         uint64    `json:"id,omitempty"`
+	ID         uint64    `json:"id,omitempty,string"`
 	Key        string    `json:"key,omitempty"`
-	User       *User     `json:"user,omitempty"`
+	User       string    `json:"user,omitempty"`
 	Reusable   bool      `json:"reusable"`
 	Ephemeral  bool      `json:"ephemeral"`
 	Used       bool      `json:"used"`
@@ -55,7 +55,7 @@ type PreAuthKey struct {
 
 // Node represents a Headscale node
 type Node struct {
-	ID        uint64    `json:"id"`
+	ID        uint64    `json:"id,string"`
 	Name      string    `json:"name"`
 	User      *User     `json:"user,omitempty"`
 	IPAddress []string  `json:"ipAddresses,omitempty"`
@@ -89,7 +89,12 @@ func (c *Client) do(ctx context.Context, method, path string, body interface{}) 
 
 // Health checks if Headscale is healthy
 func (c *Client) Health(ctx context.Context) error {
-	resp, err := c.do(ctx, http.MethodGet, "/api/v1/health", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/health", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -198,7 +203,7 @@ func (c *Client) DeleteUser(ctx context.Context, id uint64) error {
 
 // CreatePreAuthKeyRequest is the request for creating a pre-auth key
 type CreatePreAuthKeyRequest struct {
-	UserID     uint64    `json:"user"`
+	User       string    `json:"user"`
 	Reusable   bool      `json:"reusable"`
 	Ephemeral  bool      `json:"ephemeral"`
 	Expiration time.Time `json:"expiration,omitempty"`

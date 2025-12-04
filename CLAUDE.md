@@ -20,21 +20,26 @@ Wonder Mesh Net is a **networking layer** that connects homelab machines (behind
 ## Build Commands
 
 ```bash
-# Build the project
-go build ./...
+# Build the wonder binary (outputs to bin/)
+make build
+
+# Build for all platforms (linux/darwin, amd64/arm64)
+make build-all
+
+# Run all checks (fmt, vet, lint, test)
+make check
 
 # Run tests
-go test ./...
+make test
 
-# Run a single test
-go test -run TestName ./path/to/package
+# Clean build artifacts
+make clean
 
-# Run tests with verbose output
-go test -v ./...
-
-# Check for issues
-go vet ./...
+# Show all available make targets
+make help
 ```
+
+Build artifacts are saved to `bin/` directory (gitignored).
 
 ## Code Style
 

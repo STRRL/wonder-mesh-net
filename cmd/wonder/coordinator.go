@@ -29,12 +29,14 @@ var coordinatorCmd = &cobra.Command{
 
 func init() {
 	coordinatorCmd.Flags().String("listen", ":8080", "Listen address")
-	coordinatorCmd.Flags().String("headscale-url", "http://localhost:8080", "Headscale API URL")
+	coordinatorCmd.Flags().String("headscale-url", "http://localhost:8080", "Headscale API URL (internal)")
+	coordinatorCmd.Flags().String("headscale-public-url", "", "Headscale URL for workers (defaults to headscale-url)")
 	coordinatorCmd.Flags().String("headscale-api-key", "", "Headscale API key")
 	coordinatorCmd.Flags().String("public-url", "http://localhost:8080", "Public URL for callbacks")
 
 	_ = viper.BindPFlag("coordinator.listen", coordinatorCmd.Flags().Lookup("listen"))
 	_ = viper.BindPFlag("coordinator.headscale_url", coordinatorCmd.Flags().Lookup("headscale-url"))
+	_ = viper.BindPFlag("coordinator.headscale_public_url", coordinatorCmd.Flags().Lookup("headscale-public-url"))
 	_ = viper.BindPFlag("coordinator.headscale_api_key", coordinatorCmd.Flags().Lookup("headscale-api-key"))
 	_ = viper.BindPFlag("coordinator.public_url", coordinatorCmd.Flags().Lookup("public-url"))
 
@@ -47,12 +49,13 @@ func init() {
 }
 
 type coordinatorConfig struct {
-	ListenAddr      string
-	HeadscaleURL    string
-	HeadscaleAPIKey string
-	PublicURL       string
-	JWTSecret       string
-	OIDCProviders   []oidc.ProviderConfig
+	ListenAddr         string
+	HeadscaleURL       string
+	HeadscalePublicURL string
+	HeadscaleAPIKey    string
+	PublicURL          string
+	JWTSecret          string
+	OIDCProviders      []oidc.ProviderConfig
 }
 
 type coordinatorServer struct {
@@ -83,10 +86,14 @@ func newCoordinatorServer(config *coordinatorConfig) (*coordinatorServer, error)
 		}
 	}
 
+	headscaleURLForToken := config.HeadscaleURL
+	if config.HeadscalePublicURL != "" {
+		headscaleURLForToken = config.HeadscalePublicURL
+	}
 	tokenGenerator := jointoken.NewGenerator(
 		config.JWTSecret,
 		config.PublicURL,
-		config.HeadscaleURL,
+		headscaleURLForToken,
 	)
 
 	return &coordinatorServer{
@@ -130,13 +137,12 @@ func (s *coordinatorServer) handleLogin(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	cliRedirect := r.URL.Query().Get("redirect_uri")
-	if cliRedirect == "" {
-		http.Error(w, "redirect_uri parameter required", http.StatusBadRequest)
-		return
+	redirectURI := r.URL.Query().Get("redirect_uri")
+	if redirectURI == "" {
+		redirectURI = s.config.PublicURL + "/auth/complete"
 	}
 
-	authState, err := s.oidcRegistry.CreateAuthState(cliRedirect)
+	authState, err := s.oidcRegistry.CreateAuthState(redirectURI)
 	if err != nil {
 		http.Error(w, "failed to create auth state", http.StatusInternalServerError)
 		return
@@ -197,6 +203,22 @@ func (s *coordinatorServer) handleCallback(w http.ResponseWriter, r *http.Reques
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
+func (s *coordinatorServer) handleComplete(w http.ResponseWriter, r *http.Request) {
+	session := r.URL.Query().Get("session")
+	user := r.URL.Query().Get("user")
+
+	if session == "" {
+		http.Error(w, "missing session", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"session": session,
+		"user":    user,
+	})
+}
+
 func (s *coordinatorServer) handleCreateAuthKey(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -237,7 +259,7 @@ func (s *coordinatorServer) handleCreateAuthKey(w http.ResponseWriter, r *http.R
 		ttl = parsed
 	}
 
-	key, err := s.tenantManager.CreateAuthKey(ctx, user.ID, ttl, req.Reusable)
+	key, err := s.tenantManager.CreateAuthKey(ctx, user.Name, ttl, req.Reusable)
 	if err != nil {
 		log.Printf("Failed to create auth key: %v", err)
 		http.Error(w, "failed to create auth key", http.StatusInternalServerError)
@@ -363,17 +385,22 @@ func (s *coordinatorServer) handleWorkerJoin(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	key, err := s.tenantManager.CreateAuthKey(ctx, user.ID, 24*time.Hour, false)
+	key, err := s.tenantManager.CreateAuthKey(ctx, user.Name, 24*time.Hour, false)
 	if err != nil {
 		log.Printf("Failed to create auth key: %v", err)
 		http.Error(w, "failed to create auth key", http.StatusInternalServerError)
 		return
 	}
 
+	headscaleURL := s.config.HeadscalePublicURL
+	if headscaleURL == "" {
+		headscaleURL = s.config.HeadscaleURL
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"authkey":       key.Key,
-		"headscale_url": s.config.HeadscaleURL,
+		"headscale_url": headscaleURL,
 		"user":          userName,
 	})
 }
@@ -381,6 +408,7 @@ func (s *coordinatorServer) handleWorkerJoin(w http.ResponseWriter, r *http.Requ
 func runCoordinator(cmd *cobra.Command, args []string) {
 	listenAddr := viper.GetString("coordinator.listen")
 	headscaleURL := viper.GetString("coordinator.headscale_url")
+	headscalePublicURL := viper.GetString("coordinator.headscale_public_url")
 	headscaleAPIKey := viper.GetString("coordinator.headscale_api_key")
 	publicURL := viper.GetString("coordinator.public_url")
 
@@ -399,12 +427,13 @@ func runCoordinator(cmd *cobra.Command, args []string) {
 	}
 
 	config := &coordinatorConfig{
-		ListenAddr:      listenAddr,
-		HeadscaleURL:    headscaleURL,
-		HeadscaleAPIKey: headscaleAPIKey,
-		PublicURL:       publicURL,
-		JWTSecret:       jwtSecret,
-		OIDCProviders:   []oidc.ProviderConfig{},
+		ListenAddr:         listenAddr,
+		HeadscaleURL:       headscaleURL,
+		HeadscalePublicURL: headscalePublicURL,
+		HeadscaleAPIKey:    headscaleAPIKey,
+		PublicURL:          publicURL,
+		JWTSecret:          jwtSecret,
+		OIDCProviders:      []oidc.ProviderConfig{},
 	}
 
 	if githubClientID := viper.GetString("coordinator.github_client_id"); githubClientID != "" {
@@ -435,6 +464,7 @@ func runCoordinator(cmd *cobra.Command, args []string) {
 	mux.HandleFunc("/auth/providers", server.handleProviders)
 	mux.HandleFunc("/auth/login", server.handleLogin)
 	mux.HandleFunc("/auth/callback", server.handleCallback)
+	mux.HandleFunc("/auth/complete", server.handleComplete)
 	mux.HandleFunc("/api/v1/authkey", server.handleCreateAuthKey)
 	mux.HandleFunc("/api/v1/nodes", server.handleListNodes)
 	mux.HandleFunc("/api/v1/join-token", server.handleCreateJoinToken)
