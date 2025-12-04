@@ -8,73 +8,312 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
-	"strings"
 	"sync"
 	"time"
+
+	"github.com/coreos/go-oidc/v3/oidc"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/github"
+	googleOAuth "golang.org/x/oauth2/google"
 )
 
-// ProviderConfig is the configuration for an OIDC provider
+// UserInfo represents user information from any auth provider
+type UserInfo struct {
+	Subject       string `json:"sub"`
+	Email         string `json:"email,omitempty"`
+	EmailVerified bool   `json:"email_verified,omitempty"`
+	Name          string `json:"name,omitempty"`
+	Picture       string `json:"picture,omitempty"`
+}
+
+// Provider is the interface for all auth providers
+type Provider interface {
+	Name() string
+	Issuer() string
+	GetAuthURL(redirectURI, state string) string
+	ExchangeCode(ctx context.Context, code, redirectURI string) (*UserInfo, error)
+}
+
+// ProviderConfig is the configuration for a provider
 type ProviderConfig struct {
+	Type         string   `json:"type"`
 	Name         string   `json:"name"`
-	Issuer       string   `json:"issuer"`
+	Issuer       string   `json:"issuer,omitempty"`
 	ClientID     string   `json:"clientId"`
 	ClientSecret string   `json:"clientSecret"`
 	Scopes       []string `json:"scopes,omitempty"`
 }
 
-// Provider represents an OIDC provider
-type Provider struct {
-	config           ProviderConfig
-	authEndpoint     string
-	tokenEndpoint    string
-	userinfoEndpoint string
+// NewProvider creates a provider based on config type
+func NewProvider(ctx context.Context, config ProviderConfig) (Provider, error) {
+	switch config.Type {
+	case "github":
+		return NewGitHubProvider(config)
+	case "google":
+		return NewGoogleProvider(ctx, config)
+	case "oidc":
+		return NewOIDCProvider(ctx, config)
+	default:
+		return nil, fmt.Errorf("unknown provider type: %s", config.Type)
+	}
 }
 
-// WellKnownConfig represents the OIDC discovery document
-type WellKnownConfig struct {
-	Issuer                string   `json:"issuer"`
-	AuthorizationEndpoint string   `json:"authorization_endpoint"`
-	TokenEndpoint         string   `json:"token_endpoint"`
-	UserinfoEndpoint      string   `json:"userinfo_endpoint"`
-	JwksURI               string   `json:"jwks_uri"`
-	ScopesSupported       []string `json:"scopes_supported"`
+// GitHubProvider implements OAuth2 for GitHub
+type GitHubProvider struct {
+	name         string
+	oauth2Config *oauth2.Config
 }
 
-// NewProvider creates a new OIDC provider from config
-func NewProvider(ctx context.Context, config ProviderConfig) (*Provider, error) {
-	wellKnownURL := strings.TrimSuffix(config.Issuer, "/") + "/.well-known/openid-configuration"
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, wellKnownURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+// NewGitHubProvider creates a GitHub OAuth2 provider
+func NewGitHubProvider(config ProviderConfig) (*GitHubProvider, error) {
+	scopes := config.Scopes
+	if scopes == nil {
+		scopes = []string{"read:user", "user:email"}
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	oauth2Config := &oauth2.Config{
+		ClientID:     config.ClientID,
+		ClientSecret: config.ClientSecret,
+		Endpoint:     github.Endpoint,
+		Scopes:       scopes,
+	}
+
+	return &GitHubProvider{
+		name:         config.Name,
+		oauth2Config: oauth2Config,
+	}, nil
+}
+
+func (p *GitHubProvider) Name() string {
+	return p.name
+}
+
+func (p *GitHubProvider) Issuer() string {
+	return "https://github.com"
+}
+
+func (p *GitHubProvider) GetAuthURL(redirectURI, state string) string {
+	p.oauth2Config.RedirectURL = redirectURI
+	return p.oauth2Config.AuthCodeURL(state)
+}
+
+func (p *GitHubProvider) ExchangeCode(ctx context.Context, code, redirectURI string) (*UserInfo, error) {
+	p.oauth2Config.RedirectURL = redirectURI
+
+	token, err := p.oauth2Config.Exchange(ctx, code)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch well-known config: %w", err)
+		return nil, fmt.Errorf("failed to exchange code: %w", err)
+	}
+
+	client := p.oauth2Config.Client(ctx, token)
+	resp, err := client.Get("https://api.github.com/user")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user info: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to fetch well-known config: status %d, body: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("github API error: %s", string(body))
 	}
 
-	var wellKnown WellKnownConfig
-	if err := json.NewDecoder(resp.Body).Decode(&wellKnown); err != nil {
-		return nil, fmt.Errorf("failed to decode well-known config: %w", err)
+	var ghUser struct {
+		ID        int64  `json:"id"`
+		Login     string `json:"login"`
+		Name      string `json:"name"`
+		Email     string `json:"email"`
+		AvatarURL string `json:"avatar_url"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&ghUser); err != nil {
+		return nil, fmt.Errorf("failed to decode user info: %w", err)
 	}
 
-	if config.Scopes == nil {
-		config.Scopes = []string{"openid", "profile", "email"}
+	return &UserInfo{
+		Subject:       fmt.Sprintf("%d", ghUser.ID),
+		Email:         ghUser.Email,
+		EmailVerified: ghUser.Email != "",
+		Name:          ghUser.Name,
+		Picture:       ghUser.AvatarURL,
+	}, nil
+}
+
+// GoogleProvider implements OIDC for Google
+type GoogleProvider struct {
+	name         string
+	oidcProvider *oidc.Provider
+	oauth2Config *oauth2.Config
+	verifier     *oidc.IDTokenVerifier
+}
+
+// NewGoogleProvider creates a Google OIDC provider
+func NewGoogleProvider(ctx context.Context, config ProviderConfig) (*GoogleProvider, error) {
+	provider, err := oidc.NewProvider(ctx, "https://accounts.google.com")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Google OIDC provider: %w", err)
 	}
 
-	return &Provider{
-		config:           config,
-		authEndpoint:     wellKnown.AuthorizationEndpoint,
-		tokenEndpoint:    wellKnown.TokenEndpoint,
-		userinfoEndpoint: wellKnown.UserinfoEndpoint,
+	scopes := config.Scopes
+	if scopes == nil {
+		scopes = []string{oidc.ScopeOpenID, "profile", "email"}
+	}
+
+	oauth2Config := &oauth2.Config{
+		ClientID:     config.ClientID,
+		ClientSecret: config.ClientSecret,
+		Endpoint:     googleOAuth.Endpoint,
+		Scopes:       scopes,
+	}
+
+	verifier := provider.Verifier(&oidc.Config{ClientID: config.ClientID})
+
+	return &GoogleProvider{
+		name:         config.Name,
+		oidcProvider: provider,
+		oauth2Config: oauth2Config,
+		verifier:     verifier,
+	}, nil
+}
+
+func (p *GoogleProvider) Name() string {
+	return p.name
+}
+
+func (p *GoogleProvider) Issuer() string {
+	return "https://accounts.google.com"
+}
+
+func (p *GoogleProvider) GetAuthURL(redirectURI, state string) string {
+	p.oauth2Config.RedirectURL = redirectURI
+	return p.oauth2Config.AuthCodeURL(state)
+}
+
+func (p *GoogleProvider) ExchangeCode(ctx context.Context, code, redirectURI string) (*UserInfo, error) {
+	p.oauth2Config.RedirectURL = redirectURI
+
+	token, err := p.oauth2Config.Exchange(ctx, code)
+	if err != nil {
+		return nil, fmt.Errorf("failed to exchange code: %w", err)
+	}
+
+	rawIDToken, ok := token.Extra("id_token").(string)
+	if !ok {
+		return nil, fmt.Errorf("no id_token in token response")
+	}
+
+	idToken, err := p.verifier.Verify(ctx, rawIDToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify ID token: %w", err)
+	}
+
+	var claims struct {
+		Email         string `json:"email"`
+		EmailVerified bool   `json:"email_verified"`
+		Name          string `json:"name"`
+		Picture       string `json:"picture"`
+	}
+	if err := idToken.Claims(&claims); err != nil {
+		return nil, fmt.Errorf("failed to parse claims: %w", err)
+	}
+
+	return &UserInfo{
+		Subject:       idToken.Subject,
+		Email:         claims.Email,
+		EmailVerified: claims.EmailVerified,
+		Name:          claims.Name,
+		Picture:       claims.Picture,
+	}, nil
+}
+
+// OIDCProvider implements generic OIDC
+type OIDCProvider struct {
+	name         string
+	issuer       string
+	oidcProvider *oidc.Provider
+	oauth2Config *oauth2.Config
+	verifier     *oidc.IDTokenVerifier
+}
+
+// NewOIDCProvider creates a generic OIDC provider
+func NewOIDCProvider(ctx context.Context, config ProviderConfig) (*OIDCProvider, error) {
+	if config.Issuer == "" {
+		return nil, fmt.Errorf("issuer is required for generic OIDC provider")
+	}
+
+	provider, err := oidc.NewProvider(ctx, config.Issuer)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create OIDC provider: %w", err)
+	}
+
+	scopes := config.Scopes
+	if scopes == nil {
+		scopes = []string{oidc.ScopeOpenID, "profile", "email"}
+	}
+
+	oauth2Config := &oauth2.Config{
+		ClientID:     config.ClientID,
+		ClientSecret: config.ClientSecret,
+		Endpoint:     provider.Endpoint(),
+		Scopes:       scopes,
+	}
+
+	verifier := provider.Verifier(&oidc.Config{ClientID: config.ClientID})
+
+	return &OIDCProvider{
+		name:         config.Name,
+		issuer:       config.Issuer,
+		oidcProvider: provider,
+		oauth2Config: oauth2Config,
+		verifier:     verifier,
+	}, nil
+}
+
+func (p *OIDCProvider) Name() string {
+	return p.name
+}
+
+func (p *OIDCProvider) Issuer() string {
+	return p.issuer
+}
+
+func (p *OIDCProvider) GetAuthURL(redirectURI, state string) string {
+	p.oauth2Config.RedirectURL = redirectURI
+	return p.oauth2Config.AuthCodeURL(state)
+}
+
+func (p *OIDCProvider) ExchangeCode(ctx context.Context, code, redirectURI string) (*UserInfo, error) {
+	p.oauth2Config.RedirectURL = redirectURI
+
+	token, err := p.oauth2Config.Exchange(ctx, code)
+	if err != nil {
+		return nil, fmt.Errorf("failed to exchange code: %w", err)
+	}
+
+	rawIDToken, ok := token.Extra("id_token").(string)
+	if !ok {
+		return nil, fmt.Errorf("no id_token in token response")
+	}
+
+	idToken, err := p.verifier.Verify(ctx, rawIDToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify ID token: %w", err)
+	}
+
+	var claims struct {
+		Email         string `json:"email"`
+		EmailVerified bool   `json:"email_verified"`
+		Name          string `json:"name"`
+		Picture       string `json:"picture"`
+	}
+	if err := idToken.Claims(&claims); err != nil {
+		return nil, fmt.Errorf("failed to parse claims: %w", err)
+	}
+
+	return &UserInfo{
+		Subject:       idToken.Subject,
+		Email:         claims.Email,
+		EmailVerified: claims.EmailVerified,
+		Name:          claims.Name,
+		Picture:       claims.Picture,
 	}, nil
 }
 
@@ -95,110 +334,9 @@ func GenerateState() (string, error) {
 	return base64.URLEncoding.EncodeToString(b), nil
 }
 
-// GetAuthURL returns the authorization URL for this provider
-func (p *Provider) GetAuthURL(redirectURI, state string) string {
-	params := url.Values{}
-	params.Set("client_id", p.config.ClientID)
-	params.Set("redirect_uri", redirectURI)
-	params.Set("response_type", "code")
-	params.Set("scope", strings.Join(p.config.Scopes, " "))
-	params.Set("state", state)
-
-	return p.authEndpoint + "?" + params.Encode()
-}
-
-// TokenResponse represents the token response from the OIDC provider
-type TokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	TokenType    string `json:"token_type"`
-	ExpiresIn    int    `json:"expires_in"`
-	RefreshToken string `json:"refresh_token,omitempty"`
-	IDToken      string `json:"id_token,omitempty"`
-}
-
-// ExchangeCode exchanges an authorization code for tokens
-func (p *Provider) ExchangeCode(ctx context.Context, code, redirectURI string) (*TokenResponse, error) {
-	data := url.Values{}
-	data.Set("grant_type", "authorization_code")
-	data.Set("code", code)
-	data.Set("redirect_uri", redirectURI)
-	data.Set("client_id", p.config.ClientID)
-	data.Set("client_secret", p.config.ClientSecret)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.tokenEndpoint, strings.NewReader(data.Encode()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to exchange code: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("token exchange failed: status %d, body: %s", resp.StatusCode, string(body))
-	}
-
-	var tokenResp TokenResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
-		return nil, fmt.Errorf("failed to decode token response: %w", err)
-	}
-
-	return &tokenResp, nil
-}
-
-// UserInfo represents user information from the OIDC provider
-type UserInfo struct {
-	Subject       string `json:"sub"`
-	Email         string `json:"email,omitempty"`
-	EmailVerified bool   `json:"email_verified,omitempty"`
-	Name          string `json:"name,omitempty"`
-	Picture       string `json:"picture,omitempty"`
-}
-
-// GetUserInfo fetches user info using an access token
-func (p *Provider) GetUserInfo(ctx context.Context, accessToken string) (*UserInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.userinfoEndpoint, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch user info: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to fetch user info: status %d, body: %s", resp.StatusCode, string(body))
-	}
-
-	var userInfo UserInfo
-	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
-		return nil, fmt.Errorf("failed to decode user info: %w", err)
-	}
-
-	return &userInfo, nil
-}
-
-// Name returns the provider name
-func (p *Provider) Name() string {
-	return p.config.Name
-}
-
-// Issuer returns the provider issuer
-func (p *Provider) Issuer() string {
-	return p.config.Issuer
-}
-
-// Registry manages multiple OIDC providers
+// Registry manages multiple auth providers
 type Registry struct {
-	providers map[string]*Provider
+	providers map[string]Provider
 	states    map[string]*AuthState
 	mu        sync.RWMutex
 	stateTTL  time.Duration
@@ -207,13 +345,13 @@ type Registry struct {
 // NewRegistry creates a new provider registry
 func NewRegistry() *Registry {
 	return &Registry{
-		providers: make(map[string]*Provider),
+		providers: make(map[string]Provider),
 		states:    make(map[string]*AuthState),
 		stateTTL:  10 * time.Minute,
 	}
 }
 
-// RegisterProvider registers an OIDC provider
+// RegisterProvider registers a provider
 func (r *Registry) RegisterProvider(ctx context.Context, config ProviderConfig) error {
 	provider, err := NewProvider(ctx, config)
 	if err != nil {
@@ -228,7 +366,7 @@ func (r *Registry) RegisterProvider(ctx context.Context, config ProviderConfig) 
 }
 
 // GetProvider gets a provider by name
-func (r *Registry) GetProvider(name string) (*Provider, bool) {
+func (r *Registry) GetProvider(name string) (Provider, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 

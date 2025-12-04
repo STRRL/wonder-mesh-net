@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -14,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
+	"github.com/strrl/wonder-mesh-net/pkg/jointoken"
 	"github.com/strrl/wonder-mesh-net/pkg/oidc"
 )
 
@@ -36,6 +39,9 @@ func init() {
 	_ = viper.BindPFlag("coordinator.public_url", coordinatorCmd.Flags().Lookup("public-url"))
 
 	_ = viper.BindEnv("coordinator.headscale_api_key", "HEADSCALE_API_KEY")
+	_ = viper.BindEnv("coordinator.jwt_secret", "JWT_SECRET")
+	_ = viper.BindEnv("coordinator.github_client_id", "GITHUB_CLIENT_ID")
+	_ = viper.BindEnv("coordinator.github_client_secret", "GITHUB_CLIENT_SECRET")
 	_ = viper.BindEnv("coordinator.google_client_id", "GOOGLE_CLIENT_ID")
 	_ = viper.BindEnv("coordinator.google_client_secret", "GOOGLE_CLIENT_SECRET")
 }
@@ -45,15 +51,17 @@ type coordinatorConfig struct {
 	HeadscaleURL    string
 	HeadscaleAPIKey string
 	PublicURL       string
+	JWTSecret       string
 	OIDCProviders   []oidc.ProviderConfig
 }
 
 type coordinatorServer struct {
-	config        *coordinatorConfig
-	hsClient      *headscale.Client
-	tenantManager *headscale.TenantManager
-	aclManager    *headscale.ACLManager
-	oidcRegistry  *oidc.Registry
+	config         *coordinatorConfig
+	hsClient       *headscale.Client
+	tenantManager  *headscale.TenantManager
+	aclManager     *headscale.ACLManager
+	oidcRegistry   *oidc.Registry
+	tokenGenerator *jointoken.Generator
 }
 
 func newCoordinatorServer(config *coordinatorConfig) (*coordinatorServer, error) {
@@ -75,12 +83,19 @@ func newCoordinatorServer(config *coordinatorConfig) (*coordinatorServer, error)
 		}
 	}
 
+	tokenGenerator := jointoken.NewGenerator(
+		config.JWTSecret,
+		config.PublicURL,
+		config.HeadscaleURL,
+	)
+
 	return &coordinatorServer{
-		config:        config,
-		hsClient:      hsClient,
-		tenantManager: headscale.NewTenantManager(hsClient),
-		aclManager:    headscale.NewACLManager(hsClient),
-		oidcRegistry:  oidcRegistry,
+		config:         config,
+		hsClient:       hsClient,
+		tenantManager:  headscale.NewTenantManager(hsClient),
+		aclManager:     headscale.NewACLManager(hsClient),
+		oidcRegistry:   oidcRegistry,
+		tokenGenerator: tokenGenerator,
 	}, nil
 }
 
@@ -158,17 +173,10 @@ func (s *coordinatorServer) handleCallback(w http.ResponseWriter, r *http.Reques
 	}
 
 	callbackURL := s.config.PublicURL + "/auth/callback?provider=" + providerName
-	tokens, err := provider.ExchangeCode(ctx, code, callbackURL)
+	userInfo, err := provider.ExchangeCode(ctx, code, callbackURL)
 	if err != nil {
 		log.Printf("Failed to exchange code: %v", err)
 		http.Error(w, "failed to exchange code", http.StatusInternalServerError)
-		return
-	}
-
-	userInfo, err := provider.GetUserInfo(ctx, tokens.AccessToken)
-	if err != nil {
-		log.Printf("Failed to get user info: %v", err)
-		http.Error(w, "failed to get user info", http.StatusInternalServerError)
 		return
 	}
 
@@ -273,6 +281,103 @@ func (s *coordinatorServer) handleListNodes(w http.ResponseWriter, r *http.Reque
 	})
 }
 
+func (s *coordinatorServer) handleCreateJoinToken(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx := r.Context()
+
+	session := r.Header.Get("X-Session-Token")
+	if session == "" {
+		http.Error(w, "session token required", http.StatusUnauthorized)
+		return
+	}
+
+	userName := "tenant-" + session[:12]
+	user, err := s.hsClient.GetUser(ctx, userName)
+	if err != nil || user == nil {
+		http.Error(w, "invalid session", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		TTL string `json:"ttl"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		req.TTL = "1h"
+	}
+
+	ttl := time.Hour
+	if req.TTL != "" {
+		parsed, err := time.ParseDuration(req.TTL)
+		if err != nil {
+			http.Error(w, "invalid TTL format", http.StatusBadRequest)
+			return
+		}
+		ttl = parsed
+	}
+
+	token, err := s.tokenGenerator.Generate(session, userName, ttl)
+	if err != nil {
+		log.Printf("Failed to generate join token: %v", err)
+		http.Error(w, "failed to generate join token", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"token":   token,
+		"command": fmt.Sprintf("wonder worker join %s", token),
+	})
+}
+
+func (s *coordinatorServer) handleWorkerJoin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx := r.Context()
+
+	var req struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	validator := jointoken.NewValidator(s.config.JWTSecret)
+	claims, err := validator.Validate(req.Token)
+	if err != nil {
+		http.Error(w, "invalid or expired token", http.StatusUnauthorized)
+		return
+	}
+
+	userName := "tenant-" + claims.Session[:12]
+	user, err := s.hsClient.GetUser(ctx, userName)
+	if err != nil || user == nil {
+		http.Error(w, "invalid session in token", http.StatusUnauthorized)
+		return
+	}
+
+	key, err := s.tenantManager.CreateAuthKey(ctx, user.ID, 24*time.Hour, false)
+	if err != nil {
+		log.Printf("Failed to create auth key: %v", err)
+		http.Error(w, "failed to create auth key", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"authkey":       key.Key,
+		"headscale_url": s.config.HeadscaleURL,
+		"user":          userName,
+	})
+}
+
 func runCoordinator(cmd *cobra.Command, args []string) {
 	listenAddr := viper.GetString("coordinator.listen")
 	headscaleURL := viper.GetString("coordinator.headscale_url")
@@ -283,18 +388,38 @@ func runCoordinator(cmd *cobra.Command, args []string) {
 		log.Fatal("headscale-api-key is required (flag, config, or HEADSCALE_API_KEY env)")
 	}
 
+	jwtSecret := viper.GetString("coordinator.jwt_secret")
+	if jwtSecret == "" {
+		b := make([]byte, 32)
+		if _, err := rand.Read(b); err != nil {
+			log.Fatalf("Failed to generate JWT secret: %v", err)
+		}
+		jwtSecret = hex.EncodeToString(b)
+		log.Printf("Warning: JWT_SECRET not set, generated random secret (tokens won't survive restart)")
+	}
+
 	config := &coordinatorConfig{
 		ListenAddr:      listenAddr,
 		HeadscaleURL:    headscaleURL,
 		HeadscaleAPIKey: headscaleAPIKey,
 		PublicURL:       publicURL,
+		JWTSecret:       jwtSecret,
 		OIDCProviders:   []oidc.ProviderConfig{},
+	}
+
+	if githubClientID := viper.GetString("coordinator.github_client_id"); githubClientID != "" {
+		config.OIDCProviders = append(config.OIDCProviders, oidc.ProviderConfig{
+			Type:         "github",
+			Name:         "github",
+			ClientID:     githubClientID,
+			ClientSecret: viper.GetString("coordinator.github_client_secret"),
+		})
 	}
 
 	if googleClientID := viper.GetString("coordinator.google_client_id"); googleClientID != "" {
 		config.OIDCProviders = append(config.OIDCProviders, oidc.ProviderConfig{
+			Type:         "google",
 			Name:         "google",
-			Issuer:       "https://accounts.google.com",
 			ClientID:     googleClientID,
 			ClientSecret: viper.GetString("coordinator.google_client_secret"),
 		})
@@ -312,6 +437,8 @@ func runCoordinator(cmd *cobra.Command, args []string) {
 	mux.HandleFunc("/auth/callback", server.handleCallback)
 	mux.HandleFunc("/api/v1/authkey", server.handleCreateAuthKey)
 	mux.HandleFunc("/api/v1/nodes", server.handleListNodes)
+	mux.HandleFunc("/api/v1/join-token", server.handleCreateJoinToken)
+	mux.HandleFunc("/api/v1/worker/join", server.handleWorkerJoin)
 
 	httpServer := &http.Server{
 		Addr:    config.ListenAddr,

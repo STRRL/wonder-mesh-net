@@ -35,7 +35,7 @@ func init() {
 
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(coordinatorCmd)
-	rootCmd.AddCommand(authCmd)
+	rootCmd.AddCommand(workerCmd)
 }
 
 func initConfig() {
