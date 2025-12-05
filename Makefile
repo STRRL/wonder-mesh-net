@@ -1,4 +1,4 @@
-.PHONY: help build build-all clean test
+.PHONY: help build build-all clean test check
 
 # Build variables
 BINARY_NAME := wonder
@@ -37,3 +37,21 @@ clean: ## Remove build artifacts
 
 test: ## Run tests
 	$(GO) test -race -coverprofile=coverage.out ./...
+
+check: ## Run all code checks (fmt, vet, lint)
+	@echo "Checking gofmt..."
+	@gofmt_output=$$(gofmt -l .); \
+	if [ -n "$$gofmt_output" ]; then \
+		echo "Files need formatting:"; \
+		echo "$$gofmt_output"; \
+		exit 1; \
+	fi
+	@echo "Running go vet..."
+	$(GO) vet ./...
+	@echo "Running golangci-lint..."
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run ./...; \
+	else \
+		echo "golangci-lint not installed, skipping"; \
+	fi
+	@echo "All checks passed"

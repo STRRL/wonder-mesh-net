@@ -1,44 +1,17 @@
 # Wonder Mesh Net
 
-A networking layer that connects homelab machines to the internet, making them accessible to PaaS platforms and orchestration tools.
+A PaaS bootstrapper that turns homelab and edge machines into bring-your-own compute for PaaS platforms and orchestration tools.
 
 ## What is this?
 
-Wonder Mesh Net solves **one problem well**: network connectivity for homelab infrastructure.
+Wonder Mesh Net bootstraps PaaS workloads onto scattered compute. It handles multi-tenant identity, issues join tokens, and wires up secure connectivity so your orchestrator can treat those machines like cloud VMs.
 
-Your homelab machines are behind NAT, have dynamic IPs, or sit behind firewalls. Wonder Mesh Net creates an overlay network that makes them reachable as if they were cloud VMs.
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    PaaS / Orchestration Layer                       │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │  Kubernetes / Zeabur / Railway / Fly.io / Coolify / Dokploy │   │
-│  │                  (app management - not our scope)            │   │
-│  └──────────────────────────────┬──────────────────────────────┘   │
-└─────────────────────────────────┼───────────────────────────────────┘
-                                  │ needs network access
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                      WONDER-MESH-NET (this project)                 │
-│                                                                     │
-│   "Make homelab machines reachable as if they were cloud VMs"       │
-│                                                                     │
-│   - NAT traversal (WireGuard + DERP relay fallback)                 │
-│   - Mesh networking (Headscale control plane)                       │
-│   - HTTP gateway for inbound traffic                                │
-│   - No TUN device required (userspace networking / tsnet)           │
-│                                                                     │
-└─────────────────────────────────┬───────────────────────────────────┘
-                                  │ overlay network
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                    HOMELAB MACHINES (user-owned)                    │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐            │
-│  │ mini-pc  │  │ mini-pc  │  │   old    │  │   NAS    │   ...      │
-│  │ (ARM64)  │  │  (x86)   │  │  laptop  │  │          │            │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘            │
-└─────────────────────────────────────────────────────────────────────┘
-```
+**Features:**
+- Join-token based “bring your own compute” bootstrap
+- NAT traversal (WireGuard + DERP relay fallback)
+- Mesh networking (Headscale control plane)
+- Multi-tenant isolation via OIDC authentication
+- No TUN device required (userspace networking / tsnet)
 
 ## Why?
 
@@ -56,27 +29,6 @@ App management. That's handled by:
 
 We provide the network. They manage the apps.
 
-## Technology
-
-- **Tailscale/Headscale**: WireGuard-based mesh networking with DERP relay fallback
-- **tsnet**: Go-native socket API (no TUN device permissions required)
-- **Alternative**: ZeroTier + libzt for multi-language bindings
-
-## Quick Start (MVP Demo)
-
-The MVP uses Lima VMs to demonstrate the networking layer on macOS.
-
-```bash
-# Prerequisites
-brew install lima
-brew install go
-
-# Run the demo
-./demo.sh
-```
-
-See [MANUAL-MVP.md](./MANUAL-MVP.md) for detailed setup instructions.
-
 ## License
 
-MIT
+Not decided yet, maybe AGPL.
