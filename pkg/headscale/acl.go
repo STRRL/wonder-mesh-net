@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	v1 "github.com/juanfont/headscale/gen/go/headscale/v1"
 )
 
 // ACLPolicy represents a Headscale ACL policy
@@ -22,7 +24,6 @@ type ACLRule struct {
 }
 
 // GenerateTenantIsolationPolicy generates an ACL policy that isolates tenants
-// Each tenant can only access their own nodes
 func GenerateTenantIsolationPolicy(usernames []string) *ACLPolicy {
 	rules := make([]ACLRule, 0, len(usernames))
 
@@ -40,7 +41,6 @@ func GenerateTenantIsolationPolicy(usernames []string) *ACLPolicy {
 }
 
 // GenerateAutogroupSelfPolicy generates a policy using autogroup:self
-// This is simpler but may have performance issues at scale
 func GenerateAutogroupSelfPolicy() *ACLPolicy {
 	return &ACLPolicy{
 		ACLs: []ACLRule{
@@ -55,24 +55,25 @@ func GenerateAutogroupSelfPolicy() *ACLPolicy {
 
 // ACLManager manages ACL policies in Headscale
 type ACLManager struct {
-	client *Client
+	client v1.HeadscaleServiceClient
 }
 
 // NewACLManager creates a new ACLManager
-func NewACLManager(client *Client) *ACLManager {
+func NewACLManager(client v1.HeadscaleServiceClient) *ACLManager {
 	return &ACLManager{client: client}
 }
 
 // SetTenantIsolationPolicy sets the tenant isolation ACL policy
 func (am *ACLManager) SetTenantIsolationPolicy(ctx context.Context) error {
-	users, err := am.client.ListUsers(ctx)
+	resp, err := am.client.ListUsers(ctx, &v1.ListUsersRequest{})
 	if err != nil {
 		return fmt.Errorf("failed to list users: %w", err)
 	}
 
+	users := resp.GetUsers()
 	usernames := make([]string, len(users))
 	for i, u := range users {
-		usernames[i] = u.Name
+		usernames[i] = u.GetName()
 	}
 
 	policy := GenerateTenantIsolationPolicy(usernames)
@@ -81,7 +82,8 @@ func (am *ACLManager) SetTenantIsolationPolicy(ctx context.Context) error {
 		return fmt.Errorf("failed to marshal policy: %w", err)
 	}
 
-	return am.client.SetPolicy(ctx, string(policyJSON))
+	_, err = am.client.SetPolicy(ctx, &v1.SetPolicyRequest{Policy: string(policyJSON)})
+	return err
 }
 
 // SetAutogroupSelfPolicy sets the autogroup:self policy (simpler but less scalable)
@@ -92,16 +94,18 @@ func (am *ACLManager) SetAutogroupSelfPolicy(ctx context.Context) error {
 		return fmt.Errorf("failed to marshal policy: %w", err)
 	}
 
-	return am.client.SetPolicy(ctx, string(policyJSON))
+	_, err = am.client.SetPolicy(ctx, &v1.SetPolicyRequest{Policy: string(policyJSON)})
+	return err
 }
 
 // AddTenantToPolicy adds a tenant to the isolation policy
 func (am *ACLManager) AddTenantToPolicy(ctx context.Context, username string) error {
-	policyStr, err := am.client.GetPolicy(ctx)
+	resp, err := am.client.GetPolicy(ctx, &v1.GetPolicyRequest{})
 	if err != nil {
 		return fmt.Errorf("failed to get policy: %w", err)
 	}
 
+	policyStr := resp.GetPolicy()
 	var policy ACLPolicy
 	if policyStr != "" {
 		if err := json.Unmarshal([]byte(policyStr), &policy); err != nil {
@@ -128,5 +132,6 @@ func (am *ACLManager) AddTenantToPolicy(ctx context.Context, username string) er
 		return fmt.Errorf("failed to marshal policy: %w", err)
 	}
 
-	return am.client.SetPolicy(ctx, string(policyJSON))
+	_, err = am.client.SetPolicy(ctx, &v1.SetPolicyRequest{Policy: string(policyJSON)})
+	return err
 }

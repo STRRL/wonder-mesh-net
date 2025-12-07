@@ -9,34 +9,35 @@ import (
 
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
 	"github.com/strrl/wonder-mesh-net/pkg/jointoken"
+	"github.com/strrl/wonder-mesh-net/pkg/oidc"
 )
 
 // WorkerHandler handles worker-related requests.
 type WorkerHandler struct {
-	headscaleURL       string
-	headscalePublicURL string
-	jwtSecret          string
-	hsClient           *headscale.Client
-	tenantManager      *headscale.TenantManager
-	tokenGenerator     *jointoken.Generator
+	publicURL      string
+	jwtSecret      string
+	tenantManager  *headscale.TenantManager
+	tokenGenerator *jointoken.Generator
+	sessionStore   oidc.SessionStore
+	userStore      oidc.UserStore
 }
 
 // NewWorkerHandler creates a new WorkerHandler.
 func NewWorkerHandler(
-	headscaleURL string,
-	headscalePublicURL string,
+	publicURL string,
 	jwtSecret string,
-	hsClient *headscale.Client,
 	tenantManager *headscale.TenantManager,
 	tokenGenerator *jointoken.Generator,
+	sessionStore oidc.SessionStore,
+	userStore oidc.UserStore,
 ) *WorkerHandler {
 	return &WorkerHandler{
-		headscaleURL:       headscaleURL,
-		headscalePublicURL: headscalePublicURL,
-		jwtSecret:          jwtSecret,
-		hsClient:           hsClient,
-		tenantManager:      tenantManager,
-		tokenGenerator:     tokenGenerator,
+		publicURL:      publicURL,
+		jwtSecret:      jwtSecret,
+		tenantManager:  tenantManager,
+		tokenGenerator: tokenGenerator,
+		sessionStore:   sessionStore,
+		userStore:      userStore,
 	}
 }
 
@@ -49,16 +50,28 @@ func (h *WorkerHandler) HandleCreateJoinToken(w http.ResponseWriter, r *http.Req
 
 	ctx := r.Context()
 
-	session := r.Header.Get("X-Session-Token")
-	if session == "" {
+	sessionID := r.Header.Get("X-Session-Token")
+	if sessionID == "" {
 		http.Error(w, "session token required", http.StatusUnauthorized)
 		return
 	}
 
-	userName := "tenant-" + session[:12]
-	user, err := h.hsClient.GetUser(ctx, userName)
-	if err != nil || user == nil {
+	session, err := h.sessionStore.Get(ctx, sessionID)
+	if err != nil {
+		log.Printf("Failed to get session: %v", err)
 		http.Error(w, "invalid session", http.StatusUnauthorized)
+		return
+	}
+	if session == nil {
+		http.Error(w, "invalid session", http.StatusUnauthorized)
+		return
+	}
+
+	_ = h.sessionStore.UpdateLastUsed(ctx, sessionID)
+
+	user, err := h.userStore.Get(ctx, session.UserID)
+	if err != nil || user == nil {
+		http.Error(w, "user not found", http.StatusUnauthorized)
 		return
 	}
 
@@ -79,7 +92,7 @@ func (h *WorkerHandler) HandleCreateJoinToken(w http.ResponseWriter, r *http.Req
 		ttl = parsed
 	}
 
-	token, err := h.tokenGenerator.Generate(session, userName, ttl)
+	token, err := h.tokenGenerator.Generate(session.UserID, user.HeadscaleUser, ttl)
 	if err != nil {
 		log.Printf("Failed to generate join token: %v", err)
 		http.Error(w, "failed to generate join token", http.StatusInternalServerError)
@@ -117,29 +130,23 @@ func (h *WorkerHandler) HandleWorkerJoin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	userName := "tenant-" + claims.Session[:12]
-	user, err := h.hsClient.GetUser(ctx, userName)
+	user, err := h.userStore.Get(ctx, claims.Session)
 	if err != nil || user == nil {
-		http.Error(w, "invalid session in token", http.StatusUnauthorized)
+		http.Error(w, "invalid user in token", http.StatusUnauthorized)
 		return
 	}
 
-	key, err := h.tenantManager.CreateAuthKey(ctx, user.Name, 24*time.Hour, false)
+	key, err := h.tenantManager.CreateAuthKey(ctx, user.HeadscaleUserID, 24*time.Hour, false)
 	if err != nil {
 		log.Printf("Failed to create auth key: %v", err)
 		http.Error(w, "failed to create auth key", http.StatusInternalServerError)
 		return
 	}
 
-	headscaleURL := h.headscalePublicURL
-	if headscaleURL == "" {
-		headscaleURL = h.headscaleURL
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"authkey":       key.Key,
-		"headscale_url": headscaleURL,
-		"user":          userName,
+		"authkey":       key.GetKey(),
+		"headscale_url": h.publicURL,
+		"user":          user.HeadscaleUser,
 	})
 }

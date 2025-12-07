@@ -31,4 +31,4 @@ We provide the network. They manage the apps.
 
 ## License
 
-Not decided yet, maybe AGPL.
+AGPL-3.0. See [LICENSE](LICENSE) for details.

@@ -14,41 +14,30 @@ import (
 var coordinatorCmd = &cobra.Command{
 	Use:   "coordinator",
 	Short: "Run the coordinator server",
-	Long:  `Run the Wonder Mesh Net coordinator server that wraps Headscale API and provides OIDC authentication.`,
+	Long:  `Run the Wonder Mesh Net coordinator server with embedded Headscale.`,
 	Run:   runCoordinator,
 }
 
 func init() {
-	coordinatorCmd.Flags().String("listen", ":8080", "Listen address")
-	coordinatorCmd.Flags().String("headscale-url", "http://localhost:8080", "Headscale API URL (internal)")
-	coordinatorCmd.Flags().String("headscale-public-url", "", "Headscale URL for workers (defaults to headscale-url)")
-	coordinatorCmd.Flags().String("headscale-api-key", "", "Headscale API key")
-	coordinatorCmd.Flags().String("public-url", "http://localhost:8080", "Public URL for callbacks")
+	coordinatorCmd.Flags().String("listen", ":9080", "Coordinator listen address")
+	coordinatorCmd.Flags().String("public-url", "http://localhost:9080", "Public URL for callbacks")
 
 	_ = viper.BindPFlag("coordinator.listen", coordinatorCmd.Flags().Lookup("listen"))
-	_ = viper.BindPFlag("coordinator.headscale_url", coordinatorCmd.Flags().Lookup("headscale-url"))
-	_ = viper.BindPFlag("coordinator.headscale_public_url", coordinatorCmd.Flags().Lookup("headscale-public-url"))
-	_ = viper.BindPFlag("coordinator.headscale_api_key", coordinatorCmd.Flags().Lookup("headscale-api-key"))
 	_ = viper.BindPFlag("coordinator.public_url", coordinatorCmd.Flags().Lookup("public-url"))
 
-	_ = viper.BindEnv("coordinator.headscale_api_key", "HEADSCALE_API_KEY")
 	_ = viper.BindEnv("coordinator.jwt_secret", "JWT_SECRET")
 	_ = viper.BindEnv("coordinator.github_client_id", "GITHUB_CLIENT_ID")
 	_ = viper.BindEnv("coordinator.github_client_secret", "GITHUB_CLIENT_SECRET")
 	_ = viper.BindEnv("coordinator.google_client_id", "GOOGLE_CLIENT_ID")
 	_ = viper.BindEnv("coordinator.google_client_secret", "GOOGLE_CLIENT_SECRET")
+	_ = viper.BindEnv("coordinator.oidc_issuer", "OIDC_ISSUER")
+	_ = viper.BindEnv("coordinator.oidc_client_id", "OIDC_CLIENT_ID")
+	_ = viper.BindEnv("coordinator.oidc_client_secret", "OIDC_CLIENT_SECRET")
 }
 
 func runCoordinator(cmd *cobra.Command, args []string) {
 	listenAddr := viper.GetString("coordinator.listen")
-	headscaleURL := viper.GetString("coordinator.headscale_url")
-	headscalePublicURL := viper.GetString("coordinator.headscale_public_url")
-	headscaleAPIKey := viper.GetString("coordinator.headscale_api_key")
 	publicURL := viper.GetString("coordinator.public_url")
-
-	if headscaleAPIKey == "" {
-		log.Fatal("headscale-api-key is required (flag, config, or HEADSCALE_API_KEY env)")
-	}
 
 	jwtSecret := viper.GetString("coordinator.jwt_secret")
 	if jwtSecret == "" {
@@ -61,13 +50,10 @@ func runCoordinator(cmd *cobra.Command, args []string) {
 	}
 
 	config := &coordinator.Config{
-		ListenAddr:         listenAddr,
-		HeadscaleURL:       headscaleURL,
-		HeadscalePublicURL: headscalePublicURL,
-		HeadscaleAPIKey:    headscaleAPIKey,
-		PublicURL:          publicURL,
-		JWTSecret:          jwtSecret,
-		OIDCProviders:      []oidc.ProviderConfig{},
+		ListenAddr:    listenAddr,
+		PublicURL:     publicURL,
+		JWTSecret:     jwtSecret,
+		OIDCProviders: []oidc.ProviderConfig{},
 	}
 
 	if githubClientID := viper.GetString("coordinator.github_client_id"); githubClientID != "" {
@@ -85,6 +71,16 @@ func runCoordinator(cmd *cobra.Command, args []string) {
 			Name:         "google",
 			ClientID:     googleClientID,
 			ClientSecret: viper.GetString("coordinator.google_client_secret"),
+		})
+	}
+
+	if oidcIssuer := viper.GetString("coordinator.oidc_issuer"); oidcIssuer != "" {
+		config.OIDCProviders = append(config.OIDCProviders, oidc.ProviderConfig{
+			Type:         "oidc",
+			Name:         "oidc",
+			Issuer:       oidcIssuer,
+			ClientID:     viper.GetString("coordinator.oidc_client_id"),
+			ClientSecret: viper.GetString("coordinator.oidc_client_secret"),
 		})
 	}
 

@@ -1,0 +1,11 @@
+version: "2"
+sql:
+  - engine: "sqlite"
+    queries: "pkg/database/queries"
+    schema: "pkg/database/migrations"
+    gen:
+      go:
+        package: "database"
+        out: "pkg/database"
+        emit_json_tags: true
+        emit_empty_slices: true

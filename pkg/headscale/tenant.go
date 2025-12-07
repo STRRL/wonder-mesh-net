@@ -6,15 +6,18 @@ import (
 	"encoding/hex"
 	"fmt"
 	"time"
+
+	v1 "github.com/juanfont/headscale/gen/go/headscale/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // TenantManager manages tenants (users) in Headscale
 type TenantManager struct {
-	client *Client
+	client v1.HeadscaleServiceClient
 }
 
 // NewTenantManager creates a new TenantManager
-func NewTenantManager(client *Client) *TenantManager {
+func NewTenantManager(client v1.HeadscaleServiceClient) *TenantManager {
 	return &TenantManager{client: client}
 }
 
@@ -30,45 +33,52 @@ func TenantName(tenantID string) string {
 }
 
 // GetOrCreateTenant gets an existing tenant or creates a new one
-func (tm *TenantManager) GetOrCreateTenant(ctx context.Context, issuer, subject string) (*User, error) {
+func (tm *TenantManager) GetOrCreateTenant(ctx context.Context, issuer, subject string) (*v1.User, error) {
 	tenantID := DeriveTenantID(issuer, subject)
 	name := TenantName(tenantID)
 
-	user, err := tm.client.GetUser(ctx, name)
+	listResp, err := tm.client.ListUsers(ctx, &v1.ListUsersRequest{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user: %w", err)
+		return nil, fmt.Errorf("failed to list users: %w", err)
 	}
 
-	if user != nil {
-		return user, nil
+	for _, u := range listResp.GetUsers() {
+		if u.GetName() == name {
+			return u, nil
+		}
 	}
 
-	user, err = tm.client.CreateUser(ctx, name)
+	createResp, err := tm.client.CreateUser(ctx, &v1.CreateUserRequest{Name: name})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
-	return user, nil
+	return createResp.GetUser(), nil
 }
 
 // CreateAuthKey creates a pre-auth key for a tenant
-func (tm *TenantManager) CreateAuthKey(ctx context.Context, username string, ttl time.Duration, reusable bool) (*PreAuthKey, error) {
+func (tm *TenantManager) CreateAuthKey(ctx context.Context, userID uint64, ttl time.Duration, reusable bool) (*v1.PreAuthKey, error) {
 	expiration := time.Now().Add(ttl)
 
-	key, err := tm.client.CreatePreAuthKey(ctx, &CreatePreAuthKeyRequest{
-		User:       username,
+	resp, err := tm.client.CreatePreAuthKey(ctx, &v1.CreatePreAuthKeyRequest{
+		User:       userID,
 		Reusable:   reusable,
 		Ephemeral:  false,
-		Expiration: expiration,
+		Expiration: timestamppb.New(expiration),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pre-auth key: %w", err)
 	}
 
-	return key, nil
+	return resp.GetPreAuthKey(), nil
 }
 
 // GetTenantNodes gets all nodes for a tenant
-func (tm *TenantManager) GetTenantNodes(ctx context.Context, userID uint64) ([]*Node, error) {
-	return tm.client.ListNodes(ctx, &userID)
+func (tm *TenantManager) GetTenantNodes(ctx context.Context, username string) ([]*v1.Node, error) {
+	resp, err := tm.client.ListNodes(ctx, &v1.ListNodesRequest{User: username})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list nodes: %w", err)
+	}
+
+	return resp.GetNodes(), nil
 }

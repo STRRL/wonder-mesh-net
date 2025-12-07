@@ -319,10 +319,11 @@ func (p *OIDCProvider) ExchangeCode(ctx context.Context, code, redirectURI strin
 
 // AuthState represents the state for an auth flow
 type AuthState struct {
-	State       string
-	Nonce       string
-	RedirectURI string
-	CreatedAt   time.Time
+	State        string
+	Nonce        string
+	RedirectURI  string
+	ProviderName string
+	CreatedAt    time.Time
 }
 
 // GenerateState generates a random state string
@@ -336,18 +337,28 @@ func GenerateState() (string, error) {
 
 // Registry manages multiple auth providers
 type Registry struct {
-	providers map[string]Provider
-	states    map[string]*AuthState
-	mu        sync.RWMutex
-	stateTTL  time.Duration
+	providers      map[string]Provider
+	authStateStore AuthStateStore
+	mu             sync.RWMutex
+	stateTTL       time.Duration
 }
 
-// NewRegistry creates a new provider registry
+// NewRegistry creates a new provider registry with in-memory auth state store
 func NewRegistry() *Registry {
+	ttl := 10 * time.Minute
 	return &Registry{
-		providers: make(map[string]Provider),
-		states:    make(map[string]*AuthState),
-		stateTTL:  10 * time.Minute,
+		providers:      make(map[string]Provider),
+		authStateStore: NewMemoryAuthStateStore(ttl),
+		stateTTL:       ttl,
+	}
+}
+
+// NewRegistryWithStore creates a new provider registry with custom auth state store
+func NewRegistryWithStore(store AuthStateStore) *Registry {
+	return &Registry{
+		providers:      make(map[string]Provider),
+		authStateStore: store,
+		stateTTL:       10 * time.Minute,
 	}
 }
 
@@ -387,7 +398,7 @@ func (r *Registry) ListProviders() []string {
 }
 
 // CreateAuthState creates a new auth state
-func (r *Registry) CreateAuthState(redirectURI string) (*AuthState, error) {
+func (r *Registry) CreateAuthState(ctx context.Context, redirectURI, providerName string) (*AuthState, error) {
 	state, err := GenerateState()
 	if err != nil {
 		return nil, err
@@ -399,47 +410,37 @@ func (r *Registry) CreateAuthState(redirectURI string) (*AuthState, error) {
 	}
 
 	authState := &AuthState{
-		State:       state,
-		Nonce:       nonce,
-		RedirectURI: redirectURI,
-		CreatedAt:   time.Now(),
+		State:        state,
+		Nonce:        nonce,
+		RedirectURI:  redirectURI,
+		ProviderName: providerName,
+		CreatedAt:    time.Now(),
 	}
 
-	r.mu.Lock()
-	r.states[state] = authState
-	r.mu.Unlock()
+	if err := r.authStateStore.Create(ctx, authState); err != nil {
+		return nil, err
+	}
 
 	return authState, nil
 }
 
 // ValidateState validates and consumes an auth state
-func (r *Registry) ValidateState(state string) (*AuthState, bool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	authState, ok := r.states[state]
-	if !ok {
+func (r *Registry) ValidateState(ctx context.Context, state string) (*AuthState, bool) {
+	authState, err := r.authStateStore.Get(ctx, state)
+	if err != nil || authState == nil {
 		return nil, false
 	}
 
 	if time.Since(authState.CreatedAt) > r.stateTTL {
-		delete(r.states, state)
+		_ = r.authStateStore.Delete(ctx, state)
 		return nil, false
 	}
 
-	delete(r.states, state)
+	_ = r.authStateStore.Delete(ctx, state)
 	return authState, true
 }
 
 // CleanupExpiredStates removes expired auth states
-func (r *Registry) CleanupExpiredStates() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	now := time.Now()
-	for state, authState := range r.states {
-		if now.Sub(authState.CreatedAt) > r.stateTTL {
-			delete(r.states, state)
-		}
-	}
+func (r *Registry) CleanupExpiredStates(ctx context.Context) {
+	_ = r.authStateStore.DeleteExpired(ctx)
 }

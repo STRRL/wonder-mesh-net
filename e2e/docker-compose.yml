@@ -1,0 +1,53 @@
+services:
+  headscale:
+    image: headscale/headscale:0.23.0
+    container_name: headscale
+    command: serve
+    volumes:
+      - ./headscale-config.yaml:/etc/headscale/config.yaml
+      - headscale-data:/var/lib/headscale
+    ports:
+      - "8080:8080"
+      - "50443:50443"
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: keycloak
+    command: start-dev --import-realm
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME_URL: http://localhost:9090
+      KC_HOSTNAME_ADMIN_URL: http://localhost:9090
+    volumes:
+      - ./keycloak-realm.json:/opt/keycloak/data/import/realm.json
+    ports:
+      - "9090:8080"
+  coordinator:
+    build:
+      context: ..
+      dockerfile: e2e/Dockerfile
+    container_name: coordinator
+    environment:
+      HEADSCALE_API_KEY: "${HEADSCALE_API_KEY}"
+      DATABASE_PATH: /data/coordinator.db
+      OIDC_ISSUER: http://localhost:9090/realms/wonder
+      OIDC_CLIENT_ID: wonder
+      OIDC_CLIENT_SECRET: wonder-secret
+    ports:
+      - "9080:9080"
+    volumes:
+      - coordinator-data:/data
+    extra_hosts:
+      - "localhost:host-gateway"
+    depends_on:
+      - keycloak
+    command: >
+      coordinator
+      --listen :9080
+      --headscale-url http://headscale:8080
+      --headscale-public-url http://localhost:8080
+      --public-url http://localhost:9080
+
+volumes:
+  headscale-data:
+  coordinator-data:

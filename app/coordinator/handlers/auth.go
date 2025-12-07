@@ -16,7 +16,8 @@ type AuthHandler struct {
 	oidcRegistry  *oidc.Registry
 	tenantManager *headscale.TenantManager
 	aclManager    *headscale.ACLManager
-	hsClient      *headscale.Client
+	sessionStore  oidc.SessionStore
+	userStore     oidc.UserStore
 }
 
 // NewAuthHandler creates a new AuthHandler.
@@ -25,14 +26,16 @@ func NewAuthHandler(
 	oidcRegistry *oidc.Registry,
 	tenantManager *headscale.TenantManager,
 	aclManager *headscale.ACLManager,
-	hsClient *headscale.Client,
+	sessionStore oidc.SessionStore,
+	userStore oidc.UserStore,
 ) *AuthHandler {
 	return &AuthHandler{
 		publicURL:     publicURL,
 		oidcRegistry:  oidcRegistry,
 		tenantManager: tenantManager,
 		aclManager:    aclManager,
-		hsClient:      hsClient,
+		sessionStore:  sessionStore,
+		userStore:     userStore,
 	}
 }
 
@@ -47,6 +50,8 @@ func (h *AuthHandler) HandleProviders(w http.ResponseWriter, r *http.Request) {
 
 // HandleLogin handles GET /auth/login requests.
 func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	providerName := r.URL.Query().Get("provider")
 	if providerName == "" {
 		http.Error(w, "provider parameter required", http.StatusBadRequest)
@@ -64,7 +69,7 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		redirectURI = h.publicURL + "/auth/complete"
 	}
 
-	authState, err := h.oidcRegistry.CreateAuthState(redirectURI)
+	authState, err := h.oidcRegistry.CreateAuthState(ctx, redirectURI, providerName)
 	if err != nil {
 		http.Error(w, "failed to create auth state", http.StatusInternalServerError)
 		return
@@ -80,28 +85,27 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	providerName := r.URL.Query().Get("provider")
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
 
-	if providerName == "" || code == "" || state == "" {
+	if code == "" || state == "" {
 		http.Error(w, "missing parameters", http.StatusBadRequest)
 		return
 	}
 
-	authState, ok := h.oidcRegistry.ValidateState(state)
+	authState, ok := h.oidcRegistry.ValidateState(ctx, state)
 	if !ok {
 		http.Error(w, "invalid or expired state", http.StatusBadRequest)
 		return
 	}
 
-	provider, ok := h.oidcRegistry.GetProvider(providerName)
+	provider, ok := h.oidcRegistry.GetProvider(authState.ProviderName)
 	if !ok {
 		http.Error(w, "unknown provider", http.StatusBadRequest)
 		return
 	}
 
-	callbackURL := h.publicURL + "/auth/callback?provider=" + providerName
+	callbackURL := h.publicURL + "/auth/callback?provider=" + authState.ProviderName
 	userInfo, err := provider.ExchangeCode(ctx, code, callbackURL)
 	if err != nil {
 		log.Printf("Failed to exchange code: %v", err)
@@ -109,20 +113,75 @@ func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.tenantManager.GetOrCreateTenant(ctx, provider.Issuer(), userInfo.Subject)
+	hsUser, err := h.tenantManager.GetOrCreateTenant(ctx, provider.Issuer(), userInfo.Subject)
 	if err != nil {
 		log.Printf("Failed to get/create tenant: %v", err)
 		http.Error(w, "failed to create tenant", http.StatusInternalServerError)
 		return
 	}
 
-	if err := h.aclManager.AddTenantToPolicy(ctx, user.Name); err != nil {
+	if err := h.aclManager.AddTenantToPolicy(ctx, hsUser.GetName()); err != nil {
 		log.Printf("Warning: failed to update ACL policy: %v", err)
 	}
 
-	sessionToken := headscale.DeriveTenantID(provider.Issuer(), userInfo.Subject)
+	userID := headscale.DeriveTenantID(provider.Issuer(), userInfo.Subject)
+	existingUser, err := h.userStore.GetByIssuerSubject(ctx, provider.Issuer(), userInfo.Subject)
+	if err != nil {
+		log.Printf("Failed to check existing user: %v", err)
+		http.Error(w, "failed to check user", http.StatusInternalServerError)
+		return
+	}
 
-	redirectURL := authState.RedirectURI + "?session=" + sessionToken + "&user=" + user.Name
+	now := time.Now()
+	if existingUser == nil {
+		newUser := &oidc.User{
+			ID:              userID,
+			HeadscaleUser:   hsUser.GetName(),
+			HeadscaleUserID: hsUser.GetId(),
+			Issuer:          provider.Issuer(),
+			Subject:         userInfo.Subject,
+			Email:           userInfo.Email,
+			Name:            userInfo.Name,
+			Picture:         userInfo.Picture,
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		}
+		if err := h.userStore.Create(ctx, newUser); err != nil {
+			log.Printf("Failed to create user: %v", err)
+			http.Error(w, "failed to create user", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		existingUser.Email = userInfo.Email
+		existingUser.Name = userInfo.Name
+		existingUser.Picture = userInfo.Picture
+		if err := h.userStore.Update(ctx, existingUser); err != nil {
+			log.Printf("Warning: failed to update user info: %v", err)
+		}
+	}
+
+	sessionID, err := oidc.GenerateSessionID()
+	if err != nil {
+		log.Printf("Failed to generate session ID: %v", err)
+		http.Error(w, "failed to create session", http.StatusInternalServerError)
+		return
+	}
+
+	session := &oidc.Session{
+		ID:         sessionID,
+		UserID:     userID,
+		Issuer:     provider.Issuer(),
+		Subject:    userInfo.Subject,
+		CreatedAt:  now,
+		LastUsedAt: now,
+	}
+	if err := h.sessionStore.Create(ctx, session); err != nil {
+		log.Printf("Failed to create session: %v", err)
+		http.Error(w, "failed to create session", http.StatusInternalServerError)
+		return
+	}
+
+	redirectURL := authState.RedirectURI + "?session=" + sessionID + "&user=" + hsUser.GetName()
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
@@ -152,16 +211,28 @@ func (h *AuthHandler) HandleCreateAuthKey(w http.ResponseWriter, r *http.Request
 
 	ctx := r.Context()
 
-	session := r.Header.Get("X-Session-Token")
-	if session == "" {
+	sessionID := r.Header.Get("X-Session-Token")
+	if sessionID == "" {
 		http.Error(w, "session token required", http.StatusUnauthorized)
 		return
 	}
 
-	userName := "tenant-" + session[:12]
-	user, err := h.hsClient.GetUser(ctx, userName)
-	if err != nil || user == nil {
+	session, err := h.sessionStore.Get(ctx, sessionID)
+	if err != nil {
+		log.Printf("Failed to get session: %v", err)
 		http.Error(w, "invalid session", http.StatusUnauthorized)
+		return
+	}
+	if session == nil {
+		http.Error(w, "invalid session", http.StatusUnauthorized)
+		return
+	}
+
+	_ = h.sessionStore.UpdateLastUsed(ctx, sessionID)
+
+	user, err := h.userStore.Get(ctx, session.UserID)
+	if err != nil || user == nil {
+		http.Error(w, "user not found", http.StatusUnauthorized)
 		return
 	}
 
@@ -184,7 +255,7 @@ func (h *AuthHandler) HandleCreateAuthKey(w http.ResponseWriter, r *http.Request
 		ttl = parsed
 	}
 
-	key, err := h.tenantManager.CreateAuthKey(ctx, user.Name, ttl, req.Reusable)
+	key, err := h.tenantManager.CreateAuthKey(ctx, user.HeadscaleUserID, ttl, req.Reusable)
 	if err != nil {
 		log.Printf("Failed to create auth key: %v", err)
 		http.Error(w, "failed to create auth key", http.StatusInternalServerError)
@@ -193,8 +264,8 @@ func (h *AuthHandler) HandleCreateAuthKey(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"key":        key.Key,
-		"expiration": key.Expiration,
-		"reusable":   key.Reusable,
+		"key":        key.GetKey(),
+		"expiration": key.GetExpiration().AsTime(),
+		"reusable":   key.GetReusable(),
 	})
 }

@@ -4,23 +4,24 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/strrl/wonder-mesh-net/pkg/headscale"
+	v1 "github.com/juanfont/headscale/gen/go/headscale/v1"
 )
 
 // HealthHandler handles health check requests.
 type HealthHandler struct {
-	hsClient *headscale.Client
+	hsClient v1.HeadscaleServiceClient
 }
 
 // NewHealthHandler creates a new HealthHandler.
-func NewHealthHandler(hsClient *headscale.Client) *HealthHandler {
+func NewHealthHandler(hsClient v1.HeadscaleServiceClient) *HealthHandler {
 	return &HealthHandler{hsClient: hsClient}
 }
 
 // ServeHTTP handles GET /health requests.
 func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	if err := h.hsClient.Health(ctx); err != nil {
+	_, err := h.hsClient.ListUsers(ctx, &v1.ListUsersRequest{})
+	if err != nil {
 		http.Error(w, "headscale unhealthy", http.StatusServiceUnavailable)
 		return
 	}

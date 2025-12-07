@@ -22,17 +22,22 @@ func (s *Server) Run() error {
 		s.OIDCRegistry,
 		s.TenantManager,
 		s.ACLManager,
-		s.HSClient,
+		s.SessionStore,
+		s.UserStore,
 	)
-	nodesHandler := handlers.NewNodesHandler(s.HSClient, s.TenantManager)
+	nodesHandler := handlers.NewNodesHandler(s.TenantManager, s.SessionStore, s.UserStore)
 	workerHandler := handlers.NewWorkerHandler(
-		s.Config.HeadscaleURL,
-		s.Config.HeadscalePublicURL,
+		s.Config.PublicURL,
 		s.Config.JWTSecret,
-		s.HSClient,
 		s.TenantManager,
 		s.TokenGenerator,
+		s.SessionStore,
+		s.UserStore,
 	)
+	hsProxyHandler, err := handlers.NewHeadscaleProxyHandler("http://127.0.0.1:8080", "/hs")
+	if err != nil {
+		return err
+	}
 
 	mux := http.NewServeMux()
 	mux.Handle("/health", healthHandler)
@@ -44,6 +49,7 @@ func (s *Server) Run() error {
 	mux.HandleFunc("/api/v1/nodes", nodesHandler.HandleListNodes)
 	mux.HandleFunc("/api/v1/join-token", workerHandler.HandleCreateJoinToken)
 	mux.HandleFunc("/api/v1/worker/join", workerHandler.HandleWorkerJoin)
+	mux.Handle("/hs/", hsProxyHandler)
 
 	httpServer := &http.Server{
 		Addr:    s.Config.ListenAddr,
@@ -64,5 +70,10 @@ func (s *Server) Run() error {
 	log.Println("Shutting down...")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return httpServer.Shutdown(ctx)
+
+	if err := httpServer.Shutdown(ctx); err != nil {
+		return err
+	}
+
+	return s.Close()
 }
