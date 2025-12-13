@@ -40,3 +40,6 @@ data/
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# E2E test artifacts
+e2e/cookies.txt

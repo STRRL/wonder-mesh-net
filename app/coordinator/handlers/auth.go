@@ -66,7 +66,7 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 	redirectURI := r.URL.Query().Get("redirect_uri")
 	if redirectURI == "" {
-		redirectURI = h.publicURL + "/auth/complete"
+		redirectURI = h.publicURL + "/coordinator/auth/complete"
 	}
 
 	authState, err := h.oidcRegistry.CreateAuthState(ctx, redirectURI, providerName)
@@ -75,7 +75,7 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	callbackURL := h.publicURL + "/auth/callback?provider=" + providerName
+	callbackURL := h.publicURL + "/coordinator/auth/callback?provider=" + providerName
 	authURL := provider.GetAuthURL(callbackURL, authState.State)
 
 	http.Redirect(w, r, authURL, http.StatusFound)
@@ -105,7 +105,7 @@ func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	callbackURL := h.publicURL + "/auth/callback?provider=" + authState.ProviderName
+	callbackURL := h.publicURL + "/coordinator/auth/callback?provider=" + authState.ProviderName
 	userInfo, err := provider.ExchangeCode(ctx, code, callbackURL)
 	if err != nil {
 		log.Printf("Failed to exchange code: %v", err)

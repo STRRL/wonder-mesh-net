@@ -6,11 +6,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/strrl/wonder-mesh-net/app/coordinator/handlers"
 )
+
+const coordinatorPrefix = "/coordinator"
 
 // Run starts the HTTP server and blocks until a shutdown signal is received.
 // It registers all API routes, starts listening on the configured address,
@@ -34,23 +37,35 @@ func (s *Server) Run() error {
 		s.SessionStore,
 		s.UserStore,
 	)
-	hsProxyHandler, err := handlers.NewHeadscaleProxyHandler("http://127.0.0.1:8080", "/hs")
+
+	hsProxy, err := handlers.NewHeadscaleProxyHandler("http://127.0.0.1:8080")
 	if err != nil {
 		return err
 	}
 
-	mux := http.NewServeMux()
-	mux.Handle("/livez", &handlers.LivenessHandler{})
-	mux.Handle("/health", healthHandler)
-	mux.HandleFunc("/auth/providers", authHandler.HandleProviders)
-	mux.HandleFunc("/auth/login", authHandler.HandleLogin)
-	mux.HandleFunc("/auth/callback", authHandler.HandleCallback)
-	mux.HandleFunc("/auth/complete", authHandler.HandleComplete)
-	mux.HandleFunc("/api/v1/authkey", authHandler.HandleCreateAuthKey)
-	mux.HandleFunc("/api/v1/nodes", nodesHandler.HandleListNodes)
-	mux.HandleFunc("/api/v1/join-token", workerHandler.HandleCreateJoinToken)
-	mux.HandleFunc("/api/v1/worker/join", workerHandler.HandleWorkerJoin)
-	mux.Handle("/hs/", hsProxyHandler)
+	coordinatorMux := http.NewServeMux()
+	coordinatorMux.Handle("/livez", &handlers.LivenessHandler{})
+	coordinatorMux.Handle("/health", healthHandler)
+	coordinatorMux.HandleFunc("/auth/providers", authHandler.HandleProviders)
+	coordinatorMux.HandleFunc("/auth/login", authHandler.HandleLogin)
+	coordinatorMux.HandleFunc("/auth/callback", authHandler.HandleCallback)
+	coordinatorMux.HandleFunc("/auth/complete", authHandler.HandleComplete)
+	coordinatorMux.HandleFunc("/api/v1/authkey", authHandler.HandleCreateAuthKey)
+	coordinatorMux.HandleFunc("/api/v1/nodes", nodesHandler.HandleListNodes)
+	coordinatorMux.HandleFunc("/api/v1/join-token", workerHandler.HandleCreateJoinToken)
+	coordinatorMux.HandleFunc("/api/v1/worker/join", workerHandler.HandleWorkerJoin)
+
+	rootHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, coordinatorPrefix+"/") {
+			http.StripPrefix(coordinatorPrefix, coordinatorMux).ServeHTTP(w, r)
+			return
+		}
+		if r.URL.Path == coordinatorPrefix {
+			http.StripPrefix(coordinatorPrefix, coordinatorMux).ServeHTTP(w, r)
+			return
+		}
+		hsProxy.ServeHTTP(w, r)
+	})
 
 	log.Println("Initializing ACL policy...")
 	ctx := context.Background()
@@ -62,11 +77,13 @@ func (s *Server) Run() error {
 
 	httpServer := &http.Server{
 		Addr:    s.Config.Listen,
-		Handler: mux,
+		Handler: rootHandler,
 	}
 
 	go func() {
 		log.Printf("Starting coordinator on %s", s.Config.Listen)
+		log.Printf("  Coordinator API: %s/coordinator/*", s.Config.PublicURL)
+		log.Printf("  Headscale:       %s/*", s.Config.PublicURL)
 		if err := httpServer.ListenAndServe(); err != http.ErrServerClosed {
 			log.Fatalf("Server error: %v", err)
 		}

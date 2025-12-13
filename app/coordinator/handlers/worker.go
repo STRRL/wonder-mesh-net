@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
@@ -144,12 +143,10 @@ func (h *WorkerHandler) HandleWorkerJoin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	headscaleURL := strings.Replace(h.publicURL, ":9080", ":8080", 1)
-
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"authkey":       key.GetKey(),
-		"headscale_url": headscaleURL,
+		"headscale_url": h.publicURL,
 		"user":          claims.HeadscaleUser,
 	})
 }

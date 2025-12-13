@@ -25,7 +25,7 @@ services:
       OIDC_ISSUER: http://localhost:9090/realms/wonder
       OIDC_CLIENT_ID: wonder
       OIDC_CLIENT_SECRET: wonder-secret
-      OIDC_REDIRECT_URI: http://localhost:9080/auth/callback
+      OIDC_REDIRECT_URI: http://localhost:9080/coordinator/auth/callback
     volumes:
       - coordinator-data:/data
     depends_on:
@@ -36,6 +36,30 @@ services:
       - ":9080"
       - "--public-url"
       - "http://localhost:9080"
+
+  worker-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: worker-1
+    hostname: worker-1
+    privileged: true
+    volumes:
+      - /dev/net/tun:/dev/net/tun
+    depends_on:
+      - coordinator
+
+  worker-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: worker-2
+    hostname: worker-2
+    privileged: true
+    volumes:
+      - /dev/net/tun:/dev/net/tun
+    depends_on:
+      - coordinator
 
 volumes:
   coordinator-data:

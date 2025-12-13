@@ -1,4 +1,4 @@
-server_url: http://192.168.1.71:8080
+server_url: http://localhost:9080
 listen_addr: 0.0.0.0:8080
 metrics_listen_addr: ""
 grpc_listen_addr: 127.0.0.1:50443
@@ -36,7 +36,7 @@ dns:
 
 log:
   format: text
-  level: trace
+  level: info
 
 policy:
   mode: database
