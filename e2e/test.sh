@@ -219,6 +219,38 @@ docker exec worker-2 tailscale up \
     --accept-dns=false \
     2>&1 || log_warn "Tailscale up returned non-zero exit code for Worker 2"
 
+# Worker 3: Join mesh
+log_info "Worker 3: Joining mesh..."
+
+# Start tailscaled in worker-3
+docker exec worker-3 tailscaled --state=/var/lib/tailscale/tailscaled.state --socket=/var/run/tailscale/tailscaled.sock &
+sleep 3
+
+WORKER3_API_RESPONSE=$(docker exec worker-3 curl -s -X POST \
+    -H 'Content-Type: application/json' \
+    -d "{\"token\": \"$JOIN_TOKEN\"}" \
+    "http://$HOST_IP:9080/coordinator/api/v1/worker/join")
+
+WORKER3_AUTHKEY=$(echo "$WORKER3_API_RESPONSE" | sed -n 's/.*"authkey":"\([^"]*\)".*/\1/p')
+WORKER3_LOGIN_SERVER=$(echo "$WORKER3_API_RESPONSE" | sed -n 's/.*"headscale_url":"\([^"]*\)".*/\1/p' | sed "s/localhost/$HOST_IP/g")
+
+if [ -z "$WORKER3_AUTHKEY" ]; then
+    log_error "Failed to get authkey for worker 3"
+    echo "$WORKER3_API_RESPONSE"
+    exit 1
+fi
+log_info "Worker 3 authkey: ${WORKER3_AUTHKEY:0:20}..."
+log_info "Worker 3 login server: $WORKER3_LOGIN_SERVER"
+
+log_info "Running tailscale up for Worker 3..."
+docker exec worker-3 tailscale up \
+    --reset \
+    --authkey="$WORKER3_AUTHKEY" \
+    --login-server="$WORKER3_LOGIN_SERVER" \
+    --accept-routes \
+    --accept-dns=false \
+    2>&1 || log_warn "Tailscale up returned non-zero exit code for Worker 3"
+
 sleep 5
 
 # Check connectivity
@@ -226,11 +258,13 @@ log_info "Checking worker mesh connectivity..."
 
 WORKER1_IP=$(docker exec worker-1 tailscale ip -4 2>/dev/null || echo "")
 WORKER2_IP=$(docker exec worker-2 tailscale ip -4 2>/dev/null || echo "")
+WORKER3_IP=$(docker exec worker-3 tailscale ip -4 2>/dev/null || echo "")
 
 log_info "Worker 1 IP: $WORKER1_IP"
 log_info "Worker 2 IP: $WORKER2_IP"
+log_info "Worker 3 IP: $WORKER3_IP"
 
-if [ -z "$WORKER1_IP" ] || [ -z "$WORKER2_IP" ]; then
+if [ -z "$WORKER1_IP" ] || [ -z "$WORKER2_IP" ] || [ -z "$WORKER3_IP" ]; then
     log_error "Failed to get worker IPs"
 
     log_info "Worker 1 status:"
@@ -239,15 +273,25 @@ if [ -z "$WORKER1_IP" ] || [ -z "$WORKER2_IP" ]; then
     log_info "Worker 2 status:"
     docker exec worker-2 tailscale status || true
 
+    log_info "Worker 3 status:"
+    docker exec worker-3 tailscale status || true
+
     exit 1
 fi
 
-# Test ping between workers
+# Test ping between workers (full mesh)
 log_info "Testing ping from Worker 1 to Worker 2..."
 if docker exec worker-1 ping -c 3 "$WORKER2_IP"; then
     log_info "Ping successful: Worker 1 -> Worker 2"
 else
     log_warn "Ping failed: Worker 1 -> Worker 2"
+fi
+
+log_info "Testing ping from Worker 1 to Worker 3..."
+if docker exec worker-1 ping -c 3 "$WORKER3_IP"; then
+    log_info "Ping successful: Worker 1 -> Worker 3"
+else
+    log_warn "Ping failed: Worker 1 -> Worker 3"
 fi
 
 log_info "Testing ping from Worker 2 to Worker 1..."
@@ -257,5 +301,26 @@ else
     log_warn "Ping failed: Worker 2 -> Worker 1"
 fi
 
+log_info "Testing ping from Worker 2 to Worker 3..."
+if docker exec worker-2 ping -c 3 "$WORKER3_IP"; then
+    log_info "Ping successful: Worker 2 -> Worker 3"
+else
+    log_warn "Ping failed: Worker 2 -> Worker 3"
+fi
+
+log_info "Testing ping from Worker 3 to Worker 1..."
+if docker exec worker-3 ping -c 3 "$WORKER1_IP"; then
+    log_info "Ping successful: Worker 3 -> Worker 1"
+else
+    log_warn "Ping failed: Worker 3 -> Worker 1"
+fi
+
+log_info "Testing ping from Worker 3 to Worker 2..."
+if docker exec worker-3 ping -c 3 "$WORKER2_IP"; then
+    log_info "Ping successful: Worker 3 -> Worker 2"
+else
+    log_warn "Ping failed: Worker 3 -> Worker 2"
+fi
+
 log_info "=== E2E Test Complete ==="
-log_info "Workers connected to mesh successfully!"
+log_info "3 workers connected to mesh successfully!"

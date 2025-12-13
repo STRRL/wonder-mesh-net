@@ -18,7 +18,7 @@ services:
   coordinator:
     build:
       context: ..
-      dockerfile: e2e/Dockerfile
+      dockerfile: Dockerfile
     container_name: coordinator
     network_mode: "host"
     environment:
@@ -27,6 +27,7 @@ services:
       OIDC_CLIENT_SECRET: wonder-secret
       OIDC_REDIRECT_URI: http://localhost:9080/coordinator/auth/callback
     volumes:
+      - ./headscale-config.yaml:/etc/headscale/config.yaml
       - coordinator-data:/data
     depends_on:
       - keycloak
@@ -55,6 +56,18 @@ services:
       dockerfile: Dockerfile.worker
     container_name: worker-2
     hostname: worker-2
+    privileged: true
+    volumes:
+      - /dev/net/tun:/dev/net/tun
+    depends_on:
+      - coordinator
+
+  worker-3:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: worker-3
+    hostname: worker-3
     privileged: true
     volumes:
       - /dev/net/tun:/dev/net/tun
