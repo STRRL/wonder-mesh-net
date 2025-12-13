@@ -95,7 +95,7 @@ func NewServer(config *Config) (*Server, error) {
 	stateStore := oidc.NewDBAuthStateStore(db.Queries(), 10*time.Minute)
 	oidcRegistry := oidc.NewRegistryWithStore(stateStore)
 
-	for _, providerConfig := range config.OIDCProviders {
+	for _, providerConfig := range config.OIDCProviders() {
 		if err := oidcRegistry.RegisterProvider(ctx, providerConfig); err != nil {
 			log.Printf("Warning: failed to register OIDC provider %s: %v", providerConfig.Name, err)
 		} else {

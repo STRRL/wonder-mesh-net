@@ -9,11 +9,12 @@ IMAGE_TAG="${IMAGE_TAG:-dev}"
 
 cd "${PROJECT_ROOT}"
 
-echo "Building ${IMAGE_NAME}:${IMAGE_TAG}..."
+echo "Building ${IMAGE_NAME}:${IMAGE_TAG} for linux/amd64,linux/arm64..."
 
-DOCKER_BUILDKIT=1 docker build \
+docker buildx build \
+    --platform linux/amd64,linux/arm64 \
     -t "${IMAGE_NAME}:${IMAGE_TAG}" \
-    -f Dockerfile \
+    --push \
     .
 
-echo "Done: ${IMAGE_NAME}:${IMAGE_TAG}"
+echo "Pushed: ${IMAGE_NAME}:${IMAGE_TAG}"

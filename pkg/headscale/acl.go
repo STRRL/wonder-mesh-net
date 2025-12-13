@@ -46,8 +46,8 @@ func GenerateAutogroupSelfPolicy() *ACLPolicy {
 		ACLs: []ACLRule{
 			{
 				Action:       "accept",
-				Sources:      []string{"autogroup:member"},
-				Destinations: []string{"autogroup:self:*"},
+				Sources:      []string{"*"},
+				Destinations: []string{"*:*"},
 			},
 		},
 	}

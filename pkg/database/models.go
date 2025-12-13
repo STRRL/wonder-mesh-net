@@ -29,14 +29,13 @@ type Session struct {
 }
 
 type User struct {
-	ID              string         `json:"id"`
-	HeadscaleUser   string         `json:"headscale_user"`
-	Issuer          string         `json:"issuer"`
-	Subject         string         `json:"subject"`
-	Email           sql.NullString `json:"email"`
-	Name            sql.NullString `json:"name"`
-	Picture         sql.NullString `json:"picture"`
-	CreatedAt       time.Time      `json:"created_at"`
-	UpdatedAt       time.Time      `json:"updated_at"`
-	HeadscaleUserID int64          `json:"headscale_user_id"`
+	ID            string         `json:"id"`
+	HeadscaleUser string         `json:"headscale_user"`
+	Issuer        string         `json:"issuer"`
+	Subject       string         `json:"subject"`
+	Email         sql.NullString `json:"email"`
+	Name          sql.NullString `json:"name"`
+	Picture       sql.NullString `json:"picture"`
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
 }

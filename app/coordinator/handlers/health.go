@@ -17,7 +17,7 @@ func NewHealthHandler(hsClient v1.HeadscaleServiceClient) *HealthHandler {
 	return &HealthHandler{hsClient: hsClient}
 }
 
-// ServeHTTP handles GET /health requests.
+// ServeHTTP handles GET /health requests (readiness check).
 func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	_, err := h.hsClient.ListUsers(ctx, &v1.ListUsersRequest{})
@@ -27,4 +27,13 @@ func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	_, _ = fmt.Fprintln(w, "ok")
+}
+
+// LivenessHandler handles liveness probe requests.
+type LivenessHandler struct{}
+
+// ServeHTTP handles GET /livez requests (liveness check).
+func (h *LivenessHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	_, _ = fmt.Fprintln(w, "alive")
 }

@@ -59,7 +59,7 @@ func (pm *ProcessManager) Start(ctx context.Context) error {
 		args = append(args, "--config", pm.configPath)
 	}
 
-	pm.cmd = exec.CommandContext(ctx, pm.binaryPath, args...)
+	pm.cmd = exec.Command(pm.binaryPath, args...)
 	pm.cmd.Env = os.Environ()
 
 	stdout, err := pm.cmd.StdoutPipe()
@@ -93,10 +93,15 @@ func (pm *ProcessManager) Start(ctx context.Context) error {
 	}()
 
 	go func() {
-		_ = pm.cmd.Wait()
+		err := pm.cmd.Wait()
 		pm.mu.Lock()
 		pm.running = false
 		pm.mu.Unlock()
+		if err != nil {
+			fmt.Printf("[headscale] process exited with error: %v\n", err)
+		} else {
+			fmt.Printf("[headscale] process exited normally\n")
+		}
 	}()
 
 	return nil

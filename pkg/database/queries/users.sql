@@ -1,6 +1,6 @@
 -- name: CreateUser :exec
-INSERT INTO users (id, headscale_user, headscale_user_id, issuer, subject, email, name, picture, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO users (id, headscale_user, issuer, subject, email, name, picture, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetUser :one
 SELECT * FROM users WHERE id = ?;

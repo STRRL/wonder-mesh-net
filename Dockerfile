@@ -16,7 +16,7 @@ FROM alpine:3.20
 RUN apk add --no-cache ca-certificates tzdata
 
 # Download Headscale binary
-ARG HEADSCALE_VERSION=0.23.0
+ARG HEADSCALE_VERSION=0.27.1
 ARG TARGETARCH
 RUN apk add --no-cache curl && \
     curl -L -o /usr/local/bin/headscale \

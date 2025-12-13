@@ -14,8 +14,8 @@ type Claims struct {
 	jwt.RegisteredClaims
 	CoordinatorURL string `json:"coordinator_url"`
 	HeadscaleURL   string `json:"headscale_url"`
-	Session        string `json:"session"`
-	User           string `json:"user"`
+	UserID         string `json:"user_id"`
+	HeadscaleUser  string `json:"headscale_user"`
 }
 
 // Generator creates join tokens
@@ -34,8 +34,8 @@ func NewGenerator(signingKey, coordinatorURL, headscaleURL string) *Generator {
 	}
 }
 
-// Generate creates a new join token for a user session
-func (g *Generator) Generate(session, user string, ttl time.Duration) (string, error) {
+// Generate creates a new join token for a user
+func (g *Generator) Generate(userID, headscaleUser string, ttl time.Duration) (string, error) {
 	now := time.Now()
 	claims := &Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -45,8 +45,8 @@ func (g *Generator) Generate(session, user string, ttl time.Duration) (string, e
 		},
 		CoordinatorURL: g.coordinatorURL,
 		HeadscaleURL:   g.headscaleURL,
-		Session:        session,
-		User:           user,
+		UserID:         userID,
+		HeadscaleUser:  headscaleUser,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -119,7 +119,7 @@ func DecodeFromCLI(encoded string) (string, error) {
 type JoinInfo struct {
 	CoordinatorURL string    `json:"coordinator_url"`
 	HeadscaleURL   string    `json:"headscale_url"`
-	User           string    `json:"user"`
+	HeadscaleUser  string    `json:"headscale_user"`
 	ExpiresAt      time.Time `json:"expires_at"`
 }
 
@@ -138,7 +138,7 @@ func GetJoinInfo(tokenString string) (*JoinInfo, error) {
 	return &JoinInfo{
 		CoordinatorURL: claims.CoordinatorURL,
 		HeadscaleURL:   claims.HeadscaleURL,
-		User:           claims.User,
+		HeadscaleUser:  claims.HeadscaleUser,
 		ExpiresAt:      expiresAt,
 	}, nil
 }

@@ -102,7 +102,7 @@ func runWorkerJoin(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Joining Wonder Mesh Net...\n")
 	fmt.Printf("  Coordinator: %s\n", info.CoordinatorURL)
-	fmt.Printf("  User: %s\n", info.User)
+	fmt.Printf("  User: %s\n", info.HeadscaleUser)
 	fmt.Printf("  Token expires: %s\n", info.ExpiresAt.Format(time.RFC3339))
 	fmt.Println()
 

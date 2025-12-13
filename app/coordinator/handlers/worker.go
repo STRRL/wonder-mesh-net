@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
@@ -92,7 +93,7 @@ func (h *WorkerHandler) HandleCreateJoinToken(w http.ResponseWriter, r *http.Req
 		ttl = parsed
 	}
 
-	token, err := h.tokenGenerator.Generate(session.UserID, user.HeadscaleUser, ttl)
+	token, err := h.tokenGenerator.Generate(user.ID, user.HeadscaleUser, ttl)
 	if err != nil {
 		log.Printf("Failed to generate join token: %v", err)
 		http.Error(w, "failed to generate join token", http.StatusInternalServerError)
@@ -130,23 +131,25 @@ func (h *WorkerHandler) HandleWorkerJoin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	user, err := h.userStore.Get(ctx, claims.Session)
+	user, err := h.userStore.Get(ctx, claims.UserID)
 	if err != nil || user == nil {
 		http.Error(w, "invalid user in token", http.StatusUnauthorized)
 		return
 	}
 
-	key, err := h.tenantManager.CreateAuthKey(ctx, user.HeadscaleUserID, 24*time.Hour, false)
+	key, err := h.tenantManager.CreateAuthKeyByName(ctx, claims.HeadscaleUser, 24*time.Hour, false)
 	if err != nil {
 		log.Printf("Failed to create auth key: %v", err)
 		http.Error(w, "failed to create auth key", http.StatusInternalServerError)
 		return
 	}
 
+	headscaleURL := strings.Replace(h.publicURL, ":9080", ":8080", 1)
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"authkey":       key.GetKey(),
-		"headscale_url": h.publicURL,
-		"user":          user.HeadscaleUser,
+		"headscale_url": headscaleURL,
+		"user":          claims.HeadscaleUser,
 	})
 }

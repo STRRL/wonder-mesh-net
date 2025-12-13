@@ -32,7 +32,11 @@ ephemeral_node_inactivity_timeout: 30m
 dns:
   magic_dns: false
   base_domain: ""
+  override_local_dns: false
 
 log:
   format: text
   level: info
+
+policy:
+  mode: database

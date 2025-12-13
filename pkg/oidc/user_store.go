@@ -11,16 +11,15 @@ import (
 
 // User represents a local user record
 type User struct {
-	ID              string
-	HeadscaleUser   string
-	HeadscaleUserID uint64
-	Issuer          string
-	Subject         string
-	Email           string
-	Name            string
-	Picture         string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID            string
+	HeadscaleUser string
+	Issuer        string
+	Subject       string
+	Email         string
+	Name          string
+	Picture       string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // UserStore is the interface for storing users
@@ -45,16 +44,15 @@ func NewDBUserStore(queries *database.Queries) *DBUserStore {
 
 func (s *DBUserStore) Create(ctx context.Context, user *User) error {
 	return s.queries.CreateUser(ctx, database.CreateUserParams{
-		ID:              user.ID,
-		HeadscaleUser:   user.HeadscaleUser,
-		HeadscaleUserID: int64(user.HeadscaleUserID),
-		Issuer:          user.Issuer,
-		Subject:         user.Subject,
-		Email:           sql.NullString{String: user.Email, Valid: user.Email != ""},
-		Name:            sql.NullString{String: user.Name, Valid: user.Name != ""},
-		Picture:         sql.NullString{String: user.Picture, Valid: user.Picture != ""},
-		CreatedAt:       user.CreatedAt,
-		UpdatedAt:       user.UpdatedAt,
+		ID:            user.ID,
+		HeadscaleUser: user.HeadscaleUser,
+		Issuer:        user.Issuer,
+		Subject:       user.Subject,
+		Email:         sql.NullString{String: user.Email, Valid: user.Email != ""},
+		Name:          sql.NullString{String: user.Name, Valid: user.Name != ""},
+		Picture:       sql.NullString{String: user.Picture, Valid: user.Picture != ""},
+		CreatedAt:     user.CreatedAt,
+		UpdatedAt:     user.UpdatedAt,
 	})
 }
 
@@ -110,15 +108,14 @@ func (s *DBUserStore) Delete(ctx context.Context, id string) error {
 
 func dbUserToUser(dbUser database.User) *User {
 	return &User{
-		ID:              dbUser.ID,
-		HeadscaleUser:   dbUser.HeadscaleUser,
-		HeadscaleUserID: uint64(dbUser.HeadscaleUserID),
-		Issuer:          dbUser.Issuer,
-		Subject:         dbUser.Subject,
-		Email:           dbUser.Email.String,
-		Name:            dbUser.Name.String,
-		Picture:         dbUser.Picture.String,
-		CreatedAt:       dbUser.CreatedAt,
-		UpdatedAt:       dbUser.UpdatedAt,
+		ID:            dbUser.ID,
+		HeadscaleUser: dbUser.HeadscaleUser,
+		Issuer:        dbUser.Issuer,
+		Subject:       dbUser.Subject,
+		Email:         dbUser.Email.String,
+		Name:          dbUser.Name.String,
+		Picture:       dbUser.Picture.String,
+		CreatedAt:     dbUser.CreatedAt,
+		UpdatedAt:     dbUser.UpdatedAt,
 	}
 }

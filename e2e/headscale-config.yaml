@@ -1,12 +1,12 @@
-server_url: http://localhost:8080
+server_url: http://192.168.1.71:8080
 listen_addr: 0.0.0.0:8080
-metrics_listen_addr: 0.0.0.0:9090
-grpc_listen_addr: 0.0.0.0:50443
+metrics_listen_addr: ""
+grpc_listen_addr: 127.0.0.1:50443
 grpc_allow_insecure: true
 
-private_key_path: /var/lib/headscale/private.key
+private_key_path: /data/headscale/private.key
 noise:
-  private_key_path: /var/lib/headscale/noise_private.key
+  private_key_path: /data/headscale/noise_private.key
 
 prefixes:
   v4: 100.64.0.0/10
@@ -16,14 +16,7 @@ prefixes:
 database:
   type: sqlite
   sqlite:
-    path: /var/lib/headscale/db.sqlite
-
-log:
-  level: info
-
-dns:
-  magic_dns: false
-  base_domain: wonder.local
+    path: /data/headscale/db.sqlite
 
 derp:
   server:
@@ -32,3 +25,18 @@ derp:
     - https://controlplane.tailscale.com/derpmap/default
   auto_update_enabled: true
   update_frequency: 24h
+
+disable_check_updates: true
+ephemeral_node_inactivity_timeout: 30m
+
+dns:
+  magic_dns: false
+  base_domain: ""
+  override_local_dns: false
+
+log:
+  format: text
+  level: trace
+
+policy:
+  mode: database

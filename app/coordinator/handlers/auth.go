@@ -135,16 +135,15 @@ func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	if existingUser == nil {
 		newUser := &oidc.User{
-			ID:              userID,
-			HeadscaleUser:   hsUser.GetName(),
-			HeadscaleUserID: hsUser.GetId(),
-			Issuer:          provider.Issuer(),
-			Subject:         userInfo.Subject,
-			Email:           userInfo.Email,
-			Name:            userInfo.Name,
-			Picture:         userInfo.Picture,
-			CreatedAt:       now,
-			UpdatedAt:       now,
+			ID:            userID,
+			HeadscaleUser: hsUser.GetName(),
+			Issuer:        provider.Issuer(),
+			Subject:       userInfo.Subject,
+			Email:         userInfo.Email,
+			Name:          userInfo.Name,
+			Picture:       userInfo.Picture,
+			CreatedAt:     now,
+			UpdatedAt:     now,
 		}
 		if err := h.userStore.Create(ctx, newUser); err != nil {
 			log.Printf("Failed to create user: %v", err)
@@ -255,7 +254,7 @@ func (h *AuthHandler) HandleCreateAuthKey(w http.ResponseWriter, r *http.Request
 		ttl = parsed
 	}
 
-	key, err := h.tenantManager.CreateAuthKey(ctx, user.HeadscaleUserID, ttl, req.Reusable)
+	key, err := h.tenantManager.CreateAuthKeyByName(ctx, user.HeadscaleUser, ttl, req.Reusable)
 	if err != nil {
 		log.Printf("Failed to create auth key: %v", err)
 		http.Error(w, "failed to create auth key", http.StatusInternalServerError)

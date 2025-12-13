@@ -3,9 +3,8 @@ set -e
 
 cd "$(dirname "$0")"
 
-echo "=== Wonder Mesh Net E2E Test ==="
+echo "=== Wonder Mesh Net E2E Test (Embedded Headscale) ==="
 
-# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -23,75 +22,22 @@ cleanup() {
 
 trap cleanup EXIT
 
-# Step 1: Start Headscale first to generate API key
-log_info "Starting Headscale..."
-docker compose up -d headscale
-sleep 5
-
-# Wait for Headscale to be healthy
-log_info "Waiting for Headscale to be ready..."
-for i in {1..30}; do
-    if curl -s http://localhost:8080/health 2>/dev/null | grep -q "pass"; then
-        log_info "Headscale is healthy"
-        break
-    fi
-    echo "  Attempt $i/30..."
-    sleep 3
-done
-
-# Generate API key
-log_info "Generating Headscale API key..."
-API_KEY=""
-for i in {1..5}; do
-    API_KEY=$(docker compose exec -T headscale headscale apikeys create --expiration 24h 2>&1 | grep -v "^$" | tail -1)
-    if [ -n "$API_KEY" ] && [[ ! "$API_KEY" =~ "error" ]]; then
-        break
-    fi
-    log_warn "Retry $i/5..."
-    sleep 2
-done
-
-if [ -z "$API_KEY" ]; then
-    log_error "Failed to generate API key"
-    docker compose logs headscale | tail -20
-    exit 1
-fi
-log_info "API Key generated: ${API_KEY:0:20}..."
-
-# Export for docker-compose
-export HEADSCALE_API_KEY="$API_KEY"
-
-# Step 2: Start Keycloak first (coordinator needs Keycloak's OIDC endpoint at startup)
 log_info "Starting Keycloak..."
 docker compose up -d keycloak
 
-# Wait for Keycloak health
 log_info "Waiting for Keycloak to be ready..."
 for i in {1..60}; do
-    if curl -s http://localhost:9090/health/ready 2>/dev/null | grep -q "UP"; then
+    if curl -s http://localhost:9090/realms/wonder/.well-known/openid-configuration 2>/dev/null | grep -q "issuer"; then
         log_info "Keycloak is ready"
         break
     fi
     echo "  Waiting for Keycloak... ($i/60)"
-    sleep 5
+    sleep 3
 done
 
-# Wait for Keycloak OIDC endpoint (required for coordinator to register provider)
-log_info "Waiting for Keycloak OIDC endpoint..."
-for i in {1..30}; do
-    if curl -s http://localhost:9090/realms/wonder/.well-known/openid-configuration 2>/dev/null | grep -q "issuer"; then
-        log_info "Keycloak OIDC endpoint is ready"
-        break
-    fi
-    echo "  Waiting for OIDC endpoint... ($i/30)"
-    sleep 2
-done
-
-# Step 3: Start Coordinator (now Keycloak is fully ready)
-log_info "Starting Coordinator..."
+log_info "Starting Coordinator (with embedded Headscale)..."
 docker compose up -d coordinator
 
-# Wait for Coordinator
 log_info "Waiting for Coordinator to be ready..."
 for i in {1..30}; do
     if curl -s http://localhost:9080/health 2>/dev/null | grep -q "ok"; then
@@ -102,14 +48,21 @@ for i in {1..30}; do
     sleep 3
 done
 
-# Step 4: Test OIDC login flow using curl
+log_info "Waiting for embedded Headscale to be ready..."
+for i in {1..30}; do
+    if curl -s http://localhost:8080/health 2>/dev/null | grep -q "pass"; then
+        log_info "Embedded Headscale is healthy"
+        break
+    fi
+    echo "  Waiting for Headscale... ($i/30)"
+    sleep 2
+done
+
 log_info "Testing OIDC login flow..."
 
-# Get the login URL and follow redirects to Keycloak
 COOKIE_JAR="cookies.txt"
 rm -f "$COOKIE_JAR"
 
-# Start login flow - get redirect Location header
 log_info "Starting login flow..."
 LOGIN_REDIRECT=$(curl -s -I -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
     "http://localhost:9080/auth/login?provider=oidc" \
@@ -122,14 +75,11 @@ if [ -z "$LOGIN_REDIRECT" ]; then
 fi
 log_info "Redirected to: ${LOGIN_REDIRECT:0:80}..."
 
-# Keycloak should already use localhost:9090 URLs
 KEYCLOAK_URL="$LOGIN_REDIRECT"
 log_info "Fetching Keycloak login page..."
 
-# Get Keycloak login form
 LOGIN_PAGE=$(curl -s -c "$COOKIE_JAR" -b "$COOKIE_JAR" -L "$KEYCLOAK_URL")
 
-# Extract form action URL (using sed for macOS compatibility)
 FORM_ACTION=$(echo "$LOGIN_PAGE" | sed -n 's/.*action="\([^"]*\)".*/\1/p' | head -1 | sed 's/&amp;/\&/g')
 if [ -z "$FORM_ACTION" ]; then
     log_error "Could not find login form"
@@ -138,7 +88,6 @@ if [ -z "$FORM_ACTION" ]; then
 fi
 log_info "Form action: ${FORM_ACTION:0:80}..."
 
-# Submit login form
 log_info "Submitting login credentials..."
 CALLBACK_RESPONSE=$(curl -s -c "$COOKIE_JAR" -b "$COOKIE_JAR" -L \
     -d "username=testuser" \
@@ -146,11 +95,9 @@ CALLBACK_RESPONSE=$(curl -s -c "$COOKIE_JAR" -b "$COOKIE_JAR" -L \
     -w "\n%{url_effective}" \
     "$FORM_ACTION")
 
-# Extract final URL and session
 FINAL_URL=$(echo "$CALLBACK_RESPONSE" | tail -1)
 log_info "Final URL: $FINAL_URL"
 
-# Extract session from URL (using sed for macOS compatibility)
 SESSION=$(echo "$FINAL_URL" | sed -n 's/.*session=\([^&]*\).*/\1/p')
 if [ -z "$SESSION" ]; then
     log_error "Failed to get session token"
@@ -159,10 +106,6 @@ if [ -z "$SESSION" ]; then
 fi
 log_info "Session token obtained: ${SESSION:0:20}..."
 
-# Step 5: Test API with session
-log_info "Testing API endpoints..."
-
-# Create join token
 log_info "Creating join token..."
 JOIN_TOKEN_RESPONSE=$(curl -s -X POST \
     -H "X-Session-Token: $SESSION" \
@@ -178,27 +121,107 @@ if [ -z "$JOIN_TOKEN" ]; then
 fi
 log_info "Join token created: ${JOIN_TOKEN:0:50}..."
 
-# Test worker join endpoint
-log_info "Testing worker join endpoint..."
-WORKER_JOIN_RESPONSE=$(curl -s -X POST \
-    -H "Content-Type: application/json" \
-    -d "{\"token\": \"$JOIN_TOKEN\"}" \
-    "http://localhost:9080/api/v1/worker/join")
+log_info "Starting Worker containers..."
+docker compose up -d worker-1 worker-2
+sleep 3
 
-AUTHKEY=$(echo "$WORKER_JOIN_RESPONSE" | sed -n 's/.*"authkey":"\([^"]*\)".*/\1/p')
-if [ -z "$AUTHKEY" ]; then
-    log_error "Failed to get authkey"
-    echo "$WORKER_JOIN_RESPONSE"
+log_info "Starting Tailscale daemons in workers..."
+docker compose exec -T -d worker-1 tailscaled --state=/data/tailscaled.state --socket=/var/run/tailscale/tailscaled.sock
+docker compose exec -T -d worker-2 tailscaled --state=/data/tailscaled.state --socket=/var/run/tailscale/tailscaled.sock
+sleep 3
+
+log_info "Worker 1: Joining mesh..."
+WORKER1_API_RESPONSE=$(docker compose exec -T worker-1 sh -c "
+    curl -s -X POST \
+        -H 'Content-Type: application/json' \
+        -d '{\"token\": \"$JOIN_TOKEN\"}' \
+        'http://coordinator:9080/api/v1/worker/join'
+")
+WORKER1_AUTHKEY=$(echo "$WORKER1_API_RESPONSE" | sed -n 's/.*"authkey":"\([^"]*\)".*/\1/p')
+WORKER1_LOGIN_SERVER=$(echo "$WORKER1_API_RESPONSE" | sed -n 's/.*"headscale_url":"\([^"]*\)".*/\1/p' | sed 's/localhost/coordinator/g')
+
+if [ -z "$WORKER1_AUTHKEY" ]; then
+    log_error "Failed to get authkey for worker 1"
+    echo "$WORKER1_API_RESPONSE"
     exit 1
 fi
-log_info "Authkey obtained: ${AUTHKEY:0:20}..."
+log_info "Worker 1 authkey: ${WORKER1_AUTHKEY:0:20}..."
 
-# Step 6: Summary
+log_info "Running tailscale up for Worker 1..."
+docker compose exec -T worker-1 sh -c "
+    timeout 30 tailscale up \
+        --reset \
+        --authkey='$WORKER1_AUTHKEY' \
+        --login-server='$WORKER1_LOGIN_SERVER' \
+        --accept-routes \
+        --accept-dns=false \
+        2>&1
+" || log_warn "Tailscale up timed out or failed for Worker 1"
+
+log_info "Worker 2: Joining mesh..."
+WORKER2_API_RESPONSE=$(docker compose exec -T worker-2 sh -c "
+    curl -s -X POST \
+        -H 'Content-Type: application/json' \
+        -d '{\"token\": \"$JOIN_TOKEN\"}' \
+        'http://coordinator:9080/api/v1/worker/join'
+")
+WORKER2_AUTHKEY=$(echo "$WORKER2_API_RESPONSE" | sed -n 's/.*"authkey":"\([^"]*\)".*/\1/p')
+WORKER2_LOGIN_SERVER=$(echo "$WORKER2_API_RESPONSE" | sed -n 's/.*"headscale_url":"\([^"]*\)".*/\1/p' | sed 's/localhost/coordinator/g')
+
+if [ -z "$WORKER2_AUTHKEY" ]; then
+    log_error "Failed to get authkey for worker 2"
+    echo "$WORKER2_API_RESPONSE"
+    exit 1
+fi
+log_info "Worker 2 authkey: ${WORKER2_AUTHKEY:0:20}..."
+
+log_info "Running tailscale up for Worker 2..."
+docker compose exec -T worker-2 sh -c "
+    timeout 30 tailscale up \
+        --reset \
+        --authkey='$WORKER2_AUTHKEY' \
+        --login-server='$WORKER2_LOGIN_SERVER' \
+        --accept-routes \
+        --accept-dns=false \
+        2>&1
+" || log_warn "Tailscale up timed out or failed for Worker 2"
+
+sleep 5
+
+log_info "Checking worker mesh connectivity..."
+WORKER1_IP=$(docker compose exec -T worker-1 tailscale ip -4 | tr -d '\r')
+WORKER2_IP=$(docker compose exec -T worker-2 tailscale ip -4 | tr -d '\r')
+
+log_info "Worker 1 IP: $WORKER1_IP"
+log_info "Worker 2 IP: $WORKER2_IP"
+
+if [ -z "$WORKER1_IP" ] || [ -z "$WORKER2_IP" ]; then
+    log_error "Failed to get worker IPs"
+    exit 1
+fi
+
+log_info "Testing Worker 1 -> Worker 2 connectivity..."
+if docker compose exec -T worker-1 ping -c 3 "$WORKER2_IP"; then
+    log_info "Worker 1 can reach Worker 2"
+else
+    log_error "Worker 1 cannot reach Worker 2"
+    exit 1
+fi
+
+log_info "Testing Worker 2 -> Worker 1 connectivity..."
+if docker compose exec -T worker-2 ping -c 3 "$WORKER1_IP"; then
+    log_info "Worker 2 can reach Worker 1"
+else
+    log_error "Worker 2 cannot reach Worker 1"
+    exit 1
+fi
+
 echo ""
 echo "==================================="
 log_info "E2E Test Passed!"
 echo "==================================="
 echo "Session: ${SESSION:0:32}..."
 echo "Join Token: ${JOIN_TOKEN:0:50}..."
-echo "Authkey: ${AUTHKEY:0:32}..."
+echo "Worker 1: $WORKER1_IP"
+echo "Worker 2: $WORKER2_IP"
 echo ""

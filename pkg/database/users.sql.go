@@ -12,28 +12,26 @@ import (
 )
 
 const createUser = `-- name: CreateUser :exec
-INSERT INTO users (id, headscale_user, headscale_user_id, issuer, subject, email, name, picture, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO users (id, headscale_user, issuer, subject, email, name, picture, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateUserParams struct {
-	ID              string         `json:"id"`
-	HeadscaleUser   string         `json:"headscale_user"`
-	HeadscaleUserID int64          `json:"headscale_user_id"`
-	Issuer          string         `json:"issuer"`
-	Subject         string         `json:"subject"`
-	Email           sql.NullString `json:"email"`
-	Name            sql.NullString `json:"name"`
-	Picture         sql.NullString `json:"picture"`
-	CreatedAt       time.Time      `json:"created_at"`
-	UpdatedAt       time.Time      `json:"updated_at"`
+	ID            string         `json:"id"`
+	HeadscaleUser string         `json:"headscale_user"`
+	Issuer        string         `json:"issuer"`
+	Subject       string         `json:"subject"`
+	Email         sql.NullString `json:"email"`
+	Name          sql.NullString `json:"name"`
+	Picture       sql.NullString `json:"picture"`
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
 	_, err := q.db.ExecContext(ctx, createUser,
 		arg.ID,
 		arg.HeadscaleUser,
-		arg.HeadscaleUserID,
 		arg.Issuer,
 		arg.Subject,
 		arg.Email,
@@ -55,7 +53,7 @@ func (q *Queries) DeleteUser(ctx context.Context, id string) error {
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, headscale_user, issuer, subject, email, name, picture, created_at, updated_at, headscale_user_id FROM users WHERE id = ?
+SELECT id, headscale_user, issuer, subject, email, name, picture, created_at, updated_at FROM users WHERE id = ?
 `
 
 func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
@@ -71,13 +69,12 @@ func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
 		&i.Picture,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.HeadscaleUserID,
 	)
 	return i, err
 }
 
 const getUserByHeadscaleUser = `-- name: GetUserByHeadscaleUser :one
-SELECT id, headscale_user, issuer, subject, email, name, picture, created_at, updated_at, headscale_user_id FROM users WHERE headscale_user = ?
+SELECT id, headscale_user, issuer, subject, email, name, picture, created_at, updated_at FROM users WHERE headscale_user = ?
 `
 
 func (q *Queries) GetUserByHeadscaleUser(ctx context.Context, headscaleUser string) (User, error) {
@@ -93,13 +90,12 @@ func (q *Queries) GetUserByHeadscaleUser(ctx context.Context, headscaleUser stri
 		&i.Picture,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.HeadscaleUserID,
 	)
 	return i, err
 }
 
 const getUserByIssuerSubject = `-- name: GetUserByIssuerSubject :one
-SELECT id, headscale_user, issuer, subject, email, name, picture, created_at, updated_at, headscale_user_id FROM users WHERE issuer = ? AND subject = ?
+SELECT id, headscale_user, issuer, subject, email, name, picture, created_at, updated_at FROM users WHERE issuer = ? AND subject = ?
 `
 
 type GetUserByIssuerSubjectParams struct {
@@ -120,13 +116,12 @@ func (q *Queries) GetUserByIssuerSubject(ctx context.Context, arg GetUserByIssue
 		&i.Picture,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.HeadscaleUserID,
 	)
 	return i, err
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, headscale_user, issuer, subject, email, name, picture, created_at, updated_at, headscale_user_id FROM users ORDER BY created_at DESC
+SELECT id, headscale_user, issuer, subject, email, name, picture, created_at, updated_at FROM users ORDER BY created_at DESC
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -148,7 +143,6 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.Picture,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.HeadscaleUserID,
 		); err != nil {
 			return nil, err
 		}

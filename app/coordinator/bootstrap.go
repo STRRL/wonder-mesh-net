@@ -40,6 +40,7 @@ func (s *Server) Run() error {
 	}
 
 	mux := http.NewServeMux()
+	mux.Handle("/livez", &handlers.LivenessHandler{})
 	mux.Handle("/health", healthHandler)
 	mux.HandleFunc("/auth/providers", authHandler.HandleProviders)
 	mux.HandleFunc("/auth/login", authHandler.HandleLogin)
@@ -51,13 +52,21 @@ func (s *Server) Run() error {
 	mux.HandleFunc("/api/v1/worker/join", workerHandler.HandleWorkerJoin)
 	mux.Handle("/hs/", hsProxyHandler)
 
+	log.Println("Initializing ACL policy...")
+	ctx := context.Background()
+	if err := s.ACLManager.SetAutogroupSelfPolicy(ctx); err != nil {
+		log.Printf("Warning: failed to initialize ACL policy: %v", err)
+	} else {
+		log.Println("ACL policy initialized successfully")
+	}
+
 	httpServer := &http.Server{
-		Addr:    s.Config.ListenAddr,
+		Addr:    s.Config.Listen,
 		Handler: mux,
 	}
 
 	go func() {
-		log.Printf("Starting coordinator on %s", s.Config.ListenAddr)
+		log.Printf("Starting coordinator on %s", s.Config.Listen)
 		if err := httpServer.ListenAndServe(); err != http.ErrServerClosed {
 			log.Fatalf("Server error: %v", err)
 		}

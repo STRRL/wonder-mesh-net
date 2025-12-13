@@ -37,35 +37,5 @@ services:
       - "--public-url"
       - "http://localhost:9080"
 
-  worker-1:
-    build:
-      context: ..
-      dockerfile: e2e/Dockerfile
-    container_name: worker-1
-    privileged: true
-    volumes:
-      - worker1-data:/data
-    extra_hosts:
-      - "coordinator:host-gateway"
-    depends_on:
-      - coordinator
-    entrypoint: ["sleep", "infinity"]
-
-  worker-2:
-    build:
-      context: ..
-      dockerfile: e2e/Dockerfile
-    container_name: worker-2
-    privileged: true
-    volumes:
-      - worker2-data:/data
-    extra_hosts:
-      - "coordinator:host-gateway"
-    depends_on:
-      - coordinator
-    entrypoint: ["sleep", "infinity"]
-
 volumes:
   coordinator-data:
-  worker1-data:
-  worker2-data:
