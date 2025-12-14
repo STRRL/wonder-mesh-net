@@ -67,6 +67,9 @@ func NewACLManager(client v1.HeadscaleServiceClient) *ACLManager {
 
 // SetTenantIsolationPolicy sets the tenant isolation ACL policy
 func (am *ACLManager) SetTenantIsolationPolicy(ctx context.Context) error {
+	am.mu.Lock()
+	defer am.mu.Unlock()
+
 	resp, err := am.client.ListUsers(ctx, &v1.ListUsersRequest{})
 	if err != nil {
 		return fmt.Errorf("failed to list users: %w", err)
@@ -90,6 +93,9 @@ func (am *ACLManager) SetTenantIsolationPolicy(ctx context.Context) error {
 
 // SetAutogroupSelfPolicy sets the autogroup:self policy (simpler but less scalable)
 func (am *ACLManager) SetAutogroupSelfPolicy(ctx context.Context) error {
+	am.mu.Lock()
+	defer am.mu.Unlock()
+
 	policy := GenerateAutogroupSelfPolicy()
 	policyJSON, err := json.Marshal(policy)
 	if err != nil {

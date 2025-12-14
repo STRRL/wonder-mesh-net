@@ -70,7 +70,7 @@ Requires a Headscale instance. Environment variables:
 HEADSCALE_API_KEY=xxx          # Required
 GITHUB_CLIENT_ID=xxx           # For GitHub OIDC
 GITHUB_CLIENT_SECRET=xxx
-JWT_SECRET=xxx                 # Optional, random if not set
+JWT_SECRET=xxx                 # Required (generate with: openssl rand -hex 32)
 ```
 
 ```bash

@@ -81,10 +81,10 @@ func (h *WorkerHandler) HandleCreateJoinToken(w http.ResponseWriter, r *http.Req
 		TTL string `json:"ttl"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		req.TTL = "1h"
+		req.TTL = "15m"
 	}
 
-	ttl := time.Hour
+	ttl := 15 * time.Minute
 	if req.TTL != "" {
 		parsed, err := time.ParseDuration(req.TTL)
 		if err != nil {

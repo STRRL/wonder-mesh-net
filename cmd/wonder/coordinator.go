@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"log/slog"
 	"os"
 
@@ -52,13 +50,9 @@ func runCoordinator(cmd *cobra.Command, args []string) {
 	coordinatorConfig.OIDCClientSecret = viper.GetString("coordinator.oidc_client_secret")
 
 	if coordinatorConfig.JWTSecret == "" {
-		b := make([]byte, 32)
-		if _, err := rand.Read(b); err != nil {
-			slog.Error("failed to generate JWT secret", "error", err)
-			os.Exit(1)
-		}
-		coordinatorConfig.JWTSecret = hex.EncodeToString(b)
-		slog.Warn("JWT_SECRET not set, generated random secret")
+		slog.Error("JWT_SECRET environment variable is required")
+		slog.Info("generate one with: openssl rand -hex 32")
+		os.Exit(1)
 	}
 
 	server, err := coordinator.NewServer(&coordinatorConfig)
