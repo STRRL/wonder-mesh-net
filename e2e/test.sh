@@ -122,9 +122,12 @@ if [ -n "$RESPONSE_BODY" ]; then
     log_info "Response body (first 200 chars): ${RESPONSE_BODY:0:200}"
 fi
 
-SESSION=$(echo "$FINAL_URL" | sed -n 's/.*session=\([^&]*\).*/\1/p')
+SESSION=$(echo "$RESPONSE_BODY" | sed -n 's/.*"session":"\([^"]*\)".*/\1/p')
 if [ -z "$SESSION" ]; then
-    log_error "Failed to get session token from URL: $FINAL_URL"
+    SESSION=$(grep -i "wonder_session" "$COOKIE_JAR" | awk '{print $NF}' | tail -1)
+fi
+if [ -z "$SESSION" ]; then
+    log_error "Failed to get session token"
     if echo "$RESPONSE_BODY" | grep -q "failed to exchange code"; then
         log_error "OIDC code exchange failed - check coordinator logs for details"
     fi

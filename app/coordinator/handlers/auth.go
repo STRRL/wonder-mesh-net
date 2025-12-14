@@ -178,14 +178,36 @@ func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectURL := authState.RedirectURI + "?session=" + sessionID + "&user=" + hsUser.GetName()
-	http.Redirect(w, r, redirectURL, http.StatusFound)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "wonder_session",
+		Value:    sessionID,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   86400 * 7,
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name:     "wonder_user",
+		Value:    hsUser.GetName(),
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   86400 * 7,
+	})
+
+	http.Redirect(w, r, authState.RedirectURI, http.StatusFound)
 }
 
 // HandleComplete handles GET /auth/complete requests.
 func (h *AuthHandler) HandleComplete(w http.ResponseWriter, r *http.Request) {
-	session := r.URL.Query().Get("session")
-	user := r.URL.Query().Get("user")
+	var session, user string
+
+	if cookie, err := r.Cookie("wonder_session"); err == nil {
+		session = cookie.Value
+	}
+	if cookie, err := r.Cookie("wonder_user"); err == nil {
+		user = cookie.Value
+	}
 
 	if session == "" {
 		http.Error(w, "missing session", http.StatusBadRequest)

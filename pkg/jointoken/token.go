@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -145,6 +146,10 @@ func GetJoinInfo(tokenString string) (*JoinInfo, error) {
 
 // ToJSON returns the join info as JSON string
 func (ji *JoinInfo) ToJSON() string {
-	data, _ := json.MarshalIndent(ji, "", "  ")
+	data, err := json.MarshalIndent(ji, "", "  ")
+	if err != nil {
+		slog.Error("failed to marshal join info", "error", err)
+		return `{"error": "failed to marshal join info"}`
+	}
 	return string(data)
 }
