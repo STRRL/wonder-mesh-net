@@ -1,4 +1,4 @@
-.PHONY: help build build-all clean test check
+.PHONY: help build build-all clean test check image
 
 # Build variables
 BINARY_NAME := wonder
@@ -55,3 +55,6 @@ check: ## Run all code checks (fmt, vet, lint)
 		echo "golangci-lint not installed, skipping"; \
 	fi
 	@echo "All checks passed"
+
+image: ## Build and push multi-arch Docker image
+	./hack/build-image.sh

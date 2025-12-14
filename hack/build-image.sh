@@ -4,17 +4,33 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-IMAGE_NAME="${IMAGE_NAME:-ghcr.io/strrl/wonder-mesh-net}"
-IMAGE_TAG="${IMAGE_TAG:-dev}"
-
 cd "${PROJECT_ROOT}"
 
-echo "Building ${IMAGE_NAME}:${IMAGE_TAG} for linux/amd64,linux/arm64..."
+# Default tag: <commit-hash>(-dirty)
+if [ -z "${IMAGE_TAG:-}" ]; then
+    IMAGE_TAG=$(git rev-parse --short HEAD)
+    if [[ $(git status --porcelain) ]]; then
+        IMAGE_TAG="${IMAGE_TAG}-dirty"
+    fi
+fi
 
-docker buildx build \
-    --platform linux/amd64,linux/arm64 \
-    -t "${IMAGE_NAME}:${IMAGE_TAG}" \
-    --push \
-    .
+IMAGE_NAME="${IMAGE_NAME:-ghcr.io/strrl/wonder-mesh-net}"
+PLATFORM="${PLATFORM:-}"
 
-echo "Pushed: ${IMAGE_NAME}:${IMAGE_TAG}"
+docker buildx inspect multiarch >/dev/null 2>&1 || \
+    docker buildx create --use --name multiarch --driver docker-container
+
+if [ -n "${PLATFORM}" ]; then
+    echo "Building ${IMAGE_NAME}:${IMAGE_TAG} for ${PLATFORM}..."
+    docker buildx build \
+        --builder multiarch \
+        --platform "${PLATFORM}" \
+        -t "${IMAGE_NAME}:${IMAGE_TAG}" \
+        --load \
+        .
+else
+    echo "Building ${IMAGE_NAME}:${IMAGE_TAG}..."
+    docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" .
+fi
+
+echo "Done: ${IMAGE_NAME}:${IMAGE_TAG}"
