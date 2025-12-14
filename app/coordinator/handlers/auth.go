@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -70,7 +71,7 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	redirectURI := r.URL.Query().Get("redirect_uri")
 	if redirectURI == "" {
 		redirectURI = h.publicURL + "/coordinator/auth/complete"
-	} else if !strings.HasPrefix(redirectURI, h.publicURL) {
+	} else if !isValidRedirectURI(h.publicURL, redirectURI) {
 		http.Error(w, "invalid redirect_uri: must be same origin", http.StatusBadRequest)
 		return
 	}
@@ -172,12 +173,15 @@ func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sessionTTL := 7 * 24 * time.Hour
+	expiresAt := now.Add(sessionTTL)
 	session := &oidc.Session{
 		ID:         sessionID,
 		UserID:     userID,
 		Issuer:     provider.Issuer(),
 		Subject:    userInfo.Subject,
 		CreatedAt:  now,
+		ExpiresAt:  &expiresAt,
 		LastUsedAt: now,
 	}
 	if err := h.sessionStore.Create(ctx, session); err != nil {
@@ -304,4 +308,21 @@ func (h *AuthHandler) HandleCreateAuthKey(w http.ResponseWriter, r *http.Request
 	}); err != nil {
 		slog.Error("failed to encode authkey response", "error", err)
 	}
+}
+
+// isValidRedirectURI validates that the redirect URI is same-origin as publicURL.
+// This prevents open redirect attacks by comparing scheme and host explicitly.
+func isValidRedirectURI(publicURL, redirectURI string) bool {
+	parsedPublic, err := url.Parse(publicURL)
+	if err != nil {
+		return false
+	}
+
+	parsedRedirect, err := url.Parse(redirectURI)
+	if err != nil {
+		return false
+	}
+
+	return parsedRedirect.Scheme == parsedPublic.Scheme &&
+		parsedRedirect.Host == parsedPublic.Host
 }

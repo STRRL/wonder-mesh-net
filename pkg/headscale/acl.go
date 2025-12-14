@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	v1 "github.com/juanfont/headscale/gen/go/headscale/v1"
 )
@@ -56,6 +57,7 @@ func GenerateAutogroupSelfPolicy() *ACLPolicy {
 // ACLManager manages ACL policies in Headscale
 type ACLManager struct {
 	client v1.HeadscaleServiceClient
+	mu     sync.Mutex
 }
 
 // NewACLManager creates a new ACLManager
@@ -100,6 +102,9 @@ func (am *ACLManager) SetAutogroupSelfPolicy(ctx context.Context) error {
 
 // AddTenantToPolicy adds a tenant to the isolation policy
 func (am *ACLManager) AddTenantToPolicy(ctx context.Context, username string) error {
+	am.mu.Lock()
+	defer am.mu.Unlock()
+
 	resp, err := am.client.GetPolicy(ctx, &v1.GetPolicyRequest{})
 	if err != nil {
 		return fmt.Errorf("failed to get policy: %w", err)
