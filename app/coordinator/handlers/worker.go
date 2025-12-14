@@ -3,7 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -58,7 +58,7 @@ func (h *WorkerHandler) HandleCreateJoinToken(w http.ResponseWriter, r *http.Req
 
 	session, err := h.sessionStore.Get(ctx, sessionID)
 	if err != nil {
-		log.Printf("Failed to get session: %v", err)
+		slog.Error("failed to get session", "error", err)
 		http.Error(w, "invalid session", http.StatusUnauthorized)
 		return
 	}
@@ -67,7 +67,9 @@ func (h *WorkerHandler) HandleCreateJoinToken(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	_ = h.sessionStore.UpdateLastUsed(ctx, sessionID)
+	if err := h.sessionStore.UpdateLastUsed(ctx, sessionID); err != nil {
+		slog.Warn("failed to update session last used", "error", err, "session_id", sessionID)
+	}
 
 	user, err := h.userStore.Get(ctx, session.UserID)
 	if err != nil || user == nil {
@@ -94,16 +96,18 @@ func (h *WorkerHandler) HandleCreateJoinToken(w http.ResponseWriter, r *http.Req
 
 	token, err := h.tokenGenerator.Generate(user.ID, user.HeadscaleUser, ttl)
 	if err != nil {
-		log.Printf("Failed to generate join token: %v", err)
+		slog.Error("failed to generate join token", "error", err)
 		http.Error(w, "failed to generate join token", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"token":   token,
 		"command": fmt.Sprintf("wonder worker join %s", token),
-	})
+	}); err != nil {
+		slog.Error("failed to encode join token response", "error", err)
+	}
 }
 
 // HandleWorkerJoin handles POST /api/v1/worker/join requests.
@@ -138,15 +142,17 @@ func (h *WorkerHandler) HandleWorkerJoin(w http.ResponseWriter, r *http.Request)
 
 	key, err := h.tenantManager.CreateAuthKeyByName(ctx, claims.HeadscaleUser, 24*time.Hour, false)
 	if err != nil {
-		log.Printf("Failed to create auth key: %v", err)
+		slog.Error("failed to create auth key", "error", err)
 		http.Error(w, "failed to create auth key", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"authkey":       key.GetKey(),
 		"headscale_url": h.publicURL,
 		"user":          claims.HeadscaleUser,
-	})
+	}); err != nil {
+		slog.Error("failed to encode worker join response", "error", err)
+	}
 }

@@ -2,7 +2,7 @@ package coordinator
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -67,12 +67,12 @@ func (s *Server) Run() error {
 		hsProxy.ServeHTTP(w, r)
 	})
 
-	log.Println("Initializing ACL policy...")
+	slog.Info("initializing ACL policy")
 	ctx := context.Background()
 	if err := s.ACLManager.SetAutogroupSelfPolicy(ctx); err != nil {
-		log.Printf("Warning: failed to initialize ACL policy: %v", err)
+		slog.Warn("failed to initialize ACL policy", "error", err)
 	} else {
-		log.Println("ACL policy initialized successfully")
+		slog.Info("ACL policy initialized successfully")
 	}
 
 	httpServer := &http.Server{
@@ -81,11 +81,13 @@ func (s *Server) Run() error {
 	}
 
 	go func() {
-		log.Printf("Starting coordinator on %s", s.Config.Listen)
-		log.Printf("  Coordinator API: %s/coordinator/*", s.Config.PublicURL)
-		log.Printf("  Headscale:       %s/*", s.Config.PublicURL)
+		slog.Info("starting coordinator",
+			"listen", s.Config.Listen,
+			"coordinator_api", s.Config.PublicURL+"/coordinator/*",
+			"headscale", s.Config.PublicURL+"/*")
 		if err := httpServer.ListenAndServe(); err != http.ErrServerClosed {
-			log.Fatalf("Server error: %v", err)
+			slog.Error("server error", "error", err)
+			os.Exit(1)
 		}
 	}()
 
@@ -93,7 +95,7 @@ func (s *Server) Run() error {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
 
-	log.Println("Shutting down...")
+	slog.Info("shutting down")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

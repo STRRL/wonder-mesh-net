@@ -3,7 +3,7 @@ package coordinator
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -16,6 +16,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
+
+const minJWTSecretLength = 32
 
 // Server is the coordinator server that manages multi-tenant Headscale access.
 type Server struct {
@@ -34,6 +36,10 @@ type Server struct {
 
 // NewServer creates a new coordinator server.
 func NewServer(config *Config) (*Server, error) {
+	if len(config.JWTSecret) < minJWTSecretLength {
+		return nil, fmt.Errorf("JWT secret must be at least %d bytes", minJWTSecretLength)
+	}
+
 	if err := os.MkdirAll(DefaultCoordinatorDataDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create coordinator data dir: %w", err)
 	}
@@ -45,12 +51,12 @@ func NewServer(config *Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
-	log.Printf("Database initialized at %s", DefaultDatabasePath)
+	slog.Info("database initialized", "path", DefaultDatabasePath)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	log.Printf("Starting embedded Headscale...")
+	slog.Info("starting embedded Headscale")
 
 	configPath := filepath.Join(DefaultHeadscaleConfigDir, "config.yaml")
 	hsProcess := headscale.NewProcessManager(headscale.ProcessConfig{
@@ -70,7 +76,7 @@ func NewServer(config *Config) (*Server, error) {
 		return nil, fmt.Errorf("headscale not ready: %w", err)
 	}
 
-	log.Printf("Headscale started successfully")
+	slog.Info("Headscale started successfully")
 
 	apiKey, err := hsProcess.CreateAPIKey(ctx)
 	if err != nil {
@@ -78,7 +84,7 @@ func NewServer(config *Config) (*Server, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("failed to create headscale API key: %w", err)
 	}
-	log.Printf("Headscale API key created")
+	slog.Info("Headscale API key created")
 
 	hsConn, err := grpc.NewClient(
 		DefaultHeadscaleGRPCAddr,
@@ -97,9 +103,9 @@ func NewServer(config *Config) (*Server, error) {
 
 	for _, providerConfig := range config.OIDCProviders() {
 		if err := oidcRegistry.RegisterProvider(ctx, providerConfig); err != nil {
-			log.Printf("Warning: failed to register OIDC provider %s: %v", providerConfig.Name, err)
+			slog.Warn("failed to register OIDC provider", "provider", providerConfig.Name, "error", err)
 		} else {
-			log.Printf("Registered OIDC provider: %s", providerConfig.Name)
+			slog.Info("registered OIDC provider", "provider", providerConfig.Name)
 		}
 	}
 
@@ -131,7 +137,7 @@ func (s *Server) Close() error {
 	}
 	if s.HSProcess != nil {
 		if err := s.HSProcess.Stop(); err != nil {
-			log.Printf("Warning: failed to stop headscale: %v", err)
+			slog.Warn("failed to stop headscale", "error", err)
 		}
 	}
 	if s.DB != nil {

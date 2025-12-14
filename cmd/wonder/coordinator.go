@@ -3,7 +3,8 @@ package main
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"log"
+	"log/slog"
+	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -53,18 +54,20 @@ func runCoordinator(cmd *cobra.Command, args []string) {
 	if coordinatorConfig.JWTSecret == "" {
 		b := make([]byte, 32)
 		if _, err := rand.Read(b); err != nil {
-			log.Fatalf("Failed to generate JWT secret: %v", err)
+			slog.Error("failed to generate JWT secret", "error", err)
+			os.Exit(1)
 		}
 		coordinatorConfig.JWTSecret = hex.EncodeToString(b)
-		log.Printf("Warning: JWT_SECRET not set, generated random secret")
+		slog.Warn("JWT_SECRET not set, generated random secret")
 	}
 
 	server, err := coordinator.NewServer(&coordinatorConfig)
 	if err != nil {
-		log.Fatalf("Failed to create server: %v", err)
+		slog.Error("failed to create server", "error", err)
+		os.Exit(1)
 	}
 
 	if err := server.Run(); err != nil {
-		log.Printf("Shutdown error: %v", err)
+		slog.Error("shutdown error", "error", err)
 	}
 }

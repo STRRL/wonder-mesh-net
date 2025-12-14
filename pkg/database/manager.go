@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pressly/goose/v3"
@@ -32,6 +33,8 @@ func NewManager(dbPath string) (*Manager, error) {
 	}
 
 	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxLifetime(time.Hour)
 
 	if err := runMigrations(db); err != nil {
 		_ = db.Close()

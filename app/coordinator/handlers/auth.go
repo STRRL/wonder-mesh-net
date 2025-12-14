@@ -2,8 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
@@ -43,9 +44,11 @@ func NewAuthHandler(
 func (h *AuthHandler) HandleProviders(w http.ResponseWriter, r *http.Request) {
 	providers := h.oidcRegistry.ListProviders()
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"providers": providers,
-	})
+	}); err != nil {
+		slog.Error("failed to encode providers response", "error", err)
+	}
 }
 
 // HandleLogin handles GET /auth/login requests.
@@ -67,6 +70,9 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	redirectURI := r.URL.Query().Get("redirect_uri")
 	if redirectURI == "" {
 		redirectURI = h.publicURL + "/coordinator/auth/complete"
+	} else if !strings.HasPrefix(redirectURI, h.publicURL) {
+		http.Error(w, "invalid redirect_uri: must be same origin", http.StatusBadRequest)
+		return
 	}
 
 	authState, err := h.oidcRegistry.CreateAuthState(ctx, redirectURI, providerName)
@@ -106,26 +112,28 @@ func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 
 	userInfo, err := provider.ExchangeCode(ctx, code)
 	if err != nil {
-		log.Printf("Failed to exchange code: %v", err)
+		slog.Error("failed to exchange code", "error", err)
 		http.Error(w, "failed to exchange code", http.StatusInternalServerError)
 		return
 	}
 
 	hsUser, err := h.tenantManager.GetOrCreateTenant(ctx, provider.Issuer(), userInfo.Subject)
 	if err != nil {
-		log.Printf("Failed to get/create tenant: %v", err)
+		slog.Error("failed to get/create tenant", "error", err)
 		http.Error(w, "failed to create tenant", http.StatusInternalServerError)
 		return
 	}
 
 	if err := h.aclManager.AddTenantToPolicy(ctx, hsUser.GetName()); err != nil {
-		log.Printf("Warning: failed to update ACL policy: %v", err)
+		slog.Error("failed to update ACL policy", "error", err, "user", hsUser.GetName())
+		http.Error(w, "failed to update ACL policy", http.StatusInternalServerError)
+		return
 	}
 
 	userID := headscale.DeriveTenantID(provider.Issuer(), userInfo.Subject)
 	existingUser, err := h.userStore.GetByIssuerSubject(ctx, provider.Issuer(), userInfo.Subject)
 	if err != nil {
-		log.Printf("Failed to check existing user: %v", err)
+		slog.Error("failed to check existing user", "error", err)
 		http.Error(w, "failed to check user", http.StatusInternalServerError)
 		return
 	}
@@ -144,7 +152,7 @@ func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 			UpdatedAt:     now,
 		}
 		if err := h.userStore.Create(ctx, newUser); err != nil {
-			log.Printf("Failed to create user: %v", err)
+			slog.Error("failed to create user", "error", err)
 			http.Error(w, "failed to create user", http.StatusInternalServerError)
 			return
 		}
@@ -153,13 +161,13 @@ func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		existingUser.Name = userInfo.Name
 		existingUser.Picture = userInfo.Picture
 		if err := h.userStore.Update(ctx, existingUser); err != nil {
-			log.Printf("Warning: failed to update user info: %v", err)
+			slog.Warn("failed to update user info", "error", err, "user_id", existingUser.ID)
 		}
 	}
 
 	sessionID, err := oidc.GenerateSessionID()
 	if err != nil {
-		log.Printf("Failed to generate session ID: %v", err)
+		slog.Error("failed to generate session ID", "error", err)
 		http.Error(w, "failed to create session", http.StatusInternalServerError)
 		return
 	}
@@ -173,16 +181,18 @@ func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		LastUsedAt: now,
 	}
 	if err := h.sessionStore.Create(ctx, session); err != nil {
-		log.Printf("Failed to create session: %v", err)
+		slog.Error("failed to create session", "error", err)
 		http.Error(w, "failed to create session", http.StatusInternalServerError)
 		return
 	}
 
+	secure := strings.HasPrefix(h.publicURL, "https://")
 	http.SetCookie(w, &http.Cookie{
 		Name:     "wonder_session",
 		Value:    sessionID,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   86400 * 7,
 	})
@@ -191,6 +201,7 @@ func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		Value:    hsUser.GetName(),
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   86400 * 7,
 	})
@@ -215,10 +226,12 @@ func (h *AuthHandler) HandleComplete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"session": session,
 		"user":    user,
-	})
+	}); err != nil {
+		slog.Error("failed to encode complete response", "error", err)
+	}
 }
 
 // HandleCreateAuthKey handles POST /api/v1/authkey requests.
@@ -238,7 +251,7 @@ func (h *AuthHandler) HandleCreateAuthKey(w http.ResponseWriter, r *http.Request
 
 	session, err := h.sessionStore.Get(ctx, sessionID)
 	if err != nil {
-		log.Printf("Failed to get session: %v", err)
+		slog.Error("failed to get session", "error", err)
 		http.Error(w, "invalid session", http.StatusUnauthorized)
 		return
 	}
@@ -247,7 +260,9 @@ func (h *AuthHandler) HandleCreateAuthKey(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	_ = h.sessionStore.UpdateLastUsed(ctx, sessionID)
+	if err := h.sessionStore.UpdateLastUsed(ctx, sessionID); err != nil {
+		slog.Warn("failed to update session last used", "error", err, "session_id", sessionID)
+	}
 
 	user, err := h.userStore.Get(ctx, session.UserID)
 	if err != nil || user == nil {
@@ -276,15 +291,17 @@ func (h *AuthHandler) HandleCreateAuthKey(w http.ResponseWriter, r *http.Request
 
 	key, err := h.tenantManager.CreateAuthKeyByName(ctx, user.HeadscaleUser, ttl, req.Reusable)
 	if err != nil {
-		log.Printf("Failed to create auth key: %v", err)
+		slog.Error("failed to create auth key", "error", err)
 		http.Error(w, "failed to create auth key", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"key":        key.GetKey(),
 		"expiration": key.GetExpiration().AsTime(),
 		"reusable":   key.GetReusable(),
-	})
+	}); err != nil {
+		slog.Error("failed to encode authkey response", "error", err)
+	}
 }
