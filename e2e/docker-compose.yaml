@@ -22,6 +22,7 @@ services:
     container_name: coordinator
     network_mode: "host"
     environment:
+      JWT_SECRET: e2e-test-jwt-secret-at-least-32-chars
       OIDC_ISSUER: http://localhost:9090/realms/wonder
       OIDC_CLIENT_ID: wonder
       OIDC_CLIENT_SECRET: wonder-secret
