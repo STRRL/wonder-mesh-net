@@ -75,8 +75,7 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	callbackURL := h.publicURL + "/coordinator/auth/callback?provider=" + providerName
-	authURL := provider.GetAuthURL(callbackURL, authState.State)
+	authURL := provider.GetAuthURL(authState.State)
 
 	http.Redirect(w, r, authURL, http.StatusFound)
 }
@@ -105,8 +104,7 @@ func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	callbackURL := h.publicURL + "/coordinator/auth/callback?provider=" + authState.ProviderName
-	userInfo, err := provider.ExchangeCode(ctx, code, callbackURL)
+	userInfo, err := provider.ExchangeCode(ctx, code)
 	if err != nil {
 		log.Printf("Failed to exchange code: %v", err)
 		http.Error(w, "failed to exchange code", http.StatusInternalServerError)

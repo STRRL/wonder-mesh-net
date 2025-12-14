@@ -117,7 +117,10 @@ func (pm *ProcessManager) Stop() error {
 	}
 
 	if err := pm.cmd.Process.Signal(os.Interrupt); err != nil {
-		return pm.cmd.Process.Kill()
+		if !isProcessFinished(err) {
+			_ = pm.cmd.Process.Kill()
+		}
+		return nil
 	}
 
 	done := make(chan struct{})
@@ -130,8 +133,18 @@ func (pm *ProcessManager) Stop() error {
 	case <-done:
 		return nil
 	case <-time.After(10 * time.Second):
-		return pm.cmd.Process.Kill()
+		_ = pm.cmd.Process.Kill()
+		return nil
 	}
+}
+
+// isProcessFinished checks if the error indicates the process has already exited
+func isProcessFinished(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "process already finished") ||
+		strings.Contains(err.Error(), "os: process already finished")
 }
 
 // IsRunning returns true if Headscale is running

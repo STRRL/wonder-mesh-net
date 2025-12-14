@@ -30,8 +30,8 @@ type UserInfo struct {
 type Provider interface {
 	Name() string
 	Issuer() string
-	GetAuthURL(redirectURI, state string) string
-	ExchangeCode(ctx context.Context, code, redirectURI string) (*UserInfo, error)
+	GetAuthURL(state string) string
+	ExchangeCode(ctx context.Context, code string) (*UserInfo, error)
 }
 
 // ProviderConfig is the configuration for a provider
@@ -42,6 +42,7 @@ type ProviderConfig struct {
 	ClientID     string   `json:"clientId"`
 	ClientSecret string   `json:"clientSecret"`
 	Scopes       []string `json:"scopes,omitempty"`
+	RedirectURL  string   `json:"redirectUrl"`
 }
 
 // NewProvider creates a provider based on config type
@@ -74,6 +75,7 @@ func NewGitHubProvider(config ProviderConfig) (*GitHubProvider, error) {
 	oauth2Config := &oauth2.Config{
 		ClientID:     config.ClientID,
 		ClientSecret: config.ClientSecret,
+		RedirectURL:  config.RedirectURL,
 		Endpoint:     github.Endpoint,
 		Scopes:       scopes,
 	}
@@ -92,14 +94,11 @@ func (p *GitHubProvider) Issuer() string {
 	return "https://github.com"
 }
 
-func (p *GitHubProvider) GetAuthURL(redirectURI, state string) string {
-	p.oauth2Config.RedirectURL = redirectURI
+func (p *GitHubProvider) GetAuthURL(state string) string {
 	return p.oauth2Config.AuthCodeURL(state)
 }
 
-func (p *GitHubProvider) ExchangeCode(ctx context.Context, code, redirectURI string) (*UserInfo, error) {
-	p.oauth2Config.RedirectURL = redirectURI
-
+func (p *GitHubProvider) ExchangeCode(ctx context.Context, code string) (*UserInfo, error) {
 	token, err := p.oauth2Config.Exchange(ctx, code)
 	if err != nil {
 		return nil, fmt.Errorf("failed to exchange code: %w", err)
@@ -160,6 +159,7 @@ func NewGoogleProvider(ctx context.Context, config ProviderConfig) (*GoogleProvi
 	oauth2Config := &oauth2.Config{
 		ClientID:     config.ClientID,
 		ClientSecret: config.ClientSecret,
+		RedirectURL:  config.RedirectURL,
 		Endpoint:     googleOAuth.Endpoint,
 		Scopes:       scopes,
 	}
@@ -182,14 +182,11 @@ func (p *GoogleProvider) Issuer() string {
 	return "https://accounts.google.com"
 }
 
-func (p *GoogleProvider) GetAuthURL(redirectURI, state string) string {
-	p.oauth2Config.RedirectURL = redirectURI
+func (p *GoogleProvider) GetAuthURL(state string) string {
 	return p.oauth2Config.AuthCodeURL(state)
 }
 
-func (p *GoogleProvider) ExchangeCode(ctx context.Context, code, redirectURI string) (*UserInfo, error) {
-	p.oauth2Config.RedirectURL = redirectURI
-
+func (p *GoogleProvider) ExchangeCode(ctx context.Context, code string) (*UserInfo, error) {
 	token, err := p.oauth2Config.Exchange(ctx, code)
 	if err != nil {
 		return nil, fmt.Errorf("failed to exchange code: %w", err)
@@ -252,6 +249,7 @@ func NewOIDCProvider(ctx context.Context, config ProviderConfig) (*OIDCProvider,
 	oauth2Config := &oauth2.Config{
 		ClientID:     config.ClientID,
 		ClientSecret: config.ClientSecret,
+		RedirectURL:  config.RedirectURL,
 		Endpoint:     provider.Endpoint(),
 		Scopes:       scopes,
 	}
@@ -275,14 +273,11 @@ func (p *OIDCProvider) Issuer() string {
 	return p.issuer
 }
 
-func (p *OIDCProvider) GetAuthURL(redirectURI, state string) string {
-	p.oauth2Config.RedirectURL = redirectURI
+func (p *OIDCProvider) GetAuthURL(state string) string {
 	return p.oauth2Config.AuthCodeURL(state)
 }
 
-func (p *OIDCProvider) ExchangeCode(ctx context.Context, code, redirectURI string) (*UserInfo, error) {
-	p.oauth2Config.RedirectURL = redirectURI
-
+func (p *OIDCProvider) ExchangeCode(ctx context.Context, code string) (*UserInfo, error) {
 	token, err := p.oauth2Config.Exchange(ctx, code)
 	if err != nil {
 		return nil, fmt.Errorf("failed to exchange code: %w", err)
