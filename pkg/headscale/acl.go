@@ -24,8 +24,8 @@ type ACLRule struct {
 	Destinations []string `json:"dst"`
 }
 
-// GenerateTenantIsolationPolicy generates an ACL policy that isolates tenants
-func GenerateTenantIsolationPolicy(usernames []string) *ACLPolicy {
+// GenerateRealmIsolationPolicy generates an ACL policy that isolates realms
+func GenerateRealmIsolationPolicy(usernames []string) *ACLPolicy {
 	rules := make([]ACLRule, 0, len(usernames))
 
 	for _, username := range usernames {
@@ -65,8 +65,8 @@ func NewACLManager(client v1.HeadscaleServiceClient) *ACLManager {
 	return &ACLManager{client: client}
 }
 
-// SetTenantIsolationPolicy sets the tenant isolation ACL policy
-func (am *ACLManager) SetTenantIsolationPolicy(ctx context.Context) error {
+// SetRealmIsolationPolicy sets the realm isolation ACL policy
+func (am *ACLManager) SetRealmIsolationPolicy(ctx context.Context) error {
 	am.mu.Lock()
 	defer am.mu.Unlock()
 
@@ -81,7 +81,7 @@ func (am *ACLManager) SetTenantIsolationPolicy(ctx context.Context) error {
 		usernames[i] = u.GetName()
 	}
 
-	policy := GenerateTenantIsolationPolicy(usernames)
+	policy := GenerateRealmIsolationPolicy(usernames)
 	policyJSON, err := json.Marshal(policy)
 	if err != nil {
 		return fmt.Errorf("failed to marshal policy: %w", err)
@@ -106,8 +106,8 @@ func (am *ACLManager) SetAutogroupSelfPolicy(ctx context.Context) error {
 	return err
 }
 
-// AddTenantToPolicy adds a tenant to the isolation policy
-func (am *ACLManager) AddTenantToPolicy(ctx context.Context, username string) error {
+// AddRealmToPolicy adds a realm to the isolation policy
+func (am *ACLManager) AddRealmToPolicy(ctx context.Context, username string) error {
 	am.mu.Lock()
 	defer am.mu.Unlock()
 

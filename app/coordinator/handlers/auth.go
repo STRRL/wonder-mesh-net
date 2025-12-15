@@ -14,30 +14,30 @@ import (
 
 // AuthHandler handles authentication-related requests.
 type AuthHandler struct {
-	publicURL     string
-	oidcRegistry  *oidc.Registry
-	tenantManager *headscale.TenantManager
-	aclManager    *headscale.ACLManager
-	sessionStore  oidc.SessionStore
-	userStore     oidc.UserStore
+	publicURL    string
+	oidcRegistry *oidc.Registry
+	realmManager *headscale.RealmManager
+	aclManager   *headscale.ACLManager
+	sessionStore oidc.SessionStore
+	userStore    oidc.UserStore
 }
 
 // NewAuthHandler creates a new AuthHandler.
 func NewAuthHandler(
 	publicURL string,
 	oidcRegistry *oidc.Registry,
-	tenantManager *headscale.TenantManager,
+	realmManager *headscale.RealmManager,
 	aclManager *headscale.ACLManager,
 	sessionStore oidc.SessionStore,
 	userStore oidc.UserStore,
 ) *AuthHandler {
 	return &AuthHandler{
-		publicURL:     publicURL,
-		oidcRegistry:  oidcRegistry,
-		tenantManager: tenantManager,
-		aclManager:    aclManager,
-		sessionStore:  sessionStore,
-		userStore:     userStore,
+		publicURL:    publicURL,
+		oidcRegistry: oidcRegistry,
+		realmManager: realmManager,
+		aclManager:   aclManager,
+		sessionStore: sessionStore,
+		userStore:    userStore,
 	}
 }
 
@@ -118,20 +118,6 @@ func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hsUser, err := h.tenantManager.GetOrCreateTenant(ctx, provider.Issuer(), userInfo.Subject)
-	if err != nil {
-		slog.Error("failed to get/create tenant", "error", err)
-		http.Error(w, "failed to create tenant", http.StatusInternalServerError)
-		return
-	}
-
-	if err := h.aclManager.AddTenantToPolicy(ctx, hsUser.GetName()); err != nil {
-		slog.Error("failed to update ACL policy", "error", err, "user", hsUser.GetName())
-		http.Error(w, "failed to update ACL policy", http.StatusInternalServerError)
-		return
-	}
-
-	userID := headscale.DeriveTenantID(provider.Issuer(), userInfo.Subject)
 	existingUser, err := h.userStore.GetByIssuerSubject(ctx, provider.Issuer(), userInfo.Subject)
 	if err != nil {
 		slog.Error("failed to check existing user", "error", err)
@@ -140,10 +126,25 @@ func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now()
-	if existingUser == nil {
+	var userID, realmName string
+
+	if existingUser != nil {
+		userID = existingUser.ID
+		realmName = existingUser.HeadscaleUser
+
+		existingUser.Email = userInfo.Email
+		existingUser.Name = userInfo.Name
+		existingUser.Picture = userInfo.Picture
+		if err := h.userStore.Update(ctx, existingUser); err != nil {
+			slog.Warn("failed to update user info", "error", err, "user_id", existingUser.ID)
+		}
+	} else {
+		userID = headscale.GenerateRealmID()
+		realmName = headscale.RealmName(userID)
+
 		newUser := &oidc.User{
 			ID:            userID,
-			HeadscaleUser: hsUser.GetName(),
+			HeadscaleUser: realmName,
 			Issuer:        provider.Issuer(),
 			Subject:       userInfo.Subject,
 			Email:         userInfo.Email,
@@ -157,13 +158,19 @@ func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "failed to create user", http.StatusInternalServerError)
 			return
 		}
-	} else {
-		existingUser.Email = userInfo.Email
-		existingUser.Name = userInfo.Name
-		existingUser.Picture = userInfo.Picture
-		if err := h.userStore.Update(ctx, existingUser); err != nil {
-			slog.Warn("failed to update user info", "error", err, "user_id", existingUser.ID)
-		}
+	}
+
+	hsUser, err := h.realmManager.GetOrCreateRealm(ctx, realmName)
+	if err != nil {
+		slog.Error("failed to get/create realm", "error", err)
+		http.Error(w, "failed to create realm", http.StatusInternalServerError)
+		return
+	}
+
+	if err := h.aclManager.AddRealmToPolicy(ctx, hsUser.GetName()); err != nil {
+		slog.Error("failed to update ACL policy", "error", err, "user", hsUser.GetName())
+		http.Error(w, "failed to update ACL policy", http.StatusInternalServerError)
+		return
 	}
 
 	sessionID, err := oidc.GenerateSessionID()
@@ -202,7 +209,7 @@ func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	})
 	http.SetCookie(w, &http.Cookie{
 		Name:     "wonder_user",
-		Value:    hsUser.GetName(),
+		Value:    realmName,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   secure,
@@ -293,7 +300,7 @@ func (h *AuthHandler) HandleCreateAuthKey(w http.ResponseWriter, r *http.Request
 		ttl = parsed
 	}
 
-	key, err := h.tenantManager.CreateAuthKeyByName(ctx, user.HeadscaleUser, ttl, req.Reusable)
+	key, err := h.realmManager.CreateAuthKeyByName(ctx, user.HeadscaleUser, ttl, req.Reusable)
 	if err != nil {
 		slog.Error("failed to create auth key", "error", err)
 		http.Error(w, "failed to create auth key", http.StatusInternalServerError)

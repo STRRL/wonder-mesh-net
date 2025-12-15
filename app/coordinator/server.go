@@ -19,14 +19,14 @@ import (
 
 const minJWTSecretLength = 32
 
-// Server is the coordinator server that manages multi-tenant Headscale access.
+// Server is the coordinator server that manages multi-realm Headscale access.
 type Server struct {
 	Config         *Config
 	DB             *database.Manager
 	HSConn         *grpc.ClientConn
 	HSClient       v1.HeadscaleServiceClient
 	HSProcess      *headscale.ProcessManager
-	TenantManager  *headscale.TenantManager
+	RealmManager   *headscale.RealmManager
 	ACLManager     *headscale.ACLManager
 	OIDCRegistry   *oidc.Registry
 	TokenGenerator *jointoken.Generator
@@ -121,7 +121,7 @@ func NewServer(config *Config) (*Server, error) {
 		HSConn:         hsConn,
 		HSClient:       hsClient,
 		HSProcess:      hsProcess,
-		TenantManager:  headscale.NewTenantManager(hsClient),
+		RealmManager:   headscale.NewRealmManager(hsClient),
 		ACLManager:     headscale.NewACLManager(hsClient),
 		OIDCRegistry:   oidcRegistry,
 		TokenGenerator: tokenGenerator,

@@ -16,7 +16,7 @@ import (
 type WorkerHandler struct {
 	publicURL      string
 	jwtSecret      string
-	tenantManager  *headscale.TenantManager
+	realmManager   *headscale.RealmManager
 	tokenGenerator *jointoken.Generator
 	sessionStore   oidc.SessionStore
 	userStore      oidc.UserStore
@@ -26,7 +26,7 @@ type WorkerHandler struct {
 func NewWorkerHandler(
 	publicURL string,
 	jwtSecret string,
-	tenantManager *headscale.TenantManager,
+	realmManager *headscale.RealmManager,
 	tokenGenerator *jointoken.Generator,
 	sessionStore oidc.SessionStore,
 	userStore oidc.UserStore,
@@ -34,7 +34,7 @@ func NewWorkerHandler(
 	return &WorkerHandler{
 		publicURL:      publicURL,
 		jwtSecret:      jwtSecret,
-		tenantManager:  tenantManager,
+		realmManager:   realmManager,
 		tokenGenerator: tokenGenerator,
 		sessionStore:   sessionStore,
 		userStore:      userStore,
@@ -140,7 +140,7 @@ func (h *WorkerHandler) HandleWorkerJoin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	key, err := h.tenantManager.CreateAuthKeyByName(ctx, claims.HeadscaleUser, 24*time.Hour, false)
+	key, err := h.realmManager.CreateAuthKeyByName(ctx, claims.HeadscaleUser, 24*time.Hour, false)
 	if err != nil {
 		slog.Error("failed to create auth key", "error", err)
 		http.Error(w, "failed to create auth key", http.StatusInternalServerError)

@@ -11,21 +11,21 @@ import (
 
 // NodesHandler handles node-related requests.
 type NodesHandler struct {
-	tenantManager *headscale.TenantManager
-	sessionStore  oidc.SessionStore
-	userStore     oidc.UserStore
+	realmManager *headscale.RealmManager
+	sessionStore oidc.SessionStore
+	userStore    oidc.UserStore
 }
 
 // NewNodesHandler creates a new NodesHandler.
 func NewNodesHandler(
-	tenantManager *headscale.TenantManager,
+	realmManager *headscale.RealmManager,
 	sessionStore oidc.SessionStore,
 	userStore oidc.UserStore,
 ) *NodesHandler {
 	return &NodesHandler{
-		tenantManager: tenantManager,
-		sessionStore:  sessionStore,
-		userStore:     userStore,
+		realmManager: realmManager,
+		sessionStore: sessionStore,
+		userStore:    userStore,
 	}
 }
 
@@ -56,7 +56,7 @@ func (h *NodesHandler) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	nodes, err := h.tenantManager.GetTenantNodes(ctx, user.HeadscaleUser)
+	nodes, err := h.realmManager.GetRealmNodes(ctx, user.HeadscaleUser)
 	if err != nil {
 		log.Printf("Failed to list nodes: %v", err)
 		http.Error(w, "failed to list nodes", http.StatusInternalServerError)

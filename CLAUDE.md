@@ -44,8 +44,8 @@ cmd/wonder/
 pkg/
 ├── headscale/        # Headscale API client
 │   ├── client.go     # HTTP client for Headscale REST API
-│   ├── tenant.go     # Tenant management (user = tenant isolation)
-│   └── acl.go        # ACL policy generation per tenant
+│   ├── realm.go      # Realm management (user = realm isolation)
+│   └── acl.go        # ACL policy generation per realm
 ├── jointoken/        # JWT-based join tokens for workers
 ├── oidc/             # Multi-provider OIDC authentication
 └── wondersdk/        # Client SDK for external integrations
@@ -53,13 +53,18 @@ pkg/
 
 ### Key Concepts
 
-**Multi-tenancy**: Each OIDC user gets an isolated Headscale "user" (namespace). Tenant ID is derived from `hash(issuer + subject)`, username is `tenant-{id[:12]}`.
+**Multi-tenancy**: Each OIDC user gets an isolated Headscale "user" (namespace). Realm ID is a random UUID stored in DB, username is `realm-{id[:12]}`.
+
+**TODO: User / Org / Realm hierarchy**
+- Current: 1 OIDC identity = 1 realm (1:1 mapping via `users` table)
+- Future: Support organizations with multiple users sharing a realm
+- Will need: `realms` table, `orgs` table, `oidc_identities` table with roles
 
 **Auth flow**: User logs in via OIDC -> coordinator creates Headscale user -> generates session token -> user creates join token -> worker exchanges token for PreAuthKey -> runs `tailscale up` with authkey.
 
 **Coordinator endpoints**:
 - `/auth/login?provider=github` - Start OIDC flow
-- `/auth/callback` - OIDC callback, creates tenant
+- `/auth/callback` - OIDC callback, creates realm
 - `/api/v1/join-token` - Generate JWT for worker join (needs `X-Session-Token` header)
 - `/api/v1/worker/join` - Worker exchanges JWT for Headscale PreAuthKey
 

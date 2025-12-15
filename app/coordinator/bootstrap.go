@@ -23,16 +23,16 @@ func (s *Server) Run() error {
 	authHandler := handlers.NewAuthHandler(
 		s.Config.PublicURL,
 		s.OIDCRegistry,
-		s.TenantManager,
+		s.RealmManager,
 		s.ACLManager,
 		s.SessionStore,
 		s.UserStore,
 	)
-	nodesHandler := handlers.NewNodesHandler(s.TenantManager, s.SessionStore, s.UserStore)
+	nodesHandler := handlers.NewNodesHandler(s.RealmManager, s.SessionStore, s.UserStore)
 	workerHandler := handlers.NewWorkerHandler(
 		s.Config.PublicURL,
 		s.Config.JWTSecret,
-		s.TenantManager,
+		s.RealmManager,
 		s.TokenGenerator,
 		s.SessionStore,
 		s.UserStore,
