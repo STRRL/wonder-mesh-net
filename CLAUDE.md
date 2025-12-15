@@ -60,6 +60,16 @@ pkg/
 - Future: Support organizations with multiple users sharing a realm
 - Will need: `realms` table, `orgs` table, `oidc_identities` table with roles
 
+**TODO: OAuth 2.0 for third-party integrations**
+- Current: API keys for third-party access (Zeabur, etc.)
+- Future: OAuth 2.0 authorization flow for more granular, revocable access
+- Will enable: "Login with Wonder Mesh" for PaaS platforms
+
+**TODO: API Key security hardening**
+- Current: Plaintext storage (for dev convenience, keys retrievable via list API)
+- Future: Consider hashed storage (SHA256) or encrypted storage (AES-256)
+- Trade-off: Security vs. dev experience (retrievable keys)
+
 **Auth flow**: User logs in via OIDC -> coordinator creates Headscale user -> generates session token -> user creates join token -> worker exchanges token for PreAuthKey -> runs `tailscale up` with authkey.
 
 **Coordinator endpoints**:
@@ -67,6 +77,8 @@ pkg/
 - `/auth/callback` - OIDC callback, creates realm
 - `/api/v1/join-token` - Generate JWT for worker join (needs `X-Session-Token` header)
 - `/api/v1/worker/join` - Worker exchanges JWT for Headscale PreAuthKey
+- `/api/v1/nodes` - List nodes (supports `X-Session-Token` or `Authorization: Bearer <api_key>`)
+- `/api/v1/api-keys` - Manage API keys for third-party integrations (GET/POST, needs session)
 
 ## Running Locally
 

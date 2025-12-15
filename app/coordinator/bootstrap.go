@@ -28,7 +28,8 @@ func (s *Server) Run() error {
 		s.SessionStore,
 		s.UserStore,
 	)
-	nodesHandler := handlers.NewNodesHandler(s.RealmManager, s.SessionStore, s.UserStore)
+	nodesHandler := handlers.NewNodesHandler(s.RealmManager, s.SessionStore, s.UserStore, s.APIKeyStore)
+	apiKeyHandler := handlers.NewAPIKeyHandler(s.APIKeyStore, s.SessionStore, s.UserStore)
 	workerHandler := handlers.NewWorkerHandler(
 		s.Config.PublicURL,
 		s.Config.JWTSecret,
@@ -52,6 +53,8 @@ func (s *Server) Run() error {
 	coordinatorMux.HandleFunc("/auth/complete", authHandler.HandleComplete)
 	coordinatorMux.HandleFunc("/api/v1/authkey", authHandler.HandleCreateAuthKey)
 	coordinatorMux.HandleFunc("/api/v1/nodes", nodesHandler.HandleListNodes)
+	coordinatorMux.HandleFunc("/api/v1/api-keys", apiKeyHandler.HandleAPIKeys)
+	coordinatorMux.HandleFunc("/api/v1/api-keys/", apiKeyHandler.HandleDeleteAPIKey)
 	coordinatorMux.HandleFunc("/api/v1/join-token", workerHandler.HandleCreateJoinToken)
 	coordinatorMux.HandleFunc("/api/v1/worker/join", workerHandler.HandleWorkerJoin)
 

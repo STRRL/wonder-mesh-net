@@ -9,6 +9,17 @@ import (
 	"time"
 )
 
+type ApiKey struct {
+	ID         string       `json:"id"`
+	UserID     string       `json:"user_id"`
+	Name       string       `json:"name"`
+	ApiKey     string       `json:"api_key"`
+	Scopes     string       `json:"scopes"`
+	CreatedAt  time.Time    `json:"created_at"`
+	ExpiresAt  sql.NullTime `json:"expires_at"`
+	LastUsedAt sql.NullTime `json:"last_used_at"`
+}
+
 type AuthState struct {
 	State        string    `json:"state"`
 	Nonce        string    `json:"nonce"`

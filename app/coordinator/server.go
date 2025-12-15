@@ -9,6 +9,7 @@ import (
 	"time"
 
 	v1 "github.com/juanfont/headscale/gen/go/headscale/v1"
+	"github.com/strrl/wonder-mesh-net/pkg/apikey"
 	"github.com/strrl/wonder-mesh-net/pkg/database"
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
 	"github.com/strrl/wonder-mesh-net/pkg/jointoken"
@@ -32,6 +33,7 @@ type Server struct {
 	TokenGenerator *jointoken.Generator
 	SessionStore   *oidc.DBSessionStore
 	UserStore      *oidc.DBUserStore
+	APIKeyStore    *apikey.DBStore
 }
 
 // NewServer creates a new coordinator server.
@@ -127,6 +129,7 @@ func NewServer(config *Config) (*Server, error) {
 		TokenGenerator: tokenGenerator,
 		SessionStore:   oidc.NewDBSessionStore(db.Queries()),
 		UserStore:      oidc.NewDBUserStore(db.Queries()),
+		APIKeyStore:    apikey.NewDBStore(db.Queries()),
 	}, nil
 }
 

@@ -149,6 +149,104 @@ if [ -z "$JOIN_TOKEN" ]; then
 fi
 log_info "Join token created: ${JOIN_TOKEN:0:80}..."
 
+# ============================================
+# API Key Tests (for third-party integrations)
+# ============================================
+log_info "=== Testing API Key functionality ==="
+
+log_info "Creating API key..."
+API_KEY_RESPONSE=$(curl -s -X POST \
+    -H "X-Session-Token: $SESSION" \
+    -H "Content-Type: application/json" \
+    -d '{"name": "test-api-key", "scopes": "nodes:read"}' \
+    "http://localhost:9080/coordinator/api/v1/api-keys")
+
+API_KEY=$(echo "$API_KEY_RESPONSE" | sed -n 's/.*"key":"\([^"]*\)".*/\1/p')
+API_KEY_ID=$(echo "$API_KEY_RESPONSE" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+if [ -z "$API_KEY" ]; then
+    log_error "Failed to create API key"
+    echo "$API_KEY_RESPONSE"
+    exit 1
+fi
+log_info "API key created: ${API_KEY:0:20}..."
+log_info "API key ID: $API_KEY_ID"
+
+log_info "Listing API keys..."
+API_KEYS_LIST=$(curl -s \
+    -H "X-Session-Token: $SESSION" \
+    "http://localhost:9080/coordinator/api/v1/api-keys")
+
+if ! echo "$API_KEYS_LIST" | grep -q "$API_KEY_ID"; then
+    log_error "Created API key not found in list"
+    echo "$API_KEYS_LIST"
+    exit 1
+fi
+log_info "API key found in list"
+
+log_info "Testing nodes endpoint with session token..."
+NODES_BY_SESSION=$(curl -s \
+    -H "X-Session-Token: $SESSION" \
+    "http://localhost:9080/coordinator/api/v1/nodes")
+
+if ! echo "$NODES_BY_SESSION" | grep -q '"nodes"'; then
+    log_error "Failed to get nodes with session token"
+    echo "$NODES_BY_SESSION"
+    exit 1
+fi
+log_info "Nodes endpoint works with session token"
+
+log_info "Testing nodes endpoint with API key (Bearer token)..."
+NODES_BY_API_KEY=$(curl -s \
+    -H "Authorization: Bearer $API_KEY" \
+    "http://localhost:9080/coordinator/api/v1/nodes")
+
+if ! echo "$NODES_BY_API_KEY" | grep -q '"nodes"'; then
+    log_error "Failed to get nodes with API key"
+    echo "$NODES_BY_API_KEY"
+    exit 1
+fi
+log_info "Nodes endpoint works with API key (third-party integration ready)"
+
+log_info "Creating second API key for deletion test..."
+API_KEY2_RESPONSE=$(curl -s -X POST \
+    -H "X-Session-Token: $SESSION" \
+    -H "Content-Type: application/json" \
+    -d '{"name": "test-api-key-2", "scopes": "nodes:read", "expires_in": "24h"}' \
+    "http://localhost:9080/coordinator/api/v1/api-keys")
+
+API_KEY2_ID=$(echo "$API_KEY2_RESPONSE" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+if [ -z "$API_KEY2_ID" ]; then
+    log_error "Failed to create second API key"
+    exit 1
+fi
+log_info "Second API key created: $API_KEY2_ID"
+
+log_info "Deleting second API key..."
+DELETE_RESPONSE=$(curl -s -X DELETE \
+    -H "X-Session-Token: $SESSION" \
+    -w "\nHTTP_CODE:%{http_code}" \
+    "http://localhost:9080/coordinator/api/v1/api-keys/$API_KEY2_ID")
+
+DELETE_HTTP_CODE=$(echo "$DELETE_RESPONSE" | grep "^HTTP_CODE:" | cut -d: -f2)
+if [ "$DELETE_HTTP_CODE" != "204" ]; then
+    log_error "Failed to delete API key (HTTP $DELETE_HTTP_CODE)"
+    exit 1
+fi
+log_info "API key deleted successfully"
+
+log_info "Verifying deleted API key is gone..."
+API_KEYS_LIST_AFTER=$(curl -s \
+    -H "X-Session-Token: $SESSION" \
+    "http://localhost:9080/coordinator/api/v1/api-keys")
+
+if echo "$API_KEYS_LIST_AFTER" | grep -q "$API_KEY2_ID"; then
+    log_error "Deleted API key still in list"
+    exit 1
+fi
+log_info "Deleted API key confirmed removed"
+
+log_info "=== API Key tests passed ==="
+
 # Get host IP that containers can reach (coordinator uses host network)
 HOST_IP="host.docker.internal"
 # On Linux, host.docker.internal may not work, use docker bridge gateway
@@ -325,5 +423,43 @@ else
     log_warn "Ping failed: Worker 3 -> Worker 2"
 fi
 
+# ============================================
+# Verify API key can see nodes after workers joined
+# ============================================
+log_info "=== Verifying API key can see joined nodes ==="
+
+NODES_FINAL=$(curl -s \
+    -H "Authorization: Bearer $API_KEY" \
+    "http://localhost:9080/coordinator/api/v1/nodes")
+
+NODE_COUNT=$(echo "$NODES_FINAL" | sed -n 's/.*"count":\([0-9]*\).*/\1/p')
+log_info "Nodes visible via API key: $NODE_COUNT"
+
+if [ "$NODE_COUNT" -lt 3 ]; then
+    log_warn "Expected 3 nodes, got $NODE_COUNT"
+    echo "$NODES_FINAL"
+else
+    log_info "All 3 workers visible via API key"
+fi
+
+if echo "$NODES_FINAL" | grep -q "$WORKER1_IP"; then
+    log_info "Worker 1 IP ($WORKER1_IP) found in API response"
+else
+    log_warn "Worker 1 IP not found in API response"
+fi
+
+if echo "$NODES_FINAL" | grep -q "$WORKER2_IP"; then
+    log_info "Worker 2 IP ($WORKER2_IP) found in API response"
+else
+    log_warn "Worker 2 IP not found in API response"
+fi
+
+if echo "$NODES_FINAL" | grep -q "$WORKER3_IP"; then
+    log_info "Worker 3 IP ($WORKER3_IP) found in API response"
+else
+    log_warn "Worker 3 IP not found in API response"
+fi
+
 log_info "=== E2E Test Complete ==="
 log_info "3 workers connected to mesh successfully!"
+log_info "API key integration verified - third-party platforms can query node info!"
