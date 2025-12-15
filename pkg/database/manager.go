@@ -32,8 +32,10 @@ func NewManager(dbPath string) (*Manager, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(5)
+	// SQLite does not handle multiple concurrent writers well.
+	// Setting MaxOpenConns to 1 prevents "database is locked" errors.
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 	db.SetConnMaxLifetime(time.Hour)
 
 	if err := runMigrations(db); err != nil {
