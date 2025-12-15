@@ -48,7 +48,7 @@ func (q *Queries) DeleteAPIKey(ctx context.Context, id string) error {
 	return err
 }
 
-const deleteAPIKeyByUser = `-- name: DeleteAPIKeyByUser :exec
+const deleteAPIKeyByUser = `-- name: DeleteAPIKeyByUser :execresult
 DELETE FROM api_keys WHERE id = ? AND user_id = ?
 `
 
@@ -57,9 +57,8 @@ type DeleteAPIKeyByUserParams struct {
 	UserID string `json:"user_id"`
 }
 
-func (q *Queries) DeleteAPIKeyByUser(ctx context.Context, arg DeleteAPIKeyByUserParams) error {
-	_, err := q.db.ExecContext(ctx, deleteAPIKeyByUser, arg.ID, arg.UserID)
-	return err
+func (q *Queries) DeleteAPIKeyByUser(ctx context.Context, arg DeleteAPIKeyByUserParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, deleteAPIKeyByUser, arg.ID, arg.UserID)
 }
 
 const getAPIKey = `-- name: GetAPIKey :one

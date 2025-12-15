@@ -81,7 +81,7 @@ COOKIE_JAR="cookies.txt"
 rm -f "$COOKIE_JAR"
 
 log_info "Starting login flow..."
-LOGIN_REDIRECT=$(curl -s -I -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
+LOGIN_REDIRECT=$(curl -s -D - -o /dev/null -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
     "http://localhost:9080/coordinator/auth/login?provider=oidc" \
     | grep -i "^location:" | sed 's/location: //i' | tr -d '\r')
 

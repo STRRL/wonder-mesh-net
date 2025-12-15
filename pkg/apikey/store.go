@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,6 +14,20 @@ import (
 )
 
 const keyLength = 32
+
+// ErrNotFound is returned when an API key is not found.
+var ErrNotFound = errors.New("api key not found")
+
+// HasScope checks if the given scope is present in a comma-separated scope string.
+// Performs exact match, not substring match.
+func HasScope(scopes, target string) bool {
+	for _, s := range strings.Split(scopes, ",") {
+		if strings.TrimSpace(s) == target {
+			return true
+		}
+	}
+	return false
+}
 
 // APIKey represents an API key for third-party integrations
 type APIKey struct {
@@ -132,10 +147,21 @@ func (s *DBStore) List(ctx context.Context, userID string) ([]*APIKeyWithSecret,
 }
 
 func (s *DBStore) Delete(ctx context.Context, id, userID string) error {
-	return s.queries.DeleteAPIKeyByUser(ctx, database.DeleteAPIKeyByUserParams{
+	result, err := s.queries.DeleteAPIKeyByUser(ctx, database.DeleteAPIKeyByUserParams{
 		ID:     id,
 		UserID: userID,
 	})
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *DBStore) UpdateLastUsed(ctx context.Context, id string) error {

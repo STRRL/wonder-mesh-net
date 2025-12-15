@@ -29,11 +29,8 @@ func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, _ = fmt.Fprintln(w, "ok")
 }
 
-// LivenessHandler handles liveness probe requests.
-type LivenessHandler struct{}
-
-// ServeHTTP handles GET /livez requests (liveness check).
-func (h *LivenessHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+// HandleLiveness handles GET /livez requests (liveness check).
+func HandleLiveness(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = fmt.Fprintln(w, "alive")
 }

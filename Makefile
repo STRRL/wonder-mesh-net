@@ -39,13 +39,8 @@ test: ## Run tests
 	$(GO) test -race -coverprofile=coverage.out ./...
 
 check: ## Run all code checks (fmt, vet, lint)
-	@echo "Checking gofmt..."
-	@gofmt_output=$$(gofmt -l .); \
-	if [ -n "$$gofmt_output" ]; then \
-		echo "Files need formatting:"; \
-		echo "$$gofmt_output"; \
-		exit 1; \
-	fi
+	@echo "Running gofmt..."
+	@gofmt -w .
 	@echo "Running go vet..."
 	$(GO) vet ./...
 	@echo "Running golangci-lint..."

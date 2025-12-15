@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/strrl/wonder-mesh-net/pkg/apikey"
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
@@ -14,23 +13,20 @@ import (
 // NodesHandler handles node-related requests.
 type NodesHandler struct {
 	realmManager *headscale.RealmManager
-	sessionStore oidc.SessionStore
-	userStore    oidc.UserStore
 	apiKeyStore  apikey.Store
+	auth         *AuthHelper
 }
 
 // NewNodesHandler creates a new NodesHandler.
 func NewNodesHandler(
 	realmManager *headscale.RealmManager,
-	sessionStore oidc.SessionStore,
-	userStore oidc.UserStore,
 	apiKeyStore apikey.Store,
+	auth *AuthHelper,
 ) *NodesHandler {
 	return &NodesHandler{
 		realmManager: realmManager,
-		sessionStore: sessionStore,
-		userStore:    userStore,
 		apiKeyStore:  apiKeyStore,
+		auth:         auth,
 	}
 }
 
@@ -54,17 +50,9 @@ func (h *NodesHandler) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type nodeInfo struct {
-		ID       uint64   `json:"id"`
-		Name     string   `json:"name"`
-		IPAddrs  []string `json:"ip_addresses"`
-		Online   bool     `json:"online"`
-		LastSeen string   `json:"last_seen,omitempty"`
-	}
-
-	result := make([]nodeInfo, len(nodes))
+	result := make([]NodeResponse, len(nodes))
 	for i, node := range nodes {
-		result[i] = nodeInfo{
+		result[i] = NodeResponse{
 			ID:      node.GetId(),
 			Name:    node.GetName(),
 			IPAddrs: node.GetIpAddresses(),
@@ -76,55 +64,34 @@ func (h *NodesHandler) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"nodes": result,
-		"count": len(result),
+	_ = json.NewEncoder(w).Encode(NodeListResponse{
+		Nodes: result,
+		Count: len(result),
 	})
 }
 
 func (h *NodesHandler) authenticate(r *http.Request) (*oidc.User, error) {
 	ctx := r.Context()
 
-	if authHeader := r.Header.Get("Authorization"); authHeader != "" {
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			key := strings.TrimPrefix(authHeader, "Bearer ")
-			apiKey, err := h.apiKeyStore.GetByKey(ctx, key)
-			if err != nil {
-				return nil, err
-			}
-			if apiKey == nil {
-				return nil, http.ErrNoCookie
-			}
-
-			if !strings.Contains(apiKey.Scopes, "nodes:read") {
-				return nil, http.ErrNoCookie
-			}
-
-			if err := h.apiKeyStore.UpdateLastUsed(ctx, apiKey.ID); err != nil {
-				slog.Warn("failed to update API key last used", "error", err)
-			}
-
-			user, err := h.userStore.Get(ctx, apiKey.UserID)
-			if err != nil || user == nil {
-				return nil, http.ErrNoCookie
-			}
-			return user, nil
+	if key := GetBearerToken(r); key != "" {
+		apiKey, err := h.apiKeyStore.GetByKey(ctx, key)
+		if err != nil {
+			return nil, err
 		}
+		if apiKey == nil {
+			return nil, ErrInvalidAPIKey
+		}
+
+		if !apikey.HasScope(apiKey.Scopes, "nodes:read") {
+			return nil, ErrInsufficientScope
+		}
+
+		if err := h.apiKeyStore.UpdateLastUsed(ctx, apiKey.ID); err != nil {
+			slog.Warn("failed to update API key last used", "error", err)
+		}
+
+		return h.auth.GetUserByID(ctx, apiKey.UserID)
 	}
 
-	sessionID := r.Header.Get("X-Session-Token")
-	if sessionID != "" {
-		session, err := h.sessionStore.Get(ctx, sessionID)
-		if err != nil || session == nil {
-			return nil, http.ErrNoCookie
-		}
-
-		user, err := h.userStore.Get(ctx, session.UserID)
-		if err != nil || user == nil {
-			return nil, http.ErrNoCookie
-		}
-		return user, nil
-	}
-
-	return nil, http.ErrNoCookie
+	return h.auth.AuthenticateSession(r)
 }
