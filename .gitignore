@@ -27,6 +27,19 @@ go.work.sum
 # env file
 .env
 
+# Built binaries
+bin/
+deploy-server
+
+# Database
+data/
+*.db
+*.db-shm
+*.db-wal
+
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# E2E test artifacts
+e2e/cookies.txt

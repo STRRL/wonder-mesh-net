@@ -1,0 +1,88 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: keycloak
+    command: start-dev --import-realm
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME_URL: http://localhost:9090
+      KC_HOSTNAME_ADMIN_URL: http://localhost:9090
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_RELATIVE_PATH: /
+    volumes:
+      - ./keycloak-realm.json:/opt/keycloak/data/import/realm.json
+    ports:
+      - "9090:8080"
+
+  coordinator:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: coordinator
+    network_mode: "host"
+    environment:
+      JWT_SECRET: e2e-test-jwt-secret-at-least-32-chars
+      OIDC_ISSUER: http://localhost:9090/realms/wonder
+      OIDC_CLIENT_ID: wonder
+      OIDC_CLIENT_SECRET: wonder-secret
+      OIDC_REDIRECT_URI: http://localhost:9080/coordinator/auth/callback
+    volumes:
+      - ./headscale-config.yaml:/etc/headscale/config.yaml
+      - coordinator-data:/data
+    depends_on:
+      - keycloak
+    command:
+      - "coordinator"
+      - "--listen"
+      - ":9080"
+      - "--public-url"
+      - "http://localhost:9080"
+
+  worker-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: worker-1
+    hostname: worker-1
+    privileged: true
+    volumes:
+      - /dev/net/tun:/dev/net/tun
+    depends_on:
+      - coordinator
+
+  worker-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: worker-2
+    hostname: worker-2
+    privileged: true
+    volumes:
+      - /dev/net/tun:/dev/net/tun
+    depends_on:
+      - coordinator
+
+  worker-3:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: worker-3
+    hostname: worker-3
+    privileged: true
+    volumes:
+      - /dev/net/tun:/dev/net/tun
+    depends_on:
+      - coordinator
+
+  deployer:
+    build:
+      context: .
+      dockerfile: Dockerfile.deployer
+    container_name: deployer
+    hostname: deployer
+    depends_on:
+      - coordinator
+
+volumes:
+  coordinator-data:

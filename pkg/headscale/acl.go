@@ -1,0 +1,148 @@
+package headscale
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"sync"
+
+	v1 "github.com/juanfont/headscale/gen/go/headscale/v1"
+)
+
+// ACLPolicy represents a Headscale ACL policy
+type ACLPolicy struct {
+	ACLs      []ACLRule           `json:"acls,omitempty"`
+	Groups    map[string][]string `json:"groups,omitempty"`
+	TagOwners map[string][]string `json:"tagOwners,omitempty"`
+	Hosts     map[string]string   `json:"hosts,omitempty"`
+}
+
+// ACLRule represents a single ACL rule
+type ACLRule struct {
+	Action       string   `json:"action"`
+	Sources      []string `json:"src"`
+	Destinations []string `json:"dst"`
+}
+
+// GenerateRealmIsolationPolicy generates an ACL policy that isolates realms
+func GenerateRealmIsolationPolicy(usernames []string) *ACLPolicy {
+	rules := make([]ACLRule, 0, len(usernames))
+
+	for _, username := range usernames {
+		rules = append(rules, ACLRule{
+			Action:       "accept",
+			Sources:      []string{username + "@"},
+			Destinations: []string{username + "@:*"},
+		})
+	}
+
+	return &ACLPolicy{
+		ACLs: rules,
+	}
+}
+
+// GenerateAutogroupSelfPolicy generates a policy using autogroup:self
+func GenerateAutogroupSelfPolicy() *ACLPolicy {
+	return &ACLPolicy{
+		ACLs: []ACLRule{
+			{
+				Action:       "accept",
+				Sources:      []string{"*"},
+				Destinations: []string{"*:*"},
+			},
+		},
+	}
+}
+
+// ACLManager manages ACL policies in Headscale
+type ACLManager struct {
+	client v1.HeadscaleServiceClient
+	mu     sync.Mutex
+}
+
+// NewACLManager creates a new ACLManager
+func NewACLManager(client v1.HeadscaleServiceClient) *ACLManager {
+	return &ACLManager{client: client}
+}
+
+// SetRealmIsolationPolicy sets the realm isolation ACL policy
+func (am *ACLManager) SetRealmIsolationPolicy(ctx context.Context) error {
+	am.mu.Lock()
+	defer am.mu.Unlock()
+
+	resp, err := am.client.ListUsers(ctx, &v1.ListUsersRequest{})
+	if err != nil {
+		return fmt.Errorf("failed to list users: %w", err)
+	}
+
+	users := resp.GetUsers()
+	usernames := make([]string, len(users))
+	for i, u := range users {
+		usernames[i] = u.GetName()
+	}
+
+	policy := GenerateRealmIsolationPolicy(usernames)
+	policyJSON, err := json.Marshal(policy)
+	if err != nil {
+		return fmt.Errorf("failed to marshal policy: %w", err)
+	}
+
+	_, err = am.client.SetPolicy(ctx, &v1.SetPolicyRequest{Policy: string(policyJSON)})
+	return err
+}
+
+// SetAutogroupSelfPolicy sets the autogroup:self policy (simpler but less scalable)
+func (am *ACLManager) SetAutogroupSelfPolicy(ctx context.Context) error {
+	am.mu.Lock()
+	defer am.mu.Unlock()
+
+	policy := GenerateAutogroupSelfPolicy()
+	policyJSON, err := json.Marshal(policy)
+	if err != nil {
+		return fmt.Errorf("failed to marshal policy: %w", err)
+	}
+
+	_, err = am.client.SetPolicy(ctx, &v1.SetPolicyRequest{Policy: string(policyJSON)})
+	return err
+}
+
+// AddRealmToPolicy adds a realm to the isolation policy
+func (am *ACLManager) AddRealmToPolicy(ctx context.Context, username string) error {
+	am.mu.Lock()
+	defer am.mu.Unlock()
+
+	resp, err := am.client.GetPolicy(ctx, &v1.GetPolicyRequest{})
+	if err != nil {
+		return fmt.Errorf("failed to get policy: %w", err)
+	}
+
+	policyStr := resp.GetPolicy()
+	var policy ACLPolicy
+	if policyStr != "" {
+		if err := json.Unmarshal([]byte(policyStr), &policy); err != nil {
+			return fmt.Errorf("failed to unmarshal policy: %w", err)
+		}
+	}
+
+	newRule := ACLRule{
+		Action:       "accept",
+		Sources:      []string{username + "@"},
+		Destinations: []string{username + "@:*"},
+	}
+
+	for _, rule := range policy.ACLs {
+		if len(rule.Sources) > 0 && rule.Sources[0] == newRule.Sources[0] {
+			return nil
+		}
+	}
+
+	policy.ACLs = append(policy.ACLs, newRule)
+
+	policyJSON, err := json.Marshal(policy)
+	if err != nil {
+		return fmt.Errorf("failed to marshal policy: %w", err)
+	}
+
+	_, err = am.client.SetPolicy(ctx, &v1.SetPolicyRequest{Policy: string(policyJSON)})
+	return err
+}
