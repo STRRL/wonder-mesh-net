@@ -29,6 +29,7 @@ func (s *Server) Run() error {
 	)
 	nodesHandler := handlers.NewNodesHandler(s.RealmManager, s.APIKeyStore, authHelper)
 	apiKeyHandler := handlers.NewAPIKeyHandler(s.APIKeyStore, authHelper)
+	deployerHandler := handlers.NewDeployerHandler(s.Config.PublicURL, s.RealmManager, s.APIKeyStore, authHelper)
 	workerHandler := handlers.NewWorkerHandler(
 		s.Config.PublicURL,
 		s.Config.JWTSecret,
@@ -57,6 +58,7 @@ func (s *Server) Run() error {
 	coordinatorRouter.Delete("/api/v1/api-keys/{id}", apiKeyHandler.HandleDeleteAPIKey)
 	coordinatorRouter.Post("/api/v1/join-token", workerHandler.HandleCreateJoinToken)
 	coordinatorRouter.Post("/api/v1/worker/join", workerHandler.HandleWorkerJoin)
+	coordinatorRouter.Post("/api/v1/deployer/join", deployerHandler.HandleDeployerJoin)
 
 	rootRouter := chi.NewRouter()
 	rootRouter.Mount("/coordinator", coordinatorRouter)

@@ -32,3 +32,10 @@ type NodeListResponse struct {
 	Nodes []NodeResponse `json:"nodes"`
 	Count int            `json:"count"`
 }
+
+// DeployerJoinResponse represents the response for deployer join requests.
+type DeployerJoinResponse struct {
+	AuthKey      string `json:"authkey"`
+	HeadscaleURL string `json:"headscale_url"`
+	User         string `json:"user"`
+}

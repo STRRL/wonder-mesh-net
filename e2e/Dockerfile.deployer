@@ -4,21 +4,14 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y \
     curl \
-    iptables \
-    iproute2 \
-    iputils-ping \
+    openssh-client \
+    sshpass \
+    netcat-openbsd \
+    jq \
     ca-certificates \
-    openssh-server \
-    python3 \
     && rm -rf /var/lib/apt/lists/*
 
-# Configure sshd
-RUN mkdir /run/sshd \
-    && echo 'root:worker' | chpasswd \
-    && sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config \
-    && sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
-
-# Install Tailscale (latest stable, compatible with Headscale 0.27.1)
+# Install Tailscale (for userspace networking)
 RUN curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg \
     | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null \
     && curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list \
@@ -27,5 +20,4 @@ RUN curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg \
     && apt-get install -y tailscale \
     && rm -rf /var/lib/apt/lists/*
 
-# Start sshd and keep container running
-CMD ["/bin/bash", "-c", "/usr/sbin/sshd && sleep infinity"]
+CMD ["sleep", "infinity"]

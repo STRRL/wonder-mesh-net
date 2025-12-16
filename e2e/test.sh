@@ -460,6 +460,109 @@ else
     log_warn "Worker 3 IP not found in API response"
 fi
 
+# ============================================
+# Deployer Test
+# ============================================
+log_info "=== Testing Deployer ==="
+
+# Create API key with deployer:connect scope
+log_info "Creating API key with deployer:connect scope..."
+DEPLOYER_KEY_RESPONSE=$(curl -s -X POST \
+    -H "X-Session-Token: $SESSION" \
+    -H "Content-Type: application/json" \
+    -d '{"name": "deployer-key", "scopes": "nodes:read,deployer:connect"}' \
+    "http://localhost:9080/coordinator/api/v1/api-keys")
+
+DEPLOYER_KEY=$(echo "$DEPLOYER_KEY_RESPONSE" | sed -n 's/.*"key":"\([^"]*\)".*/\1/p')
+if [ -z "$DEPLOYER_KEY" ]; then
+    log_error "Failed to create deployer API key"
+    echo "$DEPLOYER_KEY_RESPONSE"
+    exit 1
+fi
+log_info "Deployer API key created: ${DEPLOYER_KEY:0:20}..."
+
+# Deployer join
+log_info "Deployer joining mesh..."
+DEPLOYER_JOIN_RESPONSE=$(docker exec deployer curl -s -X POST \
+    -H "Authorization: Bearer $DEPLOYER_KEY" \
+    -H "Content-Type: application/json" \
+    "http://$HOST_IP:9080/coordinator/api/v1/deployer/join")
+
+DEPLOYER_AUTHKEY=$(echo "$DEPLOYER_JOIN_RESPONSE" | sed -n 's/.*"authkey":"\([^"]*\)".*/\1/p')
+DEPLOYER_LOGIN_SERVER=$(echo "$DEPLOYER_JOIN_RESPONSE" | sed -n 's/.*"headscale_url":"\([^"]*\)".*/\1/p' | sed "s/localhost/$HOST_IP/g")
+
+if [ -z "$DEPLOYER_AUTHKEY" ]; then
+    log_error "Failed to get authkey for deployer"
+    echo "$DEPLOYER_JOIN_RESPONSE"
+    exit 1
+fi
+log_info "Deployer authkey: ${DEPLOYER_AUTHKEY:0:20}..."
+log_info "Deployer login server: $DEPLOYER_LOGIN_SERVER"
+
+# Start userspace tailscaled in deployer
+log_info "Starting userspace tailscaled in deployer..."
+docker exec -d deployer tailscaled \
+    --tun=userspace-networking \
+    --socks5-server=:1080 \
+    --state=/tmp/tailscale.state \
+    --socket=/tmp/tailscaled.sock
+
+sleep 3
+
+# Join mesh
+log_info "Deployer joining mesh..."
+docker exec deployer tailscale --socket=/tmp/tailscaled.sock up \
+    --authkey="$DEPLOYER_AUTHKEY" \
+    --login-server="$DEPLOYER_LOGIN_SERVER" \
+    2>&1 || log_warn "Tailscale up returned non-zero exit code for Deployer"
+
+sleep 3
+
+# Check deployer status
+log_info "Deployer tailscale status:"
+docker exec deployer tailscale --socket=/tmp/tailscaled.sock status || true
+
+# SSH to worker-1 via SOCKS5 and deploy app
+log_info "Deploying app to Worker 1 via SSH over SOCKS5..."
+docker exec deployer sshpass -p 'worker' ssh -T \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    -o ConnectTimeout=10 \
+    -o ProxyCommand="nc -x localhost:1080 %h %p" \
+    root@$WORKER1_IP \
+    'sh -c "echo \"Hello from deployed app\" > /tmp/index.html && nohup python3 -m http.server 8080 -d /tmp > /tmp/httpd.log 2>&1 &"'
+
+SSH_EXIT=$?
+if [ $SSH_EXIT -ne 0 ]; then
+    log_error "SSH command failed with exit code $SSH_EXIT"
+    exit 1
+fi
+log_info "SSH deploy command completed"
+
+# Wait for HTTP server to start and retry
+log_info "Accessing deployed app via mesh..."
+for i in 1 2 3 4 5; do
+    sleep 2
+    APP_RESPONSE=$(docker exec deployer curl -s --connect-timeout 10 --socks5-hostname localhost:1080 \
+        "http://$WORKER1_IP:8080/index.html" 2>/dev/null || true)
+    if echo "$APP_RESPONSE" | grep -q "Hello from deployed app"; then
+        log_info "Deployer test PASSED: App accessible via mesh"
+        break
+    fi
+    if [ $i -lt 5 ]; then
+        log_info "Retry $i: HTTP server not ready yet, waiting..."
+    fi
+done
+
+if ! echo "$APP_RESPONSE" | grep -q "Hello from deployed app"; then
+    log_error "Deployer test FAILED"
+    echo "Response: $APP_RESPONSE"
+    exit 1
+fi
+
+log_info "=== Deployer Test Complete ==="
+
 log_info "=== E2E Test Complete ==="
 log_info "3 workers connected to mesh successfully!"
-log_info "API key integration verified - third-party platforms can query node info!"
+log_info "API key integration verified - third-party deployers can query node info!"
+log_info "Deployer test passed - apps can be deployed and accessed via mesh!"

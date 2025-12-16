@@ -75,5 +75,14 @@ services:
     depends_on:
       - coordinator
 
+  deployer:
+    build:
+      context: .
+      dockerfile: Dockerfile.deployer
+    container_name: deployer
+    hostname: deployer
+    depends_on:
+      - coordinator
+
 volumes:
   coordinator-data:
