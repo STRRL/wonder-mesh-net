@@ -226,15 +226,22 @@ type deviceTokenResponse struct {
 	Error        string `json:"error,omitempty"`
 }
 
+const (
+	defaultPollInterval   = 5
+	deviceFlowTimeout     = 15 * time.Minute
+	maxConsecutiveErrors  = 5
+)
+
 func pollForToken(coordinator, deviceCode string, interval int) (authkey, headscaleURL, user string, err error) {
 	if interval < 1 {
-		interval = 5
+		interval = defaultPollInterval
 	}
 
 	ticker := time.NewTicker(time.Duration(interval) * time.Second)
 	defer ticker.Stop()
 
-	timeout := time.After(15 * time.Minute)
+	timeout := time.After(deviceFlowTimeout)
+	consecutiveErrors := 0
 
 	for {
 		select {
@@ -248,15 +255,24 @@ func pollForToken(coordinator, deviceCode string, interval int) (authkey, headsc
 				bytes.NewReader(reqBody),
 			)
 			if err != nil {
+				consecutiveErrors++
+				if consecutiveErrors >= maxConsecutiveErrors {
+					return "", "", "", fmt.Errorf("network error after %d retries: %w", consecutiveErrors, err)
+				}
 				continue
 			}
 
 			var result deviceTokenResponse
 			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 				resp.Body.Close()
+				consecutiveErrors++
+				if consecutiveErrors >= maxConsecutiveErrors {
+					return "", "", "", fmt.Errorf("failed to decode response after %d retries: %w", consecutiveErrors, err)
+				}
 				continue
 			}
 			resp.Body.Close()
+			consecutiveErrors = 0
 
 			switch resp.StatusCode {
 			case http.StatusOK:

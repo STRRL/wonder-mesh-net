@@ -80,15 +80,15 @@ func (s *Store) Create() (*DeviceRequest, error) {
 }
 
 func (s *Store) GetByDeviceCode(deviceCode string) (*DeviceRequest, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	req, ok := s.requests[deviceCode]
 	if !ok {
 		return nil, false
 	}
 
-	if time.Now().After(req.ExpiresAt) {
+	if time.Now().After(req.ExpiresAt) && req.Status == StatusPending {
 		req.Status = StatusExpired
 	}
 
@@ -96,15 +96,15 @@ func (s *Store) GetByDeviceCode(deviceCode string) (*DeviceRequest, bool) {
 }
 
 func (s *Store) GetByUserCode(userCode string) (*DeviceRequest, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	req, ok := s.byUser[userCode]
 	if !ok {
 		return nil, false
 	}
 
-	if time.Now().After(req.ExpiresAt) {
+	if time.Now().After(req.ExpiresAt) && req.Status == StatusPending {
 		req.Status = StatusExpired
 	}
 

@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"time"
 
 	"github.com/strrl/wonder-mesh-net/pkg/deviceflow"
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
-	"github.com/strrl/wonder-mesh-net/pkg/oidc"
 )
+
+var userCodePattern = regexp.MustCompile(`^[A-Z0-9]{4}-[A-Z0-9]{4}$`)
 
 type DeviceHandler struct {
 	publicURL    string
@@ -243,6 +245,13 @@ func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if !userCodePattern.MatchString(req.UserCode) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid code format, expected XXXX-XXXX"})
+		return
+	}
+
 	deviceReq, ok := h.store.GetByUserCode(req.UserCode)
 	if !ok {
 		w.Header().Set("Content-Type", "application/json")
@@ -335,8 +344,4 @@ func (h *DeviceHandler) HandleDeviceToken(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "access_denied"})
 	}
-}
-
-func (h *DeviceHandler) GetUserFromCookie(r *http.Request) (*oidc.User, error) {
-	return h.authHelper.GetUserFromRequest(r.Context(), r)
 }
