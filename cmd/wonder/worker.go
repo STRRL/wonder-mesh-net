@@ -16,6 +16,8 @@ import (
 	"github.com/strrl/wonder-mesh-net/pkg/jointoken"
 )
 
+var coordinatorURL string
+
 var workerCmd = &cobra.Command{
 	Use:   "worker",
 	Short: "Worker node commands",
@@ -23,12 +25,16 @@ var workerCmd = &cobra.Command{
 }
 
 var workerJoinCmd = &cobra.Command{
-	Use:   "join <token>",
-	Short: "Join the mesh using a join token",
-	Long: `Join the Wonder Mesh Net using a join token generated from the coordinator web UI.
+	Use:   "join [token]",
+	Short: "Join the mesh network",
+	Long: `Join the Wonder Mesh Net.
 
-The token contains all necessary information to connect this device to your mesh network.`,
-	Args: cobra.ExactArgs(1),
+Without arguments, starts device authorization flow:
+  wonder worker join --coordinator https://your-coordinator.example.com
+
+With a token, uses token-based join (legacy):
+  wonder worker join <token>`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: runWorkerJoin,
 }
 
@@ -47,6 +53,7 @@ var workerLeaveCmd = &cobra.Command{
 }
 
 func init() {
+	workerJoinCmd.Flags().StringVar(&coordinatorURL, "coordinator", "", "Coordinator URL (required for device flow)")
 	workerCmd.AddCommand(workerJoinCmd)
 	workerCmd.AddCommand(workerStatusCmd)
 	workerCmd.AddCommand(workerLeaveCmd)
@@ -93,8 +100,13 @@ func saveWorkerCredentials(creds *workerCredentials) error {
 }
 
 func runWorkerJoin(cmd *cobra.Command, args []string) error {
-	token := args[0]
+	if len(args) == 1 {
+		return runTokenJoin(args[0])
+	}
+	return runDeviceFlowJoin()
+}
 
+func runTokenJoin(token string) error {
 	info, err := jointoken.GetJoinInfo(token)
 	if err != nil {
 		return fmt.Errorf("invalid token: %w", err)
@@ -112,7 +124,7 @@ func runWorkerJoin(cmd *cobra.Command, args []string) error {
 
 	reqBody, _ := json.Marshal(map[string]string{"token": token})
 	resp, err := http.Post(
-		info.CoordinatorURL+"/api/v1/worker/join",
+		info.CoordinatorURL+"/coordinator/api/v1/worker/join",
 		"application/json",
 		bytes.NewReader(reqBody),
 	)
@@ -135,22 +147,151 @@ func runWorkerJoin(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to decode response: %w", err)
 	}
 
+	return completeJoin(result.Authkey, result.HeadscaleURL, result.User, info.CoordinatorURL)
+}
+
+func runDeviceFlowJoin() error {
+	if coordinatorURL == "" {
+		creds, err := loadWorkerCredentials()
+		if err == nil && creds.Coordinator != "" {
+			coordinatorURL = creds.Coordinator
+		} else {
+			return fmt.Errorf("--coordinator flag is required for device flow")
+		}
+	}
+
+	fmt.Println("Starting device authorization...")
+	fmt.Println()
+
+	deviceCode, userCode, verifyURL, interval, err := requestDeviceCode(coordinatorURL)
+	if err != nil {
+		return fmt.Errorf("failed to start device authorization: %w", err)
+	}
+
+	fmt.Println("To authorize this device, visit:")
+	fmt.Println()
+	fmt.Printf("  %s?code=%s\n", verifyURL, userCode)
+	fmt.Println()
+	fmt.Printf("And enter the code: %s\n", userCode)
+	fmt.Println()
+	fmt.Println("Waiting for authorization...")
+
+	authkey, headscaleURL, user, err := pollForToken(coordinatorURL, deviceCode, interval)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println()
+	fmt.Println("Device authorized!")
+
+	return completeJoin(authkey, headscaleURL, user, coordinatorURL)
+}
+
+type deviceCodeResponse struct {
+	DeviceCode      string `json:"device_code"`
+	UserCode        string `json:"user_code"`
+	VerificationURL string `json:"verification_url"`
+	ExpiresIn       int    `json:"expires_in"`
+	Interval        int    `json:"interval"`
+}
+
+func requestDeviceCode(coordinator string) (deviceCode, userCode, verifyURL string, interval int, err error) {
+	resp, err := http.Post(
+		coordinator+"/coordinator/device/code",
+		"application/json",
+		bytes.NewReader([]byte("{}")),
+	)
+	if err != nil {
+		return "", "", "", 0, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", "", "", 0, fmt.Errorf("failed to get device code: %s", string(body))
+	}
+
+	var result deviceCodeResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", "", "", 0, err
+	}
+
+	return result.DeviceCode, result.UserCode, result.VerificationURL, result.Interval, nil
+}
+
+type deviceTokenResponse struct {
+	Authkey      string `json:"authkey,omitempty"`
+	HeadscaleURL string `json:"headscale_url,omitempty"`
+	User         string `json:"user,omitempty"`
+	Error        string `json:"error,omitempty"`
+}
+
+func pollForToken(coordinator, deviceCode string, interval int) (authkey, headscaleURL, user string, err error) {
+	if interval < 1 {
+		interval = 5
+	}
+
+	ticker := time.NewTicker(time.Duration(interval) * time.Second)
+	defer ticker.Stop()
+
+	timeout := time.After(15 * time.Minute)
+
+	for {
+		select {
+		case <-timeout:
+			return "", "", "", fmt.Errorf("authorization timed out")
+		case <-ticker.C:
+			reqBody, _ := json.Marshal(map[string]string{"device_code": deviceCode})
+			resp, err := http.Post(
+				coordinator+"/coordinator/device/token",
+				"application/json",
+				bytes.NewReader(reqBody),
+			)
+			if err != nil {
+				continue
+			}
+
+			var result deviceTokenResponse
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				resp.Body.Close()
+				continue
+			}
+			resp.Body.Close()
+
+			switch resp.StatusCode {
+			case http.StatusOK:
+				return result.Authkey, result.HeadscaleURL, result.User, nil
+			case http.StatusAccepted:
+				fmt.Print(".")
+				continue
+			case http.StatusGone:
+				return "", "", "", fmt.Errorf("device code expired, please try again")
+			case http.StatusForbidden:
+				return "", "", "", fmt.Errorf("authorization denied")
+			default:
+				continue
+			}
+		}
+	}
+}
+
+func completeJoin(authkey, headscaleURL, user, coordinator string) error {
 	creds := &workerCredentials{
-		User:         result.User,
-		Coordinator:  info.CoordinatorURL,
-		HeadscaleURL: result.HeadscaleURL,
+		User:         user,
+		Coordinator:  coordinator,
+		HeadscaleURL: headscaleURL,
 		JoinedAt:     time.Now(),
 	}
 	if err := saveWorkerCredentials(creds); err != nil {
 		fmt.Printf("Warning: failed to save credentials: %v\n", err)
 	}
 
-	fmt.Printf("Successfully obtained auth key!\n\n")
+	fmt.Printf("\nSuccessfully obtained auth key!\n\n")
 	fmt.Printf("To complete the setup, run on this device:\n\n")
-	fmt.Printf("  sudo tailscale up --login-server=%s --authkey=%s\n\n", result.HeadscaleURL, result.Authkey)
+	fmt.Printf("  sudo tailscale up --login-server=%s --authkey=%s\n\n", headscaleURL, authkey)
 
 	if askRunTailscale() {
-		return runTailscaleUp(result.HeadscaleURL, result.Authkey)
+		return runTailscaleUp(headscaleURL, authkey)
 	}
 
 	return nil
@@ -189,8 +330,8 @@ func runWorkerStatus(cmd *cobra.Command, args []string) error {
 	creds, err := loadWorkerCredentials()
 	if err != nil {
 		fmt.Println("Not joined to any mesh")
-		fmt.Println("\nTo join, get a token from the coordinator web UI and run:")
-		fmt.Println("  wonder worker join <token>")
+		fmt.Println("\nTo join, run:")
+		fmt.Println("  wonder worker join --coordinator https://your-coordinator.example.com")
 		return nil
 	}
 
