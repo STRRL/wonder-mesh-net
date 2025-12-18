@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"html"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -12,6 +13,7 @@ import (
 )
 
 var userCodePattern = regexp.MustCompile(`^[A-Z0-9]{4}-[A-Z0-9]{4}$`)
+var deviceCodePattern = regexp.MustCompile(`^[a-f0-9]{32}$`)
 
 type DeviceHandler struct {
 	publicURL    string
@@ -70,9 +72,9 @@ func (h *DeviceHandler) HandleDeviceCode(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *DeviceHandler) HandleDeviceVerifyPage(w http.ResponseWriter, r *http.Request) {
-	userCode := r.URL.Query().Get("code")
+	userCode := html.EscapeString(r.URL.Query().Get("code"))
 
-	html := `<!DOCTYPE html>
+	htmlContent := `<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
@@ -216,7 +218,7 @@ func (h *DeviceHandler) HandleDeviceVerifyPage(w http.ResponseWriter, r *http.Re
 </html>`
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(html))
+	w.Write([]byte(htmlContent))
 }
 
 func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Request) {
@@ -311,6 +313,13 @@ func (h *DeviceHandler) HandleDeviceToken(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if !deviceCodePattern.MatchString(req.DeviceCode) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "invalid_device_code_format"})
+		return
+	}
+
 	deviceReq, ok := h.store.GetByDeviceCode(req.DeviceCode)
 	if !ok {
 		w.Header().Set("Content-Type", "application/json")
@@ -328,6 +337,7 @@ func (h *DeviceHandler) HandleDeviceToken(w http.ResponseWriter, r *http.Request
 
 	case deviceflow.StatusApproved:
 		h.store.Delete(req.DeviceCode)
+		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(DeviceTokenResponse{
 			Authkey:      deviceReq.Authkey,
 			HeadscaleURL: deviceReq.HeadscaleURL,
