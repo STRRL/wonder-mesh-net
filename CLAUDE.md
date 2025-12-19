@@ -102,6 +102,31 @@ JWT_SECRET=xxx                 # Required (generate with: openssl rand -hex 32)
 - No end-of-line comments
 - No Chinese in code comments
 
+## PR Review Comments
+
+When asked to check PR review comments, use the `gh-pr-comments` extension:
+
+```bash
+# List all reviews
+gh pr-comments reviews
+
+# List unresolved review comments (resolved hidden by default)
+gh pr-comments list
+
+# Show tree view of reviews and comments
+gh pr-comments tree
+
+# View full content of a specific comment
+gh pr-comments view <comment-id>
+
+# Include resolved comments
+gh pr-comments list --all
+gh pr-comments tree --all
+
+# Filter by outdated status
+gh pr-comments list --outdated=true
+gh pr-comments list --outdated=false
+```
 
 ## 0 - About the User and Your Role
 
