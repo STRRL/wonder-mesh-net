@@ -1,4 +1,4 @@
-package main
+package worker
 
 import (
 	"bytes"
@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"time"
 
@@ -18,88 +17,27 @@ import (
 
 var coordinatorURL string
 
-var workerCmd = &cobra.Command{
-	Use:   "worker",
-	Short: "Worker node commands",
-	Long:  `Commands for managing this device as a worker node in Wonder Mesh Net.`,
-}
-
-var workerJoinCmd = &cobra.Command{
-	Use:   "join [token]",
-	Short: "Join the mesh network",
-	Long: `Join the Wonder Mesh Net.
+func newJoinCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "join [token]",
+		Short: "Join the mesh network",
+		Long: `Join the Wonder Mesh Net.
 
 Without arguments, starts device authorization flow:
   wonder worker join --coordinator https://your-coordinator.example.com
 
 With a token, uses token-based join (legacy):
   wonder worker join <token>`,
-	Args: cobra.MaximumNArgs(1),
-	RunE: runWorkerJoin,
-}
-
-var workerStatusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Show worker status",
-	Long:  `Show current worker status and connection information.`,
-	RunE:  runWorkerStatus,
-}
-
-var workerLeaveCmd = &cobra.Command{
-	Use:   "leave",
-	Short: "Leave the mesh",
-	Long:  `Remove locally stored credentials and leave the mesh.`,
-	RunE:  runWorkerLeave,
-}
-
-func init() {
-	workerJoinCmd.Flags().StringVar(&coordinatorURL, "coordinator", "", "Coordinator URL (required for device flow)")
-	workerCmd.AddCommand(workerJoinCmd)
-	workerCmd.AddCommand(workerStatusCmd)
-	workerCmd.AddCommand(workerLeaveCmd)
-}
-
-type workerCredentials struct {
-	User         string    `json:"user"`
-	Coordinator  string    `json:"coordinator"`
-	HeadscaleURL string    `json:"headscale_url"`
-	JoinedAt     time.Time `json:"joined_at"`
-}
-
-func getWorkerCredentialsPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".wonder", "worker.json")
-}
-
-func loadWorkerCredentials() (*workerCredentials, error) {
-	data, err := os.ReadFile(getWorkerCredentialsPath())
-	if err != nil {
-		return nil, err
+		Args: cobra.MaximumNArgs(1),
+		RunE: runJoin,
 	}
 
-	var creds workerCredentials
-	if err := json.Unmarshal(data, &creds); err != nil {
-		return nil, err
-	}
+	cmd.Flags().StringVar(&coordinatorURL, "coordinator", "", "Coordinator URL (required for device flow)")
 
-	return &creds, nil
+	return cmd
 }
 
-func saveWorkerCredentials(creds *workerCredentials) error {
-	dir := filepath.Dir(getWorkerCredentialsPath())
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return err
-	}
-
-	data, err := json.MarshalIndent(creds, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(getWorkerCredentialsPath(), data, 0600)
-}
-
-func runWorkerJoin(cmd *cobra.Command, args []string) error {
+func runJoin(cmd *cobra.Command, args []string) error {
 	if len(args) == 1 {
 		return runTokenJoin(args[0])
 	}
@@ -152,7 +90,7 @@ func runTokenJoin(token string) error {
 
 func runDeviceFlowJoin() error {
 	if coordinatorURL == "" {
-		creds, err := loadWorkerCredentials()
+		creds, err := loadCredentials()
 		if err == nil && creds.Coordinator != "" {
 			coordinatorURL = creds.Coordinator
 		} else {
@@ -227,9 +165,9 @@ type deviceTokenResponse struct {
 }
 
 const (
-	defaultPollInterval   = 5
-	deviceFlowTimeout     = 15 * time.Minute
-	maxConsecutiveErrors  = 5
+	defaultPollInterval  = 5
+	deviceFlowTimeout    = 15 * time.Minute
+	maxConsecutiveErrors = 5
 )
 
 func pollOnce(coordinator, deviceCode string) (authkey, headscaleURL, user string, done bool, err error) {
@@ -297,13 +235,13 @@ func pollForToken(coordinator, deviceCode string, interval int) (authkey, headsc
 }
 
 func completeJoin(authkey, headscaleURL, user, coordinator string) error {
-	creds := &workerCredentials{
+	creds := &credentials{
 		User:         user,
 		Coordinator:  coordinator,
 		HeadscaleURL: headscaleURL,
 		JoinedAt:     time.Now(),
 	}
-	if err := saveWorkerCredentials(creds); err != nil {
+	if err := saveCredentials(creds); err != nil {
 		fmt.Printf("Warning: failed to save credentials: %v\n", err)
 	}
 
@@ -344,36 +282,5 @@ func runTailscaleUp(headscaleURL, authkey string) error {
 	}
 
 	fmt.Println("\nSuccessfully joined the mesh!")
-	return nil
-}
-
-func runWorkerStatus(cmd *cobra.Command, args []string) error {
-	creds, err := loadWorkerCredentials()
-	if err != nil {
-		fmt.Println("Not joined to any mesh")
-		fmt.Println("\nTo join, run:")
-		fmt.Println("  wonder worker join --coordinator https://your-coordinator.example.com")
-		return nil
-	}
-
-	fmt.Printf("Worker Status\n")
-	fmt.Printf("  User: %s\n", creds.User)
-	fmt.Printf("  Coordinator: %s\n", creds.Coordinator)
-	fmt.Printf("  Headscale: %s\n", creds.HeadscaleURL)
-	fmt.Printf("  Joined: %s\n", creds.JoinedAt.Format(time.RFC3339))
-
-	return nil
-}
-
-func runWorkerLeave(cmd *cobra.Command, args []string) error {
-	path := getWorkerCredentialsPath()
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-
-	fmt.Println("Left the mesh")
-	fmt.Println("\nNote: To fully disconnect, you may also want to run:")
-	fmt.Println("  sudo tailscale down")
-
 	return nil
 }

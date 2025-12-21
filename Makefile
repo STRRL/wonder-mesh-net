@@ -5,12 +5,24 @@ BINARY_NAME := wonder
 BUILD_DIR := bin
 GO := go
 GOFLAGS := -v
-LDFLAGS := -s -w
 
-# Version info
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-BUILD_TIME := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
+# Version info: tag if tagged, "untagged" otherwise; sha with -dirty suffix if dirty
+GIT_SHA := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+GIT_DIRTY := $(shell git status --porcelain 2>/dev/null | head -1)
+GIT_TAG := $(shell git describe --tags --exact-match 2>/dev/null)
+
+ifdef GIT_TAG
+    VERSION := $(GIT_TAG)
+else
+    VERSION := untagged
+endif
+
+ifdef GIT_DIRTY
+    GIT_SHA := $(GIT_SHA)-dirty
+endif
+
+VERSION_PKG := github.com/strrl/wonder-mesh-net/cmd/wonder/commands
+LDFLAGS := -s -w -X $(VERSION_PKG).Version=$(VERSION) -X $(VERSION_PKG).GitSHA=$(GIT_SHA)
 
 help: ## Show this help message
 	@echo "Wonder Mesh Net - Build System"
