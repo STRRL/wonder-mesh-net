@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -26,11 +26,11 @@ func NewHeadscaleProxyHandler(targetURL string) (*HeadscaleProxyHandler, error) 
 	proxy.Director = func(req *http.Request) {
 		originalDirector(req)
 		req.Host = target.Host
-		log.Printf("[Headscale] %s %s", req.Method, req.URL.Path)
+		slog.Debug("headscale proxy", "method", req.Method, "path", req.URL.Path)
 	}
 
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		log.Printf("[Headscale] Error: %s %s: %v", r.Method, r.URL.Path, err)
+		slog.Error("headscale proxy error", "method", r.Method, "path", r.URL.Path, "error", err)
 		http.Error(w, "Proxy error", http.StatusBadGateway)
 	}
 

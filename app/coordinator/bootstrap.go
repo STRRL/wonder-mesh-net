@@ -38,6 +38,12 @@ func (s *Server) Run() error {
 		s.SessionStore,
 		s.UserStore,
 	)
+	deviceHandler := handlers.NewDeviceHandler(
+		s.Config.PublicURL,
+		s.DeviceFlowStore,
+		s.RealmManager,
+		authHelper,
+	)
 
 	hsProxy, err := handlers.NewHeadscaleProxyHandler("http://127.0.0.1:8080")
 	if err != nil {
@@ -59,6 +65,10 @@ func (s *Server) Run() error {
 	coordinatorRouter.Post("/api/v1/join-token", workerHandler.HandleCreateJoinToken)
 	coordinatorRouter.Post("/api/v1/worker/join", workerHandler.HandleWorkerJoin)
 	coordinatorRouter.Post("/api/v1/deployer/join", deployerHandler.HandleDeployerJoin)
+	coordinatorRouter.Post("/device/code", deviceHandler.HandleDeviceCode)
+	coordinatorRouter.Get("/device/verify", deviceHandler.HandleDeviceVerifyPage)
+	coordinatorRouter.Post("/device/verify", deviceHandler.HandleDeviceVerify)
+	coordinatorRouter.Post("/device/token", deviceHandler.HandleDeviceToken)
 
 	rootRouter := chi.NewRouter()
 	rootRouter.Mount("/coordinator", coordinatorRouter)

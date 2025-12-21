@@ -84,3 +84,36 @@ func (h *AuthHelper) GetUserByID(ctx context.Context, userID string) (*oidc.User
 	}
 	return user, nil
 }
+
+// GetUserFromRequest tries to authenticate user from header or cookie.
+func (h *AuthHelper) GetUserFromRequest(ctx context.Context, r *http.Request) (*oidc.User, error) {
+	sessionID := r.Header.Get("X-Session-Token")
+	if sessionID == "" {
+		cookie, err := r.Cookie("wonder_session")
+		if err == nil && cookie.Value != "" {
+			sessionID = cookie.Value
+		}
+	}
+
+	if sessionID == "" {
+		return nil, ErrNoCredentials
+	}
+
+	session, err := h.sessionStore.Get(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if session == nil {
+		return nil, ErrInvalidSession
+	}
+
+	user, err := h.userStore.Get(ctx, session.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, ErrUserNotFound
+	}
+
+	return user, nil
+}

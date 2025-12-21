@@ -11,6 +11,7 @@ import (
 	v1 "github.com/juanfont/headscale/gen/go/headscale/v1"
 	"github.com/strrl/wonder-mesh-net/pkg/apikey"
 	"github.com/strrl/wonder-mesh-net/pkg/database"
+	"github.com/strrl/wonder-mesh-net/pkg/deviceflow"
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
 	"github.com/strrl/wonder-mesh-net/pkg/jointoken"
 	"github.com/strrl/wonder-mesh-net/pkg/oidc"
@@ -22,18 +23,19 @@ const minJWTSecretLength = 32
 
 // Server is the coordinator server that manages multi-realm Headscale access.
 type Server struct {
-	Config         *Config
-	DB             *database.Manager
-	HSConn         *grpc.ClientConn
-	HSClient       v1.HeadscaleServiceClient
-	HSProcess      *headscale.ProcessManager
-	RealmManager   *headscale.RealmManager
-	ACLManager     *headscale.ACLManager
-	OIDCRegistry   *oidc.Registry
-	TokenGenerator *jointoken.Generator
-	SessionStore   *oidc.DBSessionStore
-	UserStore      *oidc.DBUserStore
-	APIKeyStore    *apikey.DBStore
+	Config          *Config
+	DB              *database.Manager
+	HSConn          *grpc.ClientConn
+	HSClient        v1.HeadscaleServiceClient
+	HSProcess       *headscale.ProcessManager
+	RealmManager    *headscale.RealmManager
+	ACLManager      *headscale.ACLManager
+	OIDCRegistry    *oidc.Registry
+	TokenGenerator  *jointoken.Generator
+	SessionStore    *oidc.DBSessionStore
+	UserStore       *oidc.DBUserStore
+	APIKeyStore     *apikey.DBStore
+	DeviceFlowStore *deviceflow.Store
 }
 
 // NewServer creates a new coordinator server.
@@ -118,18 +120,19 @@ func NewServer(config *Config) (*Server, error) {
 	)
 
 	return &Server{
-		Config:         config,
-		DB:             db,
-		HSConn:         hsConn,
-		HSClient:       hsClient,
-		HSProcess:      hsProcess,
-		RealmManager:   headscale.NewRealmManager(hsClient),
-		ACLManager:     headscale.NewACLManager(hsClient),
-		OIDCRegistry:   oidcRegistry,
-		TokenGenerator: tokenGenerator,
-		SessionStore:   oidc.NewDBSessionStore(db.Queries()),
-		UserStore:      oidc.NewDBUserStore(db.Queries()),
-		APIKeyStore:    apikey.NewDBStore(db.Queries()),
+		Config:          config,
+		DB:              db,
+		HSConn:          hsConn,
+		HSClient:        hsClient,
+		HSProcess:       hsProcess,
+		RealmManager:    headscale.NewRealmManager(hsClient),
+		ACLManager:      headscale.NewACLManager(hsClient),
+		OIDCRegistry:    oidcRegistry,
+		TokenGenerator:  tokenGenerator,
+		SessionStore:    oidc.NewDBSessionStore(db.Queries()),
+		UserStore:       oidc.NewDBUserStore(db.Queries()),
+		APIKeyStore:     apikey.NewDBStore(db.Queries()),
+		DeviceFlowStore: deviceflow.NewStore(),
 	}, nil
 }
 
