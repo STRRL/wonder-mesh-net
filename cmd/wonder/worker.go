@@ -232,6 +232,38 @@ const (
 	maxConsecutiveErrors  = 5
 )
 
+func pollOnce(coordinator, deviceCode string) (authkey, headscaleURL, user string, done bool, err error) {
+	reqBody, _ := json.Marshal(map[string]string{"device_code": deviceCode})
+	resp, err := http.Post(
+		coordinator+"/coordinator/device/token",
+		"application/json",
+		bytes.NewReader(reqBody),
+	)
+	if err != nil {
+		return "", "", "", false, fmt.Errorf("network error: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	var result deviceTokenResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", "", "", false, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return result.Authkey, result.HeadscaleURL, result.User, true, nil
+	case http.StatusAccepted:
+		fmt.Print(".")
+		return "", "", "", false, nil
+	case http.StatusGone:
+		return "", "", "", true, fmt.Errorf("device code expired, please try again")
+	case http.StatusForbidden:
+		return "", "", "", true, fmt.Errorf("authorization denied")
+	default:
+		return "", "", "", false, nil
+	}
+}
+
 func pollForToken(coordinator, deviceCode string, interval int) (authkey, headscaleURL, user string, err error) {
 	if interval < 1 {
 		interval = defaultPollInterval
@@ -248,44 +280,17 @@ func pollForToken(coordinator, deviceCode string, interval int) (authkey, headsc
 		case <-timeout:
 			return "", "", "", fmt.Errorf("authorization timed out")
 		case <-ticker.C:
-			reqBody, _ := json.Marshal(map[string]string{"device_code": deviceCode})
-			resp, err := http.Post(
-				coordinator+"/coordinator/device/token",
-				"application/json",
-				bytes.NewReader(reqBody),
-			)
+			authkey, headscaleURL, user, done, err := pollOnce(coordinator, deviceCode)
 			if err != nil {
 				consecutiveErrors++
 				if consecutiveErrors >= maxConsecutiveErrors {
-					return "", "", "", fmt.Errorf("network error after %d retries: %w", consecutiveErrors, err)
+					return "", "", "", err
 				}
 				continue
 			}
-
-			var result deviceTokenResponse
-			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-				resp.Body.Close()
-				consecutiveErrors++
-				if consecutiveErrors >= maxConsecutiveErrors {
-					return "", "", "", fmt.Errorf("failed to decode response after %d retries: %w", consecutiveErrors, err)
-				}
-				continue
-			}
-			resp.Body.Close()
 			consecutiveErrors = 0
-
-			switch resp.StatusCode {
-			case http.StatusOK:
-				return result.Authkey, result.HeadscaleURL, result.User, nil
-			case http.StatusAccepted:
-				fmt.Print(".")
-				continue
-			case http.StatusGone:
-				return "", "", "", fmt.Errorf("device code expired, please try again")
-			case http.StatusForbidden:
-				return "", "", "", fmt.Errorf("authorization denied")
-			default:
-				continue
+			if done {
+				return authkey, headscaleURL, user, nil
 			}
 		}
 	}

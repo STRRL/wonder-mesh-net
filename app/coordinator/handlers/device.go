@@ -218,7 +218,9 @@ func (h *DeviceHandler) HandleDeviceVerifyPage(w http.ResponseWriter, r *http.Re
 </html>`
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(htmlContent))
+	if _, err := w.Write([]byte(htmlContent)); err != nil {
+		slog.Error("failed to write device verify page", "error", err)
+	}
 }
 
 func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Request) {

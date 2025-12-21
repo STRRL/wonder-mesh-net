@@ -52,15 +52,30 @@ func NewStore() *Store {
 	return s
 }
 
+const maxCollisionRetries = 10
+
 func (s *Store) Create() (*DeviceRequest, error) {
 	deviceCode, err := generateCode(DeviceCodeLength)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate device code: %w", err)
 	}
 
-	userCode, err := generateUserCode()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate user code: %w", err)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var userCode string
+	for i := 0; i < maxCollisionRetries; i++ {
+		code, err := generateUserCode()
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate user code: %w", err)
+		}
+		if _, exists := s.byUser[code]; !exists {
+			userCode = code
+			break
+		}
+	}
+	if userCode == "" {
+		return nil, fmt.Errorf("failed to generate unique user code after %d attempts", maxCollisionRetries)
 	}
 
 	req := &DeviceRequest{
@@ -71,10 +86,8 @@ func (s *Store) Create() (*DeviceRequest, error) {
 		CreatedAt:  time.Now(),
 	}
 
-	s.mu.Lock()
 	s.requests[deviceCode] = req
 	s.byUser[userCode] = req
-	s.mu.Unlock()
 
 	return req, nil
 }
@@ -181,14 +194,21 @@ func generateCode(length int) (string, error) {
 
 func generateUserCode() (string, error) {
 	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-	bytes := make([]byte, UserCodeLength)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
+	charsetLen := len(charset)
+	maxUnbiased := 256 - (256 % charsetLen)
 
 	code := make([]byte, UserCodeLength)
-	for i := range bytes {
-		code[i] = charset[int(bytes[i])%len(charset)]
+	for i := 0; i < UserCodeLength; i++ {
+		for {
+			var b [1]byte
+			if _, err := rand.Read(b[:]); err != nil {
+				return "", err
+			}
+			if int(b[0]) < maxUnbiased {
+				code[i] = charset[int(b[0])%charsetLen]
+				break
+			}
+		}
 	}
 
 	return string(code[:4]) + "-" + string(code[4:]), nil
