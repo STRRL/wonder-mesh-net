@@ -235,7 +235,7 @@ func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Reques
 	if err != nil || user == nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "login required"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "login required"})
 		return
 	}
 
@@ -245,14 +245,14 @@ func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Reques
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "invalid request"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid request"})
 		return
 	}
 
 	if !userCodePattern.MatchString(req.UserCode) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "invalid code format, expected XXXX-XXXX"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid code format, expected XXXX-XXXX"})
 		return
 	}
 
@@ -260,14 +260,14 @@ func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{"error": "invalid or expired code"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid or expired code"})
 		return
 	}
 
 	if deviceReq.Status != deviceflow.StatusPending {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "code already used"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "code already used"})
 		return
 	}
 
@@ -276,7 +276,7 @@ func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Reques
 		slog.Error("failed to create auth key for device", "error", err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "failed to create auth key"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "failed to create auth key"})
 		return
 	}
 
@@ -284,12 +284,12 @@ func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Reques
 		slog.Error("failed to approve device", "error", err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "failed to approve device"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "failed to approve device"})
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "approved"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "approved"})
 }
 
 type DeviceTokenResponse struct {
@@ -311,14 +311,14 @@ func (h *DeviceHandler) HandleDeviceToken(w http.ResponseWriter, r *http.Request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "invalid_request"})
+		_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "invalid_request"})
 		return
 	}
 
 	if !deviceCodePattern.MatchString(req.DeviceCode) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "invalid_device_code_format"})
+		_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "invalid_device_code_format"})
 		return
 	}
 
@@ -326,7 +326,7 @@ func (h *DeviceHandler) HandleDeviceToken(w http.ResponseWriter, r *http.Request
 	if !ok {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "invalid_device_code"})
+		_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "invalid_device_code"})
 		return
 	}
 
@@ -335,12 +335,12 @@ func (h *DeviceHandler) HandleDeviceToken(w http.ResponseWriter, r *http.Request
 	switch deviceReq.Status {
 	case deviceflow.StatusPending:
 		w.WriteHeader(http.StatusAccepted)
-		json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "authorization_pending"})
+		_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "authorization_pending"})
 
 	case deviceflow.StatusApproved:
 		h.store.Delete(req.DeviceCode)
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(DeviceTokenResponse{
+		_ = json.NewEncoder(w).Encode(DeviceTokenResponse{
 			Authkey:      deviceReq.Authkey,
 			HeadscaleURL: deviceReq.HeadscaleURL,
 			User:         deviceReq.HeadscaleUser,
@@ -349,11 +349,11 @@ func (h *DeviceHandler) HandleDeviceToken(w http.ResponseWriter, r *http.Request
 	case deviceflow.StatusExpired:
 		h.store.Delete(req.DeviceCode)
 		w.WriteHeader(http.StatusGone)
-		json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "expired_token"})
+		_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "expired_token"})
 
 	case deviceflow.StatusDenied:
 		h.store.Delete(req.DeviceCode)
 		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "access_denied"})
+		_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "access_denied"})
 	}
 }

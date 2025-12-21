@@ -1,7 +1,7 @@
 package worker
 
 import (
-	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -19,17 +19,17 @@ func newStatusCmd() *cobra.Command {
 func runStatus(cmd *cobra.Command, args []string) error {
 	creds, err := loadCredentials()
 	if err != nil {
-		fmt.Println("Not joined to any mesh")
-		fmt.Println("\nTo join, run:")
-		fmt.Println("  wonder worker join --coordinator https://your-coordinator.example.com")
+		slog.Info("Not joined to any mesh")
+		slog.Info("To join, run: wonder worker join --coordinator https://your-coordinator.example.com")
 		return nil
 	}
 
-	fmt.Printf("Worker Status\n")
-	fmt.Printf("  User: %s\n", creds.User)
-	fmt.Printf("  Coordinator: %s\n", creds.Coordinator)
-	fmt.Printf("  Headscale: %s\n", creds.HeadscaleURL)
-	fmt.Printf("  Joined: %s\n", creds.JoinedAt.Format(time.RFC3339))
+	slog.Info("Worker Status",
+		"user", creds.User,
+		"coordinator", creds.Coordinator,
+		"headscale", creds.HeadscaleURL,
+		"joined", creds.JoinedAt.Format(time.RFC3339),
+	)
 
 	return nil
 }

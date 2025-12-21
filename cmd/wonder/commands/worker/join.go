@@ -1,14 +1,17 @@
 package worker
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -50,11 +53,11 @@ func runTokenJoin(token string) error {
 		return fmt.Errorf("invalid token: %w", err)
 	}
 
-	fmt.Printf("Joining Wonder Mesh Net...\n")
-	fmt.Printf("  Coordinator: %s\n", info.CoordinatorURL)
-	fmt.Printf("  User: %s\n", info.HeadscaleUser)
-	fmt.Printf("  Token expires: %s\n", info.ExpiresAt.Format(time.RFC3339))
-	fmt.Println()
+	slog.Info("Joining Wonder Mesh Net...",
+		"coordinator", info.CoordinatorURL,
+		"user", info.HeadscaleUser,
+		"token_expires", info.ExpiresAt.Format(time.RFC3339),
+	)
 
 	if time.Now().After(info.ExpiresAt) {
 		return fmt.Errorf("token has expired, please generate a new one from the coordinator")
@@ -98,29 +101,25 @@ func runDeviceFlowJoin() error {
 		}
 	}
 
-	fmt.Println("Starting device authorization...")
-	fmt.Println()
+	slog.Info("Starting device authorization...")
 
 	deviceCode, userCode, verifyURL, interval, err := requestDeviceCode(coordinatorURL)
 	if err != nil {
 		return fmt.Errorf("failed to start device authorization: %w", err)
 	}
 
-	fmt.Println("To authorize this device, visit:")
-	fmt.Println()
-	fmt.Printf("  %s?code=%s\n", verifyURL, userCode)
-	fmt.Println()
-	fmt.Printf("And enter the code: %s\n", userCode)
-	fmt.Println()
-	fmt.Println("Waiting for authorization...")
+	slog.Info("To authorize this device",
+		"url", verifyURL+"?code="+userCode,
+		"code", userCode,
+	)
+	slog.Info("Waiting for authorization...")
 
 	authkey, headscaleURL, user, err := pollForToken(coordinatorURL, deviceCode, interval)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println()
-	fmt.Println("Device authorized!")
+	slog.Info("Device authorized!")
 
 	return completeJoin(authkey, headscaleURL, user, coordinatorURL)
 }
@@ -191,7 +190,7 @@ func pollOnce(coordinator, deviceCode string) (authkey, headscaleURL, user strin
 	case http.StatusOK:
 		return result.Authkey, result.HeadscaleURL, result.User, true, nil
 	case http.StatusAccepted:
-		fmt.Print(".")
+		slog.Debug("Polling for authorization...")
 		return "", "", "", false, nil
 	case http.StatusGone:
 		return "", "", "", true, fmt.Errorf("device code expired, please try again")
@@ -242,12 +241,13 @@ func completeJoin(authkey, headscaleURL, user, coordinator string) error {
 		JoinedAt:     time.Now(),
 	}
 	if err := saveCredentials(creds); err != nil {
-		fmt.Printf("Warning: failed to save credentials: %v\n", err)
+		slog.Warn("Failed to save credentials", "error", err)
 	}
 
-	fmt.Printf("\nSuccessfully obtained auth key!\n\n")
-	fmt.Printf("To complete the setup, run on this device:\n\n")
-	fmt.Printf("  sudo tailscale up --login-server=%s --authkey=%s\n\n", headscaleURL, authkey)
+	slog.Info("Successfully obtained auth key!")
+	slog.Info("To complete the setup, run on this device",
+		"command", "sudo tailscale up --login-server="+headscaleURL+" --authkey="+authkey,
+	)
 
 	if askRunTailscale() {
 		return runTailscaleUp(headscaleURL, authkey)
@@ -257,14 +257,15 @@ func completeJoin(authkey, headscaleURL, user, coordinator string) error {
 }
 
 func askRunTailscale() bool {
-	fmt.Print("Would you like to run this command now? [y/N]: ")
-	var answer string
-	_, _ = fmt.Scanln(&answer)
+	slog.Info("Would you like to run this command now? [y/N]")
+	reader := bufio.NewReader(os.Stdin)
+	answer, _ := reader.ReadString('\n')
+	answer = strings.TrimSpace(answer)
 	return answer == "y" || answer == "Y"
 }
 
 func runTailscaleUp(headscaleURL, authkey string) error {
-	fmt.Println("\nRunning tailscale up...")
+	slog.Info("Running tailscale up...")
 
 	var tsCmd *exec.Cmd
 	if runtime.GOOS == "windows" {
@@ -281,6 +282,6 @@ func runTailscaleUp(headscaleURL, authkey string) error {
 		return fmt.Errorf("tailscale up failed: %w", err)
 	}
 
-	fmt.Println("\nSuccessfully joined the mesh!")
+	slog.Info("Successfully joined the mesh!")
 	return nil
 }

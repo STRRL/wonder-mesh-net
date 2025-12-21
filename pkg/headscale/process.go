@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
@@ -81,14 +82,14 @@ func (pm *ProcessManager) Start(ctx context.Context) error {
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
-			fmt.Printf("[headscale] %s\n", scanner.Text())
+			slog.Info("headscale", "output", scanner.Text())
 		}
 	}()
 
 	go func() {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			fmt.Printf("[headscale] %s\n", scanner.Text())
+			slog.Info("headscale", "output", scanner.Text())
 		}
 	}()
 
@@ -98,9 +99,9 @@ func (pm *ProcessManager) Start(ctx context.Context) error {
 		pm.running = false
 		pm.mu.Unlock()
 		if err != nil {
-			fmt.Printf("[headscale] process exited with error: %v\n", err)
+			slog.Error("headscale process exited with error", "error", err)
 		} else {
-			fmt.Printf("[headscale] process exited normally\n")
+			slog.Info("headscale process exited normally")
 		}
 	}()
 

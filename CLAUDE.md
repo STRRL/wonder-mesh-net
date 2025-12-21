@@ -101,6 +101,7 @@ JWT_SECRET=xxx                 # Required (generate with: openssl rand -hex 32)
 
 - No end-of-line comments
 - No Chinese in code comments
+- Use `log/slog` package for all output, not `fmt.Print*` functions
 
 ## PR Review Comments
 

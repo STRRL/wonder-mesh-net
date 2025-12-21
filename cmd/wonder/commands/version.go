@@ -1,7 +1,7 @@
 package commands
 
 import (
-	"fmt"
+	"log/slog"
 
 	"github.com/spf13/cobra"
 )
@@ -16,7 +16,7 @@ func NewVersionCmd() *cobra.Command {
 		Use:   "version",
 		Short: "Print version information",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("wonder %s (%s)\n", Version, GitSHA)
+			slog.Info("wonder", "version", Version, "git_sha", GitSHA)
 		},
 	}
 }
