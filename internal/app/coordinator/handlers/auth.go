@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/store"
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
 	"github.com/strrl/wonder-mesh-net/pkg/oidc"
 )
@@ -18,8 +19,8 @@ type AuthHandler struct {
 	oidcRegistry *oidc.Registry
 	realmManager *headscale.RealmManager
 	aclManager   *headscale.ACLManager
-	sessionStore oidc.SessionStore
-	userStore    oidc.UserStore
+	sessionStore store.SessionStore
+	userStore    store.UserStore
 }
 
 // NewAuthHandler creates a new AuthHandler.
@@ -28,8 +29,8 @@ func NewAuthHandler(
 	oidcRegistry *oidc.Registry,
 	realmManager *headscale.RealmManager,
 	aclManager *headscale.ACLManager,
-	sessionStore oidc.SessionStore,
-	userStore oidc.UserStore,
+	sessionStore store.SessionStore,
+	userStore store.UserStore,
 ) *AuthHandler {
 	return &AuthHandler{
 		publicURL:    publicURL,
@@ -142,7 +143,7 @@ func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		userID = headscale.GenerateRealmID()
 		realmName = headscale.RealmName(userID)
 
-		newUser := &oidc.User{
+		newUser := &store.User{
 			ID:            userID,
 			HeadscaleUser: realmName,
 			Issuer:        provider.Issuer(),
@@ -173,7 +174,7 @@ func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionID, err := oidc.GenerateSessionID()
+	sessionID, err := store.GenerateSessionID()
 	if err != nil {
 		slog.Error("failed to generate session ID", "error", err)
 		http.Error(w, "failed to create session", http.StatusInternalServerError)
@@ -182,7 +183,7 @@ func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 
 	sessionTTL := 7 * 24 * time.Hour
 	expiresAt := now.Add(sessionTTL)
-	session := &oidc.Session{
+	session := &store.Session{
 		ID:         sessionID,
 		UserID:     userID,
 		Issuer:     provider.Issuer(),

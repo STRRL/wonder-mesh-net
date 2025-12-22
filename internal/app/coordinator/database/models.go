@@ -29,6 +29,19 @@ type AuthState struct {
 	ExpiresAt    time.Time `json:"expires_at"`
 }
 
+type DeviceRequest struct {
+	DeviceCode     string         `json:"device_code"`
+	UserCode       string         `json:"user_code"`
+	Status         string         `json:"status"`
+	HeadscaleUser  sql.NullString `json:"headscale_user"`
+	UserID         sql.NullString `json:"user_id"`
+	Authkey        sql.NullString `json:"authkey"`
+	HeadscaleUrl   sql.NullString `json:"headscale_url"`
+	CoordinatorUrl sql.NullString `json:"coordinator_url"`
+	CreatedAt      time.Time      `json:"created_at"`
+	ExpiresAt      time.Time      `json:"expires_at"`
+}
+
 type Session struct {
 	ID         string       `json:"id"`
 	UserID     string       `json:"user_id"`

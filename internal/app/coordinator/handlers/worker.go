@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/store"
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
 	"github.com/strrl/wonder-mesh-net/pkg/jointoken"
-	"github.com/strrl/wonder-mesh-net/pkg/oidc"
 )
 
 // WorkerHandler handles worker-related requests.
@@ -18,8 +18,8 @@ type WorkerHandler struct {
 	jwtSecret      string
 	realmManager   *headscale.RealmManager
 	tokenGenerator *jointoken.Generator
-	sessionStore   oidc.SessionStore
-	userStore      oidc.UserStore
+	sessionStore   store.SessionStore
+	userStore      store.UserStore
 }
 
 // NewWorkerHandler creates a new WorkerHandler.
@@ -28,8 +28,8 @@ func NewWorkerHandler(
 	jwtSecret string,
 	realmManager *headscale.RealmManager,
 	tokenGenerator *jointoken.Generator,
-	sessionStore oidc.SessionStore,
-	userStore oidc.UserStore,
+	sessionStore store.SessionStore,
+	userStore store.UserStore,
 ) *WorkerHandler {
 	return &WorkerHandler{
 		publicURL:      publicURL,

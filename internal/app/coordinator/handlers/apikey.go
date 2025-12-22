@@ -8,17 +8,17 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/strrl/wonder-mesh-net/pkg/apikey"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/store"
 )
 
 // APIKeyHandler handles API key management requests.
 type APIKeyHandler struct {
-	apiKeyStore apikey.Store
+	apiKeyStore store.APIKeyStore
 	auth        *AuthHelper
 }
 
 // NewAPIKeyHandler creates a new APIKeyHandler.
-func NewAPIKeyHandler(apiKeyStore apikey.Store, auth *AuthHelper) *APIKeyHandler {
+func NewAPIKeyHandler(apiKeyStore store.APIKeyStore, auth *AuthHelper) *APIKeyHandler {
 	return &APIKeyHandler{
 		apiKeyStore: apiKeyStore,
 		auth:        auth,
@@ -136,7 +136,7 @@ func (h *APIKeyHandler) HandleDeleteAPIKey(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := h.apiKeyStore.Delete(ctx, keyID, user.ID); err != nil {
-		if errors.Is(err, apikey.ErrNotFound) {
+		if errors.Is(err, store.ErrAPIKeyNotFound) {
 			http.Error(w, "api key not found", http.StatusNotFound)
 			return
 		}

@@ -1,4 +1,4 @@
-package apikey
+package store
 
 import (
 	"context"
@@ -10,13 +10,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/strrl/wonder-mesh-net/pkg/database"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/database"
 )
 
 const keyLength = 32
 
-// ErrNotFound is returned when an API key is not found.
-var ErrNotFound = errors.New("api key not found")
+// ErrAPIKeyNotFound is returned when an API key is not found.
+var ErrAPIKeyNotFound = errors.New("api key not found")
 
 // HasScope checks if the given scope is present in a comma-separated scope string.
 // Performs exact match, not substring match.
@@ -54,8 +54,8 @@ type APIKeyWithSecret struct {
 	Key string
 }
 
-// Store is the interface for storing API keys
-type Store interface {
+// APIKeyStore is the interface for storing API keys
+type APIKeyStore interface {
 	Create(ctx context.Context, userID, name, scopes string, expiresAt *time.Time) (*APIKeyWithSecret, error)
 	Get(ctx context.Context, id string) (*APIKeyWithSecret, error)
 	GetByKey(ctx context.Context, key string) (*APIKey, error)
@@ -64,17 +64,17 @@ type Store interface {
 	UpdateLastUsed(ctx context.Context, id string) error
 }
 
-// DBStore is a database implementation of Store
-type DBStore struct {
+// DBAPIKeyStore is a database implementation of APIKeyStore
+type DBAPIKeyStore struct {
 	queries *database.Queries
 }
 
-// NewDBStore creates a new database-backed API key store
-func NewDBStore(queries *database.Queries) *DBStore {
-	return &DBStore{queries: queries}
+// NewDBAPIKeyStore creates a new database-backed API key store
+func NewDBAPIKeyStore(queries *database.Queries) *DBAPIKeyStore {
+	return &DBAPIKeyStore{queries: queries}
 }
 
-func (s *DBStore) Create(ctx context.Context, userID, name, scopes string, expiresAt *time.Time) (*APIKeyWithSecret, error) {
+func (s *DBAPIKeyStore) Create(ctx context.Context, userID, name, scopes string, expiresAt *time.Time) (*APIKeyWithSecret, error) {
 	keyBytes := make([]byte, keyLength)
 	if _, err := rand.Read(keyBytes); err != nil {
 		return nil, err
@@ -115,7 +115,7 @@ func (s *DBStore) Create(ctx context.Context, userID, name, scopes string, expir
 	}, nil
 }
 
-func (s *DBStore) GetByKey(ctx context.Context, key string) (*APIKey, error) {
+func (s *DBAPIKeyStore) GetByKey(ctx context.Context, key string) (*APIKey, error) {
 	dbKey, err := s.queries.GetAPIKeyByKey(ctx, key)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -133,7 +133,7 @@ func (s *DBStore) GetByKey(ctx context.Context, key string) (*APIKey, error) {
 	return apiKey, nil
 }
 
-func (s *DBStore) List(ctx context.Context, userID string) ([]*APIKeyWithSecret, error) {
+func (s *DBAPIKeyStore) List(ctx context.Context, userID string) ([]*APIKeyWithSecret, error) {
 	dbKeys, err := s.queries.ListAPIKeysByUser(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -146,7 +146,7 @@ func (s *DBStore) List(ctx context.Context, userID string) ([]*APIKeyWithSecret,
 	return keys, nil
 }
 
-func (s *DBStore) Delete(ctx context.Context, id, userID string) error {
+func (s *DBAPIKeyStore) Delete(ctx context.Context, id, userID string) error {
 	result, err := s.queries.DeleteAPIKeyByUser(ctx, database.DeleteAPIKeyByUserParams{
 		ID:     id,
 		UserID: userID,
@@ -159,19 +159,19 @@ func (s *DBStore) Delete(ctx context.Context, id, userID string) error {
 		return err
 	}
 	if rowsAffected == 0 {
-		return ErrNotFound
+		return ErrAPIKeyNotFound
 	}
 	return nil
 }
 
-func (s *DBStore) UpdateLastUsed(ctx context.Context, id string) error {
+func (s *DBAPIKeyStore) UpdateLastUsed(ctx context.Context, id string) error {
 	return s.queries.UpdateAPIKeyLastUsed(ctx, database.UpdateAPIKeyLastUsedParams{
 		LastUsedAt: sql.NullTime{Time: time.Now(), Valid: true},
 		ID:         id,
 	})
 }
 
-func (s *DBStore) Get(ctx context.Context, id string) (*APIKeyWithSecret, error) {
+func (s *DBAPIKeyStore) Get(ctx context.Context, id string) (*APIKeyWithSecret, error) {
 	dbKey, err := s.queries.GetAPIKey(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

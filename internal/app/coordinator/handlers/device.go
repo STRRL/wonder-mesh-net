@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/strrl/wonder-mesh-net/pkg/deviceflow"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/store"
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
 )
 
@@ -17,20 +17,20 @@ var deviceCodePattern = regexp.MustCompile(`^[a-f0-9]{32}$`)
 
 type DeviceHandler struct {
 	publicURL    string
-	store        *deviceflow.Store
+	store        *store.DeviceRequestStore
 	realmManager *headscale.RealmManager
 	authHelper   *AuthHelper
 }
 
 func NewDeviceHandler(
 	publicURL string,
-	store *deviceflow.Store,
+	deviceStore *store.DeviceRequestStore,
 	realmManager *headscale.RealmManager,
 	authHelper *AuthHelper,
 ) *DeviceHandler {
 	return &DeviceHandler{
 		publicURL:    publicURL,
-		store:        store,
+		store:        deviceStore,
 		realmManager: realmManager,
 		authHelper:   authHelper,
 	}
@@ -50,7 +50,8 @@ func (h *DeviceHandler) HandleDeviceCode(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	req, err := h.store.Create()
+	ctx := r.Context()
+	req, err := h.store.Create(ctx)
 	if err != nil {
 		slog.Error("failed to create device request", "error", err)
 		http.Error(w, "failed to create device request", http.StatusInternalServerError)
@@ -62,7 +63,7 @@ func (h *DeviceHandler) HandleDeviceCode(w http.ResponseWriter, r *http.Request)
 		UserCode:        req.UserCode,
 		VerificationURL: h.publicURL + "/coordinator/device/verify",
 		ExpiresIn:       int(time.Until(req.ExpiresAt).Seconds()),
-		Interval:        int(deviceflow.PollInterval.Seconds()),
+		Interval:        int(store.PollInterval.Seconds()),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -256,7 +257,7 @@ func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	deviceReq, ok := h.store.GetByUserCode(req.UserCode)
+	deviceReq, ok := h.store.GetByUserCode(ctx, req.UserCode)
 	if !ok {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
@@ -264,7 +265,7 @@ func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if deviceReq.Status != deviceflow.StatusPending {
+	if deviceReq.Status != store.DeviceStatusPending {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "code already used"})
@@ -280,7 +281,7 @@ func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err := h.store.Approve(req.UserCode, user.ID, user.HeadscaleUser, key.GetKey(), h.publicURL, h.publicURL); err != nil {
+	if err := h.store.Approve(ctx, req.UserCode, user.ID, user.HeadscaleUser, key.GetKey(), h.publicURL, h.publicURL); err != nil {
 		slog.Error("failed to approve device", "error", err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -305,6 +306,8 @@ func (h *DeviceHandler) HandleDeviceToken(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	ctx := r.Context()
+
 	var req struct {
 		DeviceCode string `json:"device_code"`
 	}
@@ -322,7 +325,7 @@ func (h *DeviceHandler) HandleDeviceToken(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	deviceReq, ok := h.store.GetByDeviceCode(req.DeviceCode)
+	deviceReq, ok := h.store.GetByDeviceCode(ctx, req.DeviceCode)
 	if !ok {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
@@ -333,12 +336,12 @@ func (h *DeviceHandler) HandleDeviceToken(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Type", "application/json")
 
 	switch deviceReq.Status {
-	case deviceflow.StatusPending:
+	case store.DeviceStatusPending:
 		w.WriteHeader(http.StatusAccepted)
 		_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "authorization_pending"})
 
-	case deviceflow.StatusApproved:
-		h.store.Delete(req.DeviceCode)
+	case store.DeviceStatusApproved:
+		h.store.Delete(ctx, req.DeviceCode)
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(DeviceTokenResponse{
 			Authkey:      deviceReq.Authkey,
@@ -346,13 +349,13 @@ func (h *DeviceHandler) HandleDeviceToken(w http.ResponseWriter, r *http.Request
 			User:         deviceReq.HeadscaleUser,
 		})
 
-	case deviceflow.StatusExpired:
-		h.store.Delete(req.DeviceCode)
+	case store.DeviceStatusExpired:
+		h.store.Delete(ctx, req.DeviceCode)
 		w.WriteHeader(http.StatusGone)
 		_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "expired_token"})
 
-	case deviceflow.StatusDenied:
-		h.store.Delete(req.DeviceCode)
+	case store.DeviceStatusDenied:
+		h.store.Delete(ctx, req.DeviceCode)
 		w.WriteHeader(http.StatusForbidden)
 		_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "access_denied"})
 	}

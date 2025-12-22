@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/strrl/wonder-mesh-net/app/coordinator/handlers"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/handlers"
 )
 
 // Run starts the HTTP server and blocks until a shutdown signal is received.
@@ -95,6 +95,16 @@ func (s *Server) Run() error {
 		if err := httpServer.ListenAndServe(); err != http.ErrServerClosed {
 			slog.Error("server error", "error", err)
 			os.Exit(1)
+		}
+	}()
+
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			if err := s.DeviceFlowStore.DeleteExpired(context.Background()); err != nil {
+				slog.Warn("failed to cleanup expired device requests", "error", err)
+			}
 		}
 	}()
 

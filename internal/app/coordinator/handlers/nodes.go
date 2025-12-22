@@ -5,22 +5,21 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/strrl/wonder-mesh-net/pkg/apikey"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/store"
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
-	"github.com/strrl/wonder-mesh-net/pkg/oidc"
 )
 
 // NodesHandler handles node-related requests.
 type NodesHandler struct {
 	realmManager *headscale.RealmManager
-	apiKeyStore  apikey.Store
+	apiKeyStore  store.APIKeyStore
 	auth         *AuthHelper
 }
 
 // NewNodesHandler creates a new NodesHandler.
 func NewNodesHandler(
 	realmManager *headscale.RealmManager,
-	apiKeyStore apikey.Store,
+	apiKeyStore store.APIKeyStore,
 	auth *AuthHelper,
 ) *NodesHandler {
 	return &NodesHandler{
@@ -70,7 +69,7 @@ func (h *NodesHandler) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *NodesHandler) authenticate(r *http.Request) (*oidc.User, error) {
+func (h *NodesHandler) authenticate(r *http.Request) (*store.User, error) {
 	ctx := r.Context()
 
 	if key := GetBearerToken(r); key != "" {
@@ -82,7 +81,7 @@ func (h *NodesHandler) authenticate(r *http.Request) (*oidc.User, error) {
 			return nil, ErrInvalidAPIKey
 		}
 
-		if !apikey.HasScope(apiKey.Scopes, "nodes:read") {
+		if !store.HasScope(apiKey.Scopes, "nodes:read") {
 			return nil, ErrInsufficientScope
 		}
 

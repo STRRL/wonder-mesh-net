@@ -1,4 +1,4 @@
-package oidc
+package store
 
 import (
 	"context"
@@ -6,7 +6,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/strrl/wonder-mesh-net/pkg/database"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/database"
+	"github.com/strrl/wonder-mesh-net/pkg/oidc"
 )
 
 // DBAuthStateStore is a database implementation of AuthStateStore
@@ -23,7 +24,7 @@ func NewDBAuthStateStore(queries *database.Queries, ttl time.Duration) *DBAuthSt
 	}
 }
 
-func (s *DBAuthStateStore) Create(ctx context.Context, state *AuthState) error {
+func (s *DBAuthStateStore) Create(ctx context.Context, state *oidc.AuthState) error {
 	return s.queries.CreateAuthState(ctx, database.CreateAuthStateParams{
 		State:        state.State,
 		Nonce:        state.Nonce,
@@ -34,7 +35,7 @@ func (s *DBAuthStateStore) Create(ctx context.Context, state *AuthState) error {
 	})
 }
 
-func (s *DBAuthStateStore) Get(ctx context.Context, state string) (*AuthState, error) {
+func (s *DBAuthStateStore) Get(ctx context.Context, state string) (*oidc.AuthState, error) {
 	dbState, err := s.queries.GetAuthState(ctx, state)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -48,7 +49,7 @@ func (s *DBAuthStateStore) Get(ctx context.Context, state string) (*AuthState, e
 		return nil, nil
 	}
 
-	return &AuthState{
+	return &oidc.AuthState{
 		State:        dbState.State,
 		Nonce:        dbState.Nonce,
 		RedirectURI:  dbState.RedirectUri,

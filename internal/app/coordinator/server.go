@@ -9,9 +9,8 @@ import (
 	"time"
 
 	v1 "github.com/juanfont/headscale/gen/go/headscale/v1"
-	"github.com/strrl/wonder-mesh-net/pkg/apikey"
-	"github.com/strrl/wonder-mesh-net/pkg/database"
-	"github.com/strrl/wonder-mesh-net/pkg/deviceflow"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/database"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/store"
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
 	"github.com/strrl/wonder-mesh-net/pkg/jointoken"
 	"github.com/strrl/wonder-mesh-net/pkg/oidc"
@@ -32,10 +31,10 @@ type Server struct {
 	ACLManager      *headscale.ACLManager
 	OIDCRegistry    *oidc.Registry
 	TokenGenerator  *jointoken.Generator
-	SessionStore    *oidc.DBSessionStore
-	UserStore       *oidc.DBUserStore
-	APIKeyStore     *apikey.DBStore
-	DeviceFlowStore *deviceflow.Store
+	SessionStore    *store.DBSessionStore
+	UserStore       *store.DBUserStore
+	APIKeyStore     *store.DBAPIKeyStore
+	DeviceFlowStore *store.DeviceRequestStore
 }
 
 // NewServer creates a new coordinator server.
@@ -102,7 +101,7 @@ func NewServer(config *Config) (*Server, error) {
 	}
 	hsClient := v1.NewHeadscaleServiceClient(hsConn)
 
-	stateStore := oidc.NewDBAuthStateStore(db.Queries(), 10*time.Minute)
+	stateStore := store.NewDBAuthStateStore(db.Queries(), 10*time.Minute)
 	oidcRegistry := oidc.NewRegistryWithStore(stateStore)
 
 	for _, providerConfig := range config.OIDCProviders() {
@@ -129,10 +128,10 @@ func NewServer(config *Config) (*Server, error) {
 		ACLManager:      headscale.NewACLManager(hsClient),
 		OIDCRegistry:    oidcRegistry,
 		TokenGenerator:  tokenGenerator,
-		SessionStore:    oidc.NewDBSessionStore(db.Queries()),
-		UserStore:       oidc.NewDBUserStore(db.Queries()),
-		APIKeyStore:     apikey.NewDBStore(db.Queries()),
-		DeviceFlowStore: deviceflow.NewStore(),
+		SessionStore:    store.NewDBSessionStore(db.Queries()),
+		UserStore:       store.NewDBUserStore(db.Queries()),
+		APIKeyStore:     store.NewDBAPIKeyStore(db.Queries()),
+		DeviceFlowStore: store.NewDeviceRequestStore(db.Queries()),
 	}, nil
 }
 

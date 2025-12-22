@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/strrl/wonder-mesh-net/pkg/apikey"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/store"
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
 )
 
@@ -14,7 +14,7 @@ import (
 type DeployerHandler struct {
 	publicURL    string
 	realmManager *headscale.RealmManager
-	apiKeyStore  apikey.Store
+	apiKeyStore  store.APIKeyStore
 	auth         *AuthHelper
 }
 
@@ -22,7 +22,7 @@ type DeployerHandler struct {
 func NewDeployerHandler(
 	publicURL string,
 	realmManager *headscale.RealmManager,
-	apiKeyStore apikey.Store,
+	apiKeyStore store.APIKeyStore,
 	auth *AuthHelper,
 ) *DeployerHandler {
 	return &DeployerHandler{
@@ -55,7 +55,7 @@ func (h *DeployerHandler) HandleDeployerJoin(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if !apikey.HasScope(apiKey.Scopes, "deployer:connect") {
+	if !store.HasScope(apiKey.Scopes, "deployer:connect") {
 		http.Error(w, "insufficient scope: deployer:connect required", http.StatusForbidden)
 		return
 	}

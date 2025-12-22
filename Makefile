@@ -1,4 +1,4 @@
-.PHONY: help build build-all clean test check image
+.PHONY: help build build-all clean test check image generate
 
 # Build variables
 BINARY_NAME := wonder
@@ -65,3 +65,12 @@ check: ## Run all code checks (fmt, vet, lint)
 
 image: ## Build and push multi-arch Docker image
 	./hack/build-image.sh
+
+generate: ## Generate code (sqlc)
+	@echo "Running sqlc generate..."
+	@if command -v sqlc >/dev/null 2>&1; then \
+		sqlc generate; \
+	else \
+		echo "sqlc not installed. Install with: go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest"; \
+		exit 1; \
+	fi

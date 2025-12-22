@@ -1,4 +1,4 @@
-package oidc
+package store
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/strrl/wonder-mesh-net/pkg/database"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/database"
 )
 
 // Session represents a user session

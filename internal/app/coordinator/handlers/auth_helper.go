@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/strrl/wonder-mesh-net/pkg/oidc"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/store"
 )
 
 // Authentication errors
@@ -20,12 +20,12 @@ var (
 
 // AuthHelper provides common authentication methods for handlers.
 type AuthHelper struct {
-	sessionStore oidc.SessionStore
-	userStore    oidc.UserStore
+	sessionStore store.SessionStore
+	userStore    store.UserStore
 }
 
 // NewAuthHelper creates a new AuthHelper.
-func NewAuthHelper(sessionStore oidc.SessionStore, userStore oidc.UserStore) *AuthHelper {
+func NewAuthHelper(sessionStore store.SessionStore, userStore store.UserStore) *AuthHelper {
 	return &AuthHelper{
 		sessionStore: sessionStore,
 		userStore:    userStore,
@@ -33,7 +33,7 @@ func NewAuthHelper(sessionStore oidc.SessionStore, userStore oidc.UserStore) *Au
 }
 
 // AuthenticateSession authenticates a request using X-Session-Token header.
-func (h *AuthHelper) AuthenticateSession(r *http.Request) (*oidc.User, error) {
+func (h *AuthHelper) AuthenticateSession(r *http.Request) (*store.User, error) {
 	sessionID := r.Header.Get("X-Session-Token")
 	if sessionID == "" {
 		return nil, ErrNoCredentials
@@ -74,7 +74,7 @@ func GetBearerToken(r *http.Request) string {
 }
 
 // GetUserByID retrieves a user by ID.
-func (h *AuthHelper) GetUserByID(ctx context.Context, userID string) (*oidc.User, error) {
+func (h *AuthHelper) GetUserByID(ctx context.Context, userID string) (*store.User, error) {
 	user, err := h.userStore.Get(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -86,7 +86,7 @@ func (h *AuthHelper) GetUserByID(ctx context.Context, userID string) (*oidc.User
 }
 
 // GetUserFromRequest tries to authenticate user from header or cookie.
-func (h *AuthHelper) GetUserFromRequest(ctx context.Context, r *http.Request) (*oidc.User, error) {
+func (h *AuthHelper) GetUserFromRequest(ctx context.Context, r *http.Request) (*store.User, error) {
 	sessionID := r.Header.Get("X-Session-Token")
 	if sessionID == "" {
 		cookie, err := r.Cookie("wonder_session")
