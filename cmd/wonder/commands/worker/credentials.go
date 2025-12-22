@@ -2,6 +2,7 @@ package worker
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -14,13 +15,20 @@ type credentials struct {
 	JoinedAt     time.Time `json:"joined_at"`
 }
 
-func getCredentialsPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".wonder", "worker.json")
+func getCredentialsPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("get credentials path %w", err)
+	}
+	return filepath.Join(home, ".wonder", "worker.json"), nil
 }
 
 func loadCredentials() (*credentials, error) {
-	data, err := os.ReadFile(getCredentialsPath())
+	credentialPath, err := getCredentialsPath()
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(credentialPath)
 	if err != nil {
 		return nil, err
 	}
@@ -34,8 +42,9 @@ func loadCredentials() (*credentials, error) {
 }
 
 func saveCredentials(creds *credentials) error {
-	dir := filepath.Dir(getCredentialsPath())
-	if err := os.MkdirAll(dir, 0700); err != nil {
+
+	credentialPath, err := getCredentialsPath()
+	if err != nil {
 		return err
 	}
 
@@ -44,5 +53,5 @@ func saveCredentials(creds *credentials) error {
 		return err
 	}
 
-	return os.WriteFile(getCredentialsPath(), data, 0600)
+	return os.WriteFile(credentialPath, data, 0600)
 }

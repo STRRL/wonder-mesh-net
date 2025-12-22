@@ -17,8 +17,11 @@ func newLeaveCmd() *cobra.Command {
 }
 
 func runLeave(cmd *cobra.Command, args []string) error {
-	path := getCredentialsPath()
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+	credentialPath, err := getCredentialsPath()
+	if err != nil {
+		return fmt.Errorf("leave wonder mesh %w", err)
+	}
+	if err := os.Remove(credentialPath); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 
