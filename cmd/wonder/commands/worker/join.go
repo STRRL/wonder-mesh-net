@@ -1,17 +1,14 @@
 package worker
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -53,11 +50,11 @@ func runTokenJoin(token string) error {
 		return fmt.Errorf("invalid token: %w", err)
 	}
 
-	slog.Info("Joining Wonder Mesh Net...",
-		"coordinator", info.CoordinatorURL,
-		"user", info.HeadscaleUser,
-		"token_expires", info.ExpiresAt.Format(time.RFC3339),
-	)
+	fmt.Println("Joining Wonder Mesh Net...")
+	fmt.Printf("  Coordinator: %s\n", info.CoordinatorURL)
+	fmt.Printf("  User: %s\n", info.HeadscaleUser)
+	fmt.Printf("  Token expires: %s\n", info.ExpiresAt.Format(time.RFC3339))
+	fmt.Println()
 
 	if time.Now().After(info.ExpiresAt) {
 		return fmt.Errorf("token has expired, please generate a new one from the coordinator")
@@ -101,25 +98,29 @@ func runDeviceFlowJoin() error {
 		}
 	}
 
-	slog.Info("Starting device authorization...")
+	fmt.Println("Starting device authorization...")
+	fmt.Println()
 
 	deviceCode, userCode, verifyURL, interval, err := requestDeviceCode(coordinatorURL)
 	if err != nil {
 		return fmt.Errorf("failed to start device authorization: %w", err)
 	}
 
-	slog.Info("To authorize this device",
-		"url", verifyURL+"?code="+userCode,
-		"code", userCode,
-	)
-	slog.Info("Waiting for authorization...")
+	fmt.Println("To authorize this device, visit:")
+	fmt.Println()
+	fmt.Printf("  %s?code=%s\n", verifyURL, userCode)
+	fmt.Println()
+	fmt.Printf("And enter the code: %s\n", userCode)
+	fmt.Println()
+	fmt.Println("Waiting for authorization...")
 
 	authkey, headscaleURL, user, err := pollForToken(coordinatorURL, deviceCode, interval)
 	if err != nil {
 		return err
 	}
 
-	slog.Info("Device authorized!")
+	fmt.Println()
+	fmt.Println("Device authorized!")
 
 	return completeJoin(authkey, headscaleURL, user, coordinatorURL)
 }
@@ -190,7 +191,7 @@ func pollOnce(coordinator, deviceCode string) (authkey, headscaleURL, user strin
 	case http.StatusOK:
 		return result.Authkey, result.HeadscaleURL, result.User, true, nil
 	case http.StatusAccepted:
-		slog.Debug("Polling for authorization...")
+		fmt.Print(".")
 		return "", "", "", false, nil
 	case http.StatusGone:
 		return "", "", "", true, fmt.Errorf("device code expired, please try again")
@@ -241,13 +242,16 @@ func completeJoin(authkey, headscaleURL, user, coordinator string) error {
 		JoinedAt:     time.Now(),
 	}
 	if err := saveCredentials(creds); err != nil {
-		slog.Warn("Failed to save credentials", "error", err)
+		fmt.Printf("Warning: failed to save credentials: %v\n", err)
 	}
 
-	slog.Info("Successfully obtained auth key!")
-	slog.Info("To complete the setup, run on this device",
-		"command", "sudo tailscale up --login-server="+headscaleURL+" --authkey="+authkey,
-	)
+	fmt.Println()
+	fmt.Println("Successfully obtained auth key!")
+	fmt.Println()
+	fmt.Println("To complete the setup, run on this device:")
+	fmt.Println()
+	fmt.Printf("  sudo tailscale up --login-server=%s --authkey=%s\n", headscaleURL, authkey)
+	fmt.Println()
 
 	if askRunTailscale() {
 		return runTailscaleUp(headscaleURL, authkey)
@@ -257,15 +261,15 @@ func completeJoin(authkey, headscaleURL, user, coordinator string) error {
 }
 
 func askRunTailscale() bool {
-	slog.Info("Would you like to run this command now? [y/N]")
-	reader := bufio.NewReader(os.Stdin)
-	answer, _ := reader.ReadString('\n')
-	answer = strings.TrimSpace(answer)
+	fmt.Print("Would you like to run this command now? [y/N]: ")
+	var answer string
+	_, _ = fmt.Scanln(&answer)
 	return answer == "y" || answer == "Y"
 }
 
 func runTailscaleUp(headscaleURL, authkey string) error {
-	slog.Info("Running tailscale up...")
+	fmt.Println()
+	fmt.Println("Running tailscale up...")
 
 	var tsCmd *exec.Cmd
 	if runtime.GOOS == "windows" {
@@ -282,6 +286,7 @@ func runTailscaleUp(headscaleURL, authkey string) error {
 		return fmt.Errorf("tailscale up failed: %w", err)
 	}
 
-	slog.Info("Successfully joined the mesh!")
+	fmt.Println()
+	fmt.Println("Successfully joined the mesh!")
 	return nil
 }

@@ -101,7 +101,8 @@ JWT_SECRET=xxx                 # Required (generate with: openssl rand -hex 32)
 
 - No end-of-line comments
 - No Chinese in code comments
-- Use `log/slog` package for all output, not `fmt.Print*` functions
+- Use `fmt.Print*` for user-facing CLI output (in `cmd/`)
+- Use `log/slog` for application logging (in `pkg/`)
 
 ## PR Review Comments
 

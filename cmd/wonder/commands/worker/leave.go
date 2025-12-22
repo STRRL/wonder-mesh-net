@@ -1,7 +1,7 @@
 package worker
 
 import (
-	"log/slog"
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -22,8 +22,9 @@ func runLeave(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	slog.Info("Left the mesh")
-	slog.Info("Note: To fully disconnect, you may also want to run: sudo tailscale down")
+	fmt.Println("Left the mesh")
+	fmt.Println("\nNote: To fully disconnect, you may also want to run:")
+	fmt.Println("  sudo tailscale down")
 
 	return nil
 }
