@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"html"
 	"log/slog"
 	"net/http"
@@ -257,11 +258,17 @@ func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	deviceReq, ok := h.store.GetByUserCode(ctx, req.UserCode)
-	if !ok {
+	deviceReq, err := h.store.GetByUserCode(ctx, req.UserCode)
+	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid or expired code"})
+		if errors.Is(err, store.ErrDeviceRequestNotFound) {
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid or expired code"})
+		} else {
+			slog.Error("failed to get device request", "error", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "internal error"})
+		}
 		return
 	}
 
@@ -325,11 +332,17 @@ func (h *DeviceHandler) HandleDeviceToken(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	deviceReq, ok := h.store.GetByDeviceCode(ctx, req.DeviceCode)
-	if !ok {
+	deviceReq, err := h.store.GetByDeviceCode(ctx, req.DeviceCode)
+	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "invalid_device_code"})
+		if errors.Is(err, store.ErrDeviceRequestNotFound) {
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "invalid_device_code"})
+		} else {
+			slog.Error("failed to get device request", "error", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "internal_error"})
+		}
 		return
 	}
 

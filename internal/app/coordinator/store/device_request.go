@@ -20,6 +20,9 @@ const (
 	maxCollisionRetries = 10
 )
 
+// ErrDeviceRequestNotFound is returned when a device request is not found
+var ErrDeviceRequestNotFound = errors.New("device request not found")
+
 // DeviceStatus represents the status of a device authorization request
 type DeviceStatus string
 
@@ -103,13 +106,13 @@ func (s *DeviceRequestStore) Create(ctx context.Context) (*DeviceRequest, error)
 }
 
 // GetByDeviceCode retrieves a device request by device code
-func (s *DeviceRequestStore) GetByDeviceCode(ctx context.Context, deviceCode string) (*DeviceRequest, bool) {
+func (s *DeviceRequestStore) GetByDeviceCode(ctx context.Context, deviceCode string) (*DeviceRequest, error) {
 	dbReq, err := s.queries.GetDeviceRequestByDeviceCode(ctx, deviceCode)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, false
+			return nil, ErrDeviceRequestNotFound
 		}
-		return nil, false
+		return nil, fmt.Errorf("failed to get device request: %w", err)
 	}
 
 	req := dbDeviceRequestToDeviceRequest(dbReq)
@@ -117,17 +120,17 @@ func (s *DeviceRequestStore) GetByDeviceCode(ctx context.Context, deviceCode str
 		req.Status = DeviceStatusExpired
 	}
 
-	return req, true
+	return req, nil
 }
 
 // GetByUserCode retrieves a device request by user code
-func (s *DeviceRequestStore) GetByUserCode(ctx context.Context, userCode string) (*DeviceRequest, bool) {
+func (s *DeviceRequestStore) GetByUserCode(ctx context.Context, userCode string) (*DeviceRequest, error) {
 	dbReq, err := s.queries.GetDeviceRequestByUserCode(ctx, userCode)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, false
+			return nil, ErrDeviceRequestNotFound
 		}
-		return nil, false
+		return nil, fmt.Errorf("failed to get device request: %w", err)
 	}
 
 	req := dbDeviceRequestToDeviceRequest(dbReq)
@@ -135,7 +138,7 @@ func (s *DeviceRequestStore) GetByUserCode(ctx context.Context, userCode string)
 		req.Status = DeviceStatusExpired
 	}
 
-	return req, true
+	return req, nil
 }
 
 // Approve approves a device request and stores the approval details
