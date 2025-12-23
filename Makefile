@@ -22,7 +22,7 @@ ifdef GIT_DIRTY
 endif
 
 VERSION_PKG := github.com/strrl/wonder-mesh-net/cmd/wonder/commands
-LDFLAGS := -s -w -X $(VERSION_PKG).Version=$(VERSION) -X $(VERSION_PKG).GitSHA=$(GIT_SHA)
+LDFLAGS := -s -w -X $(VERSION_PKG).version=$(VERSION) -X $(VERSION_PKG).gitSHA=$(GIT_SHA)
 
 help: ## Show this help message
 	@echo "Wonder Mesh Net - Build System"
