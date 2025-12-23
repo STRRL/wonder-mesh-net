@@ -288,6 +288,10 @@ func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Both headscaleURL and coordinatorURL use publicURL because the coordinator
+	// reverse-proxies all Tailscale control plane traffic to the embedded Headscale
+	// instance (see handlers/proxy.go). Workers use this single URL for both
+	// coordinator API calls and tailscale --login-server.
 	if err := h.store.Approve(ctx, req.UserCode, user.ID, user.HeadscaleUser, key.GetKey(), h.publicURL, h.publicURL); err != nil {
 		slog.Error("approve device", "error", err)
 		w.Header().Set("Content-Type", "application/json")

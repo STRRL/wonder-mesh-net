@@ -78,6 +78,8 @@ func (h *DeployerHandler) HandleDeployerJoin(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// HeadscaleURL uses publicURL because the coordinator reverse-proxies
+	// Tailscale control plane traffic to the embedded Headscale instance.
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(DeployerJoinResponse{
 		AuthKey:      authKey.GetKey(),

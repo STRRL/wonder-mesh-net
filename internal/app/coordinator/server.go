@@ -112,6 +112,8 @@ func NewServer(config *Config) (*Server, error) {
 		}
 	}
 
+	// Both coordinatorURL and headscaleURL use PublicURL because the coordinator
+	// reverse-proxies Tailscale control plane traffic to embedded Headscale.
 	tokenGenerator := jointoken.NewGenerator(
 		config.JWTSecret,
 		config.PublicURL,

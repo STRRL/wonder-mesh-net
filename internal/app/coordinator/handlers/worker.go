@@ -147,6 +147,8 @@ func (h *WorkerHandler) HandleWorkerJoin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// headscale_url uses publicURL because the coordinator reverse-proxies
+	// Tailscale control plane traffic to the embedded Headscale instance.
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"authkey":       key.GetKey(),
