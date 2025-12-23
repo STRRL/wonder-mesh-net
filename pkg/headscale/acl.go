@@ -72,7 +72,7 @@ func (am *ACLManager) SetRealmIsolationPolicy(ctx context.Context) error {
 
 	resp, err := am.client.ListUsers(ctx, &v1.ListUsersRequest{})
 	if err != nil {
-		return fmt.Errorf("failed to list users: %w", err)
+		return fmt.Errorf("list users: %w", err)
 	}
 
 	users := resp.GetUsers()
@@ -84,7 +84,7 @@ func (am *ACLManager) SetRealmIsolationPolicy(ctx context.Context) error {
 	policy := GenerateRealmIsolationPolicy(usernames)
 	policyJSON, err := json.Marshal(policy)
 	if err != nil {
-		return fmt.Errorf("failed to marshal policy: %w", err)
+		return fmt.Errorf("marshal policy: %w", err)
 	}
 
 	_, err = am.client.SetPolicy(ctx, &v1.SetPolicyRequest{Policy: string(policyJSON)})
@@ -99,7 +99,7 @@ func (am *ACLManager) SetAutogroupSelfPolicy(ctx context.Context) error {
 	policy := GenerateAutogroupSelfPolicy()
 	policyJSON, err := json.Marshal(policy)
 	if err != nil {
-		return fmt.Errorf("failed to marshal policy: %w", err)
+		return fmt.Errorf("marshal policy: %w", err)
 	}
 
 	_, err = am.client.SetPolicy(ctx, &v1.SetPolicyRequest{Policy: string(policyJSON)})
@@ -113,14 +113,14 @@ func (am *ACLManager) AddRealmToPolicy(ctx context.Context, username string) err
 
 	resp, err := am.client.GetPolicy(ctx, &v1.GetPolicyRequest{})
 	if err != nil {
-		return fmt.Errorf("failed to get policy: %w", err)
+		return fmt.Errorf("get policy: %w", err)
 	}
 
 	policyStr := resp.GetPolicy()
 	var policy ACLPolicy
 	if policyStr != "" {
 		if err := json.Unmarshal([]byte(policyStr), &policy); err != nil {
-			return fmt.Errorf("failed to unmarshal policy: %w", err)
+			return fmt.Errorf("unmarshal policy: %w", err)
 		}
 	}
 
@@ -140,7 +140,7 @@ func (am *ACLManager) AddRealmToPolicy(ctx context.Context, username string) err
 
 	policyJSON, err := json.Marshal(policy)
 	if err != nil {
-		return fmt.Errorf("failed to marshal policy: %w", err)
+		return fmt.Errorf("marshal policy: %w", err)
 	}
 
 	_, err = am.client.SetPolicy(ctx, &v1.SetPolicyRequest{Policy: string(policyJSON)})

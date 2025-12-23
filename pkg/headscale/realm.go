@@ -34,7 +34,7 @@ func RealmName(realmID string) string {
 func (rm *RealmManager) GetOrCreateRealm(ctx context.Context, realmName string) (*v1.User, error) {
 	listResp, err := rm.client.ListUsers(ctx, &v1.ListUsersRequest{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to list users: %w", err)
+		return nil, fmt.Errorf("list users: %w", err)
 	}
 
 	for _, u := range listResp.GetUsers() {
@@ -45,7 +45,7 @@ func (rm *RealmManager) GetOrCreateRealm(ctx context.Context, realmName string) 
 
 	createResp, err := rm.client.CreateUser(ctx, &v1.CreateUserRequest{Name: realmName})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create user: %w", err)
+		return nil, fmt.Errorf("create user: %w", err)
 	}
 
 	return createResp.GetUser(), nil
@@ -55,7 +55,7 @@ func (rm *RealmManager) GetOrCreateRealm(ctx context.Context, realmName string) 
 func (rm *RealmManager) EnsureUser(ctx context.Context, name string) (*v1.User, error) {
 	listResp, err := rm.client.ListUsers(ctx, &v1.ListUsersRequest{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to list users: %w", err)
+		return nil, fmt.Errorf("list users: %w", err)
 	}
 
 	for _, u := range listResp.GetUsers() {
@@ -66,7 +66,7 @@ func (rm *RealmManager) EnsureUser(ctx context.Context, name string) (*v1.User, 
 
 	createResp, err := rm.client.CreateUser(ctx, &v1.CreateUserRequest{Name: name})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create user: %w", err)
+		return nil, fmt.Errorf("create user: %w", err)
 	}
 
 	return createResp.GetUser(), nil
@@ -83,7 +83,7 @@ func (rm *RealmManager) CreateAuthKey(ctx context.Context, userID uint64, ttl ti
 		Expiration: timestamppb.New(expiration),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create pre-auth key: %w", err)
+		return nil, fmt.Errorf("create pre-auth key: %w", err)
 	}
 
 	return resp.GetPreAuthKey(), nil
@@ -95,7 +95,7 @@ func (rm *RealmManager) CreateAuthKey(ctx context.Context, userID uint64, ttl ti
 func (rm *RealmManager) CreateAuthKeyByName(ctx context.Context, username string, ttl time.Duration, reusable bool) (*v1.PreAuthKey, error) {
 	hsUser, err := rm.EnsureUser(ctx, username)
 	if err != nil {
-		return nil, fmt.Errorf("failed to ensure user: %w", err)
+		return nil, fmt.Errorf("ensure user: %w", err)
 	}
 
 	return rm.CreateAuthKey(ctx, hsUser.GetId(), ttl, reusable)
@@ -105,7 +105,7 @@ func (rm *RealmManager) CreateAuthKeyByName(ctx context.Context, username string
 func (rm *RealmManager) GetRealmNodes(ctx context.Context, username string) ([]*v1.Node, error) {
 	resp, err := rm.client.ListNodes(ctx, &v1.ListNodesRequest{User: username})
 	if err != nil {
-		return nil, fmt.Errorf("failed to list nodes: %w", err)
+		return nil, fmt.Errorf("list nodes: %w", err)
 	}
 
 	return resp.GetNodes(), nil

@@ -1,16 +1,28 @@
-.PHONY: help build build-all clean test check image
+.PHONY: help build build-all clean test check image generate
 
 # Build variables
 BINARY_NAME := wonder
 BUILD_DIR := bin
 GO := go
 GOFLAGS := -v
-LDFLAGS := -s -w
 
-# Version info
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-BUILD_TIME := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
+# Version info: tag if tagged, "untagged" otherwise; sha with -dirty suffix if dirty
+GIT_SHA := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+GIT_DIRTY := $(shell git diff-index --quiet HEAD -- 2>/dev/null || echo "dirty")
+GIT_TAG := $(shell git describe --tags --exact-match 2>/dev/null)
+
+ifdef GIT_TAG
+    VERSION := $(GIT_TAG)
+else
+    VERSION := untagged
+endif
+
+ifdef GIT_DIRTY
+    GIT_SHA := $(GIT_SHA)-dirty
+endif
+
+VERSION_PKG := github.com/strrl/wonder-mesh-net/cmd/wonder/commands
+LDFLAGS := -s -w -X $(VERSION_PKG).version=$(VERSION) -X $(VERSION_PKG).gitSHA=$(GIT_SHA)
 
 help: ## Show this help message
 	@echo "Wonder Mesh Net - Build System"
@@ -53,3 +65,12 @@ check: ## Run all code checks (fmt, vet, lint)
 
 image: ## Build and push multi-arch Docker image
 	./hack/build-image.sh
+
+generate: ## Generate code (sqlc)
+	@echo "Running sqlc generate..."
+	@if command -v sqlc >/dev/null 2>&1; then \
+		sqlc generate; \
+	else \
+		echo "sqlc not installed. Install with: go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest"; \
+		exit 1; \
+	fi

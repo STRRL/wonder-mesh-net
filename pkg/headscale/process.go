@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
@@ -64,16 +65,16 @@ func (pm *ProcessManager) Start(ctx context.Context) error {
 
 	stdout, err := pm.cmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("failed to get stdout pipe: %w", err)
+		return fmt.Errorf("get stdout pipe: %w", err)
 	}
 
 	stderr, err := pm.cmd.StderrPipe()
 	if err != nil {
-		return fmt.Errorf("failed to get stderr pipe: %w", err)
+		return fmt.Errorf("get stderr pipe: %w", err)
 	}
 
 	if err := pm.cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start headscale: %w", err)
+		return fmt.Errorf("start headscale: %w", err)
 	}
 
 	pm.running = true
@@ -81,14 +82,14 @@ func (pm *ProcessManager) Start(ctx context.Context) error {
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
-			fmt.Printf("[headscale] %s\n", scanner.Text())
+			slog.Info("headscale", "output", scanner.Text())
 		}
 	}()
 
 	go func() {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			fmt.Printf("[headscale] %s\n", scanner.Text())
+			slog.Info("headscale", "output", scanner.Text())
 		}
 	}()
 
@@ -98,9 +99,9 @@ func (pm *ProcessManager) Start(ctx context.Context) error {
 		pm.running = false
 		pm.mu.Unlock()
 		if err != nil {
-			fmt.Printf("[headscale] process exited with error: %v\n", err)
+			slog.Error("headscale process exited with error", "error", err)
 		} else {
-			fmt.Printf("[headscale] process exited normally\n")
+			slog.Info("headscale process exited normally")
 		}
 	}()
 
@@ -190,12 +191,12 @@ func (pm *ProcessManager) CreateAPIKey(ctx context.Context) (string, error) {
 	cmd := exec.CommandContext(ctx, pm.binaryPath, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("failed to create API key: %w, output: %s", err, output)
+		return "", fmt.Errorf("create API key: %w, output: %s", err, output)
 	}
 
 	apiKey := parseAPIKeyOutput(string(output))
 	if apiKey == "" {
-		return "", fmt.Errorf("failed to parse API key from output: %s", output)
+		return "", fmt.Errorf("parse API key from output: %s", output)
 	}
 
 	return apiKey, nil
