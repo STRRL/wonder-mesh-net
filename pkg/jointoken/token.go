@@ -91,7 +91,7 @@ func (v *Validator) Validate(tokenString string) (*Claims, error) {
 func ParseUnsafe(tokenString string) (*Claims, error) {
 	token, _, err := jwt.NewParser().ParseUnverified(tokenString, &Claims{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse token: %w", err)
+		return nil, fmt.Errorf("parse token: %w", err)
 	}
 
 	claims, ok := token.Claims.(*Claims)
@@ -111,7 +111,7 @@ func EncodeForCLI(token string) string {
 func DecodeFromCLI(encoded string) (string, error) {
 	data, err := base64.RawURLEncoding.DecodeString(encoded)
 	if err != nil {
-		return "", fmt.Errorf("failed to decode token: %w", err)
+		return "", fmt.Errorf("decode token: %w", err)
 	}
 	return string(data), nil
 }
@@ -148,8 +148,8 @@ func GetJoinInfo(tokenString string) (*JoinInfo, error) {
 func (ji *JoinInfo) ToJSON() string {
 	data, err := json.MarshalIndent(ji, "", "  ")
 	if err != nil {
-		slog.Error("failed to marshal join info", "error", err)
-		return `{"error": "failed to marshal join info"}`
+		slog.Error("marshal join info", "error", err)
+		return `{"error": "marshal join info"}`
 	}
 	return string(data)
 }

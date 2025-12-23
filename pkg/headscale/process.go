@@ -65,16 +65,16 @@ func (pm *ProcessManager) Start(ctx context.Context) error {
 
 	stdout, err := pm.cmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("failed to get stdout pipe: %w", err)
+		return fmt.Errorf("get stdout pipe: %w", err)
 	}
 
 	stderr, err := pm.cmd.StderrPipe()
 	if err != nil {
-		return fmt.Errorf("failed to get stderr pipe: %w", err)
+		return fmt.Errorf("get stderr pipe: %w", err)
 	}
 
 	if err := pm.cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start headscale: %w", err)
+		return fmt.Errorf("start headscale: %w", err)
 	}
 
 	pm.running = true
@@ -191,12 +191,12 @@ func (pm *ProcessManager) CreateAPIKey(ctx context.Context) (string, error) {
 	cmd := exec.CommandContext(ctx, pm.binaryPath, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("failed to create API key: %w, output: %s", err, output)
+		return "", fmt.Errorf("create API key: %w, output: %s", err, output)
 	}
 
 	apiKey := parseAPIKeyOutput(string(output))
 	if apiKey == "" {
-		return "", fmt.Errorf("failed to parse API key from output: %s", output)
+		return "", fmt.Errorf("parse API key from output: %s", output)
 	}
 
 	return apiKey, nil

@@ -103,6 +103,7 @@ JWT_SECRET=xxx                 # Required (generate with: openssl rand -hex 32)
 - No Chinese in code comments
 - Use `fmt.Print*` for user-facing CLI output (in `cmd/`)
 - Use `log/slog` for application logging (in `pkg/`)
+- Avoid "failed to" prefix in logs and error messages; instead describe the action and what occurred (e.g., `"read config: file not found"` instead of `"failed to read config"`)
 
 ## PR Review Comments
 

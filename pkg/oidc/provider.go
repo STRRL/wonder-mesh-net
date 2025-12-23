@@ -101,13 +101,13 @@ func (p *GitHubProvider) GetAuthURL(state string) string {
 func (p *GitHubProvider) ExchangeCode(ctx context.Context, code string) (*UserInfo, error) {
 	token, err := p.oauth2Config.Exchange(ctx, code)
 	if err != nil {
-		return nil, fmt.Errorf("failed to exchange code: %w", err)
+		return nil, fmt.Errorf("exchange code: %w", err)
 	}
 
 	client := p.oauth2Config.Client(ctx, token)
 	resp, err := client.Get("https://api.github.com/user")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user info: %w", err)
+		return nil, fmt.Errorf("get user info: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -124,7 +124,7 @@ func (p *GitHubProvider) ExchangeCode(ctx context.Context, code string) (*UserIn
 		AvatarURL string `json:"avatar_url"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&ghUser); err != nil {
-		return nil, fmt.Errorf("failed to decode user info: %w", err)
+		return nil, fmt.Errorf("decode user info: %w", err)
 	}
 
 	return &UserInfo{
@@ -148,7 +148,7 @@ type GoogleProvider struct {
 func NewGoogleProvider(ctx context.Context, config ProviderConfig) (*GoogleProvider, error) {
 	provider, err := oidc.NewProvider(ctx, "https://accounts.google.com")
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Google OIDC provider: %w", err)
+		return nil, fmt.Errorf("create Google OIDC provider: %w", err)
 	}
 
 	scopes := config.Scopes
@@ -189,7 +189,7 @@ func (p *GoogleProvider) GetAuthURL(state string) string {
 func (p *GoogleProvider) ExchangeCode(ctx context.Context, code string) (*UserInfo, error) {
 	token, err := p.oauth2Config.Exchange(ctx, code)
 	if err != nil {
-		return nil, fmt.Errorf("failed to exchange code: %w", err)
+		return nil, fmt.Errorf("exchange code: %w", err)
 	}
 
 	rawIDToken, ok := token.Extra("id_token").(string)
@@ -199,7 +199,7 @@ func (p *GoogleProvider) ExchangeCode(ctx context.Context, code string) (*UserIn
 
 	idToken, err := p.verifier.Verify(ctx, rawIDToken)
 	if err != nil {
-		return nil, fmt.Errorf("failed to verify ID token: %w", err)
+		return nil, fmt.Errorf("verify ID token: %w", err)
 	}
 
 	var claims struct {
@@ -209,7 +209,7 @@ func (p *GoogleProvider) ExchangeCode(ctx context.Context, code string) (*UserIn
 		Picture       string `json:"picture"`
 	}
 	if err := idToken.Claims(&claims); err != nil {
-		return nil, fmt.Errorf("failed to parse claims: %w", err)
+		return nil, fmt.Errorf("parse claims: %w", err)
 	}
 
 	return &UserInfo{
@@ -238,7 +238,7 @@ func NewOIDCProvider(ctx context.Context, config ProviderConfig) (*OIDCProvider,
 
 	provider, err := oidc.NewProvider(ctx, config.Issuer)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create OIDC provider: %w", err)
+		return nil, fmt.Errorf("create OIDC provider: %w", err)
 	}
 
 	scopes := config.Scopes
@@ -280,7 +280,7 @@ func (p *OIDCProvider) GetAuthURL(state string) string {
 func (p *OIDCProvider) ExchangeCode(ctx context.Context, code string) (*UserInfo, error) {
 	token, err := p.oauth2Config.Exchange(ctx, code)
 	if err != nil {
-		return nil, fmt.Errorf("failed to exchange code: %w", err)
+		return nil, fmt.Errorf("exchange code: %w", err)
 	}
 
 	rawIDToken, ok := token.Extra("id_token").(string)
@@ -290,7 +290,7 @@ func (p *OIDCProvider) ExchangeCode(ctx context.Context, code string) (*UserInfo
 
 	idToken, err := p.verifier.Verify(ctx, rawIDToken)
 	if err != nil {
-		return nil, fmt.Errorf("failed to verify ID token: %w", err)
+		return nil, fmt.Errorf("verify ID token: %w", err)
 	}
 
 	var claims struct {
@@ -300,7 +300,7 @@ func (p *OIDCProvider) ExchangeCode(ctx context.Context, code string) (*UserInfo
 		Picture       string `json:"picture"`
 	}
 	if err := idToken.Claims(&claims); err != nil {
-		return nil, fmt.Errorf("failed to parse claims: %w", err)
+		return nil, fmt.Errorf("parse claims: %w", err)
 	}
 
 	return &UserInfo{

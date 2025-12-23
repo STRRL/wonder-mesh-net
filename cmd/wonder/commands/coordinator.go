@@ -58,7 +58,7 @@ func runCoordinator(cmd *cobra.Command, args []string) {
 
 	server, err := coordinator.NewServer(&cfg)
 	if err != nil {
-		slog.Error("failed to create server", "error", err)
+		slog.Error("create server", "error", err)
 		os.Exit(1)
 	}
 

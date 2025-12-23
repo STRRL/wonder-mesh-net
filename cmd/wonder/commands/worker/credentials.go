@@ -18,7 +18,7 @@ type credentials struct {
 func getCredentialsPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("get credentials path %w", err)
+		return "", fmt.Errorf("get credentials path: %w", err)
 	}
 	return filepath.Join(home, ".wonder", "worker.json"), nil
 }
@@ -42,10 +42,13 @@ func loadCredentials() (*credentials, error) {
 }
 
 func saveCredentials(creds *credentials) error {
-
 	credentialPath, err := getCredentialsPath()
 	if err != nil {
 		return err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(credentialPath), 0700); err != nil {
+		return fmt.Errorf("create credentials directory: %w", err)
 	}
 
 	data, err := json.MarshalIndent(creds, "", "  ")

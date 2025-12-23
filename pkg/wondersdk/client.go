@@ -40,7 +40,7 @@ type Node struct {
 func (c *Client) ListNodes(ctx context.Context, sessionToken string) ([]Node, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/api/v1/nodes", nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("create request: %w", err)
 	}
 
 	req.Header.Set("X-Session-Token", sessionToken)
@@ -50,7 +50,7 @@ func (c *Client) ListNodes(ctx context.Context, sessionToken string) ([]Node, er
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, fmt.Errorf("send request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -63,7 +63,7 @@ func (c *Client) ListNodes(ctx context.Context, sessionToken string) ([]Node, er
 		Nodes []Node `json:"nodes"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
 	return result.Nodes, nil
@@ -89,12 +89,12 @@ func (c *Client) GetOnlineNodes(ctx context.Context, sessionToken string) ([]Nod
 func (c *Client) Health(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/health", nil)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return fmt.Errorf("create request: %w", err)
 	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
+		return fmt.Errorf("send request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 

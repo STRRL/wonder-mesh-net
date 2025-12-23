@@ -44,8 +44,8 @@ func (h *NodesHandler) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 
 	nodes, err := h.realmManager.GetRealmNodes(ctx, user.HeadscaleUser)
 	if err != nil {
-		slog.Error("failed to list nodes", "error", err)
-		http.Error(w, "failed to list nodes", http.StatusInternalServerError)
+		slog.Error("list nodes", "error", err)
+		http.Error(w, "list nodes", http.StatusInternalServerError)
 		return
 	}
 
@@ -86,7 +86,7 @@ func (h *NodesHandler) authenticate(r *http.Request) (*store.User, error) {
 		}
 
 		if err := h.apiKeyStore.UpdateLastUsed(ctx, apiKey.ID); err != nil {
-			slog.Warn("failed to update API key last used", "error", err)
+			slog.Warn("update API key last used", "error", err)
 		}
 
 		return h.auth.GetUserByID(ctx, apiKey.UserID)

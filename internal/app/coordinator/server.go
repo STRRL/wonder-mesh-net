@@ -44,15 +44,15 @@ func NewServer(config *Config) (*Server, error) {
 	}
 
 	if err := os.MkdirAll(DefaultCoordinatorDataDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create coordinator data dir: %w", err)
+		return nil, fmt.Errorf("create coordinator data dir: %w", err)
 	}
 	if err := os.MkdirAll(DefaultHeadscaleDataDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create headscale data dir: %w", err)
+		return nil, fmt.Errorf("create headscale data dir: %w", err)
 	}
 
 	db, err := database.NewManager(DefaultDatabasePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize database: %w", err)
+		return nil, fmt.Errorf("initialize database: %w", err)
 	}
 	slog.Info("database initialized", "path", DefaultDatabasePath)
 
@@ -70,7 +70,7 @@ func NewServer(config *Config) (*Server, error) {
 
 	if err := hsProcess.Start(ctx); err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("failed to start headscale: %w", err)
+		return nil, fmt.Errorf("start headscale: %w", err)
 	}
 
 	if err := hsProcess.WaitReady(ctx, 30*time.Second); err != nil {
@@ -85,7 +85,7 @@ func NewServer(config *Config) (*Server, error) {
 	if err != nil {
 		_ = hsProcess.Stop()
 		_ = db.Close()
-		return nil, fmt.Errorf("failed to create headscale API key: %w", err)
+		return nil, fmt.Errorf("create headscale API key: %w", err)
 	}
 	slog.Info("Headscale API key created")
 
@@ -97,7 +97,7 @@ func NewServer(config *Config) (*Server, error) {
 	if err != nil {
 		_ = hsProcess.Stop()
 		_ = db.Close()
-		return nil, fmt.Errorf("failed to connect to headscale gRPC: %w", err)
+		return nil, fmt.Errorf("connect to headscale gRPC: %w", err)
 	}
 	hsClient := v1.NewHeadscaleServiceClient(hsConn)
 
@@ -106,7 +106,7 @@ func NewServer(config *Config) (*Server, error) {
 
 	for _, providerConfig := range config.OIDCProviders() {
 		if err := oidcRegistry.RegisterProvider(ctx, providerConfig); err != nil {
-			slog.Warn("failed to register OIDC provider", "provider", providerConfig.Name, "error", err)
+			slog.Warn("register OIDC provider", "provider", providerConfig.Name, "error", err)
 		} else {
 			slog.Info("registered OIDC provider", "provider", providerConfig.Name)
 		}
@@ -142,7 +142,7 @@ func (s *Server) Close() error {
 	}
 	if s.HSProcess != nil {
 		if err := s.HSProcess.Stop(); err != nil {
-			slog.Warn("failed to stop headscale", "error", err)
+			slog.Warn("stop headscale", "error", err)
 		}
 	}
 	if s.DB != nil {

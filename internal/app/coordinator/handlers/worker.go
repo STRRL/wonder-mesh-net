@@ -58,7 +58,7 @@ func (h *WorkerHandler) HandleCreateJoinToken(w http.ResponseWriter, r *http.Req
 
 	session, err := h.sessionStore.Get(ctx, sessionID)
 	if err != nil {
-		slog.Error("failed to get session", "error", err)
+		slog.Error("get session", "error", err)
 		http.Error(w, "invalid session", http.StatusUnauthorized)
 		return
 	}
@@ -68,7 +68,7 @@ func (h *WorkerHandler) HandleCreateJoinToken(w http.ResponseWriter, r *http.Req
 	}
 
 	if err := h.sessionStore.UpdateLastUsed(ctx, sessionID); err != nil {
-		slog.Warn("failed to update session last used", "error", err, "session_id", sessionID)
+		slog.Warn("update session last used", "error", err, "session_id", sessionID)
 	}
 
 	user, err := h.userStore.Get(ctx, session.UserID)
@@ -96,8 +96,8 @@ func (h *WorkerHandler) HandleCreateJoinToken(w http.ResponseWriter, r *http.Req
 
 	token, err := h.tokenGenerator.Generate(user.ID, user.HeadscaleUser, ttl)
 	if err != nil {
-		slog.Error("failed to generate join token", "error", err)
-		http.Error(w, "failed to generate join token", http.StatusInternalServerError)
+		slog.Error("generate join token", "error", err)
+		http.Error(w, "generate join token", http.StatusInternalServerError)
 		return
 	}
 
@@ -106,7 +106,7 @@ func (h *WorkerHandler) HandleCreateJoinToken(w http.ResponseWriter, r *http.Req
 		"token":   token,
 		"command": fmt.Sprintf("wonder worker join %s", token),
 	}); err != nil {
-		slog.Error("failed to encode join token response", "error", err)
+		slog.Error("encode join token response", "error", err)
 	}
 }
 
@@ -142,8 +142,8 @@ func (h *WorkerHandler) HandleWorkerJoin(w http.ResponseWriter, r *http.Request)
 
 	key, err := h.realmManager.CreateAuthKeyByName(ctx, claims.HeadscaleUser, 24*time.Hour, false)
 	if err != nil {
-		slog.Error("failed to create auth key", "error", err)
-		http.Error(w, "failed to create auth key", http.StatusInternalServerError)
+		slog.Error("create auth key", "error", err)
+		http.Error(w, "create auth key", http.StatusInternalServerError)
 		return
 	}
 
@@ -153,6 +153,6 @@ func (h *WorkerHandler) HandleWorkerJoin(w http.ResponseWriter, r *http.Request)
 		"headscale_url": h.publicURL,
 		"user":          claims.HeadscaleUser,
 	}); err != nil {
-		slog.Error("failed to encode worker join response", "error", err)
+		slog.Error("encode worker join response", "error", err)
 	}
 }

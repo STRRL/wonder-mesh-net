@@ -77,7 +77,7 @@ func (s *Server) Run() error {
 	slog.Info("initializing ACL policy")
 	ctx := context.Background()
 	if err := s.ACLManager.SetAutogroupSelfPolicy(ctx); err != nil {
-		slog.Warn("failed to initialize ACL policy", "error", err)
+		slog.Warn("initialize ACL policy", "error", err)
 	} else {
 		slog.Info("ACL policy initialized successfully")
 	}
@@ -103,7 +103,7 @@ func (s *Server) Run() error {
 		defer ticker.Stop()
 		for range ticker.C {
 			if err := s.DeviceFlowStore.DeleteExpired(context.Background()); err != nil {
-				slog.Warn("failed to cleanup expired device requests", "error", err)
+				slog.Warn("cleanup expired device requests", "error", err)
 			}
 		}
 	}()

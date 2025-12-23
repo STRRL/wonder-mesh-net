@@ -69,8 +69,8 @@ func (h *APIKeyHandler) HandleCreateAPIKey(w http.ResponseWriter, r *http.Reques
 
 	apiKeyWithSecret, err := h.apiKeyStore.Create(ctx, user.ID, req.Name, scopes, expiresAt)
 	if err != nil {
-		slog.Error("failed to create API key", "error", err)
-		http.Error(w, "failed to create API key", http.StatusInternalServerError)
+		slog.Error("create API key", "error", err)
+		http.Error(w, "create API key", http.StatusInternalServerError)
 		return
 	}
 
@@ -97,8 +97,8 @@ func (h *APIKeyHandler) HandleListAPIKeys(w http.ResponseWriter, r *http.Request
 
 	keys, err := h.apiKeyStore.List(ctx, user.ID)
 	if err != nil {
-		slog.Error("failed to list API keys", "error", err)
-		http.Error(w, "failed to list API keys", http.StatusInternalServerError)
+		slog.Error("list API keys", "error", err)
+		http.Error(w, "list API keys", http.StatusInternalServerError)
 		return
 	}
 
@@ -140,8 +140,8 @@ func (h *APIKeyHandler) HandleDeleteAPIKey(w http.ResponseWriter, r *http.Reques
 			http.Error(w, "api key not found", http.StatusNotFound)
 			return
 		}
-		slog.Error("failed to delete API key", "error", err)
-		http.Error(w, "failed to delete API key", http.StatusInternalServerError)
+		slog.Error("delete API key", "error", err)
+		http.Error(w, "delete API key", http.StatusInternalServerError)
 		return
 	}
 

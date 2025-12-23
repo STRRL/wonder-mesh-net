@@ -61,18 +61,18 @@ func NewDeviceRequestStore(queries *database.Queries) *DeviceRequestStore {
 func (s *DeviceRequestStore) Create(ctx context.Context) (*DeviceRequest, error) {
 	deviceCode, err := generateDeviceCode(DeviceCodeLength)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate device code: %w", err)
+		return nil, fmt.Errorf("generate device code: %w", err)
 	}
 
 	var userCode string
 	for i := 0; i < maxCollisionRetries; i++ {
 		code, err := generateUserCode()
 		if err != nil {
-			return nil, fmt.Errorf("failed to generate user code: %w", err)
+			return nil, fmt.Errorf("generate user code: %w", err)
 		}
 		exists, err := s.queries.UserCodeExists(ctx, code)
 		if err != nil {
-			return nil, fmt.Errorf("failed to check user code: %w", err)
+			return nil, fmt.Errorf("check user code: %w", err)
 		}
 		if exists == 0 {
 			userCode = code
@@ -80,7 +80,7 @@ func (s *DeviceRequestStore) Create(ctx context.Context) (*DeviceRequest, error)
 		}
 	}
 	if userCode == "" {
-		return nil, fmt.Errorf("failed to generate unique user code after %d attempts", maxCollisionRetries)
+		return nil, fmt.Errorf("generate unique user code: exhausted %d attempts", maxCollisionRetries)
 	}
 
 	now := time.Now()
@@ -93,7 +93,7 @@ func (s *DeviceRequestStore) Create(ctx context.Context) (*DeviceRequest, error)
 		ExpiresAt:  expiresAt,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create device request: %w", err)
+		return nil, fmt.Errorf("create device request: %w", err)
 	}
 
 	return &DeviceRequest{
@@ -112,7 +112,7 @@ func (s *DeviceRequestStore) GetByDeviceCode(ctx context.Context, deviceCode str
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrDeviceRequestNotFound
 		}
-		return nil, fmt.Errorf("failed to get device request: %w", err)
+		return nil, fmt.Errorf("get device request: %w", err)
 	}
 
 	req := dbDeviceRequestToDeviceRequest(dbReq)
@@ -130,7 +130,7 @@ func (s *DeviceRequestStore) GetByUserCode(ctx context.Context, userCode string)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrDeviceRequestNotFound
 		}
-		return nil, fmt.Errorf("failed to get device request: %w", err)
+		return nil, fmt.Errorf("get device request: %w", err)
 	}
 
 	req := dbDeviceRequestToDeviceRequest(dbReq)

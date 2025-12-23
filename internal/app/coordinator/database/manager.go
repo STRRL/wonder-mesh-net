@@ -24,12 +24,12 @@ type Manager struct {
 // NewManager creates a new database manager and runs migrations
 func NewManager(dbPath string) (*Manager, error) {
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
-		return nil, fmt.Errorf("failed to create database directory: %w", err)
+		return nil, fmt.Errorf("create database directory: %w", err)
 	}
 
 	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_busy_timeout=5000")
 	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
+		return nil, fmt.Errorf("open database: %w", err)
 	}
 
 	// SQLite does not handle multiple concurrent writers well.
@@ -40,7 +40,7 @@ func NewManager(dbPath string) (*Manager, error) {
 
 	if err := runMigrations(db); err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("failed to run migrations: %w", err)
+		return nil, fmt.Errorf("run migrations: %w", err)
 	}
 
 	return &Manager{
@@ -54,11 +54,11 @@ func runMigrations(db *sql.DB) error {
 	goose.SetBaseFS(embedMigrations)
 
 	if err := goose.SetDialect("sqlite3"); err != nil {
-		return fmt.Errorf("failed to set dialect: %w", err)
+		return fmt.Errorf("set dialect: %w", err)
 	}
 
 	if err := goose.Up(db, "migrations"); err != nil {
-		return fmt.Errorf("failed to run migrations: %w", err)
+		return fmt.Errorf("run migrations: %w", err)
 	}
 
 	return nil

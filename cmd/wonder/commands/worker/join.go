@@ -67,7 +67,7 @@ func runTokenJoin(token string) error {
 		bytes.NewReader(reqBody),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to contact coordinator: %w", err)
+		return fmt.Errorf("contact coordinator: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -82,7 +82,7 @@ func runTokenJoin(token string) error {
 		User         string `json:"user"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
+		return fmt.Errorf("decode response: %w", err)
 	}
 
 	return completeJoin(result.Authkey, result.HeadscaleURL, result.User, info.CoordinatorURL)
@@ -103,7 +103,7 @@ func runDeviceFlowJoin() error {
 
 	deviceCode, userCode, verifyURL, interval, err := requestDeviceCode(coordinatorURL)
 	if err != nil {
-		return fmt.Errorf("failed to start device authorization: %w", err)
+		return fmt.Errorf("start device authorization: %w", err)
 	}
 
 	fmt.Println("To authorize this device, visit:")
@@ -146,7 +146,7 @@ func requestDeviceCode(coordinator string) (deviceCode, userCode, verifyURL stri
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return "", "", "", 0, fmt.Errorf("failed to get device code: %s", string(body))
+		return "", "", "", 0, fmt.Errorf("get device code: %s", string(body))
 	}
 
 	var result deviceCodeResponse
@@ -184,7 +184,7 @@ func pollOnce(coordinator, deviceCode string) (authkey, headscaleURL, user strin
 
 	var result deviceTokenResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", "", "", false, fmt.Errorf("failed to decode response: %w", err)
+		return "", "", "", false, fmt.Errorf("decode response: %w", err)
 	}
 
 	switch resp.StatusCode {
@@ -242,7 +242,7 @@ func completeJoin(authkey, headscaleURL, user, coordinator string) error {
 		JoinedAt:     time.Now(),
 	}
 	if err := saveCredentials(creds); err != nil {
-		fmt.Printf("Warning: failed to save credentials: %v\n", err)
+		fmt.Printf("Warning: save credentials: %v\n", err)
 	}
 
 	fmt.Println()

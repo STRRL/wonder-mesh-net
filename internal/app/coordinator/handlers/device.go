@@ -54,8 +54,8 @@ func (h *DeviceHandler) HandleDeviceCode(w http.ResponseWriter, r *http.Request)
 	ctx := r.Context()
 	req, err := h.store.Create(ctx)
 	if err != nil {
-		slog.Error("failed to create device request", "error", err)
-		http.Error(w, "failed to create device request", http.StatusInternalServerError)
+		slog.Error("create device request", "error", err)
+		http.Error(w, "create device request", http.StatusInternalServerError)
 		return
 	}
 
@@ -69,7 +69,7 @@ func (h *DeviceHandler) HandleDeviceCode(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		slog.Error("failed to encode device code response", "error", err)
+		slog.Error("encode device code response", "error", err)
 	}
 }
 
@@ -221,7 +221,7 @@ func (h *DeviceHandler) HandleDeviceVerifyPage(w http.ResponseWriter, r *http.Re
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if _, err := w.Write([]byte(htmlContent)); err != nil {
-		slog.Error("failed to write device verify page", "error", err)
+		slog.Error("write device verify page", "error", err)
 	}
 }
 
@@ -265,7 +265,7 @@ func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Reques
 			w.WriteHeader(http.StatusNotFound)
 			_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid or expired code"})
 		} else {
-			slog.Error("failed to get device request", "error", err)
+			slog.Error("get device request", "error", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			_ = json.NewEncoder(w).Encode(map[string]string{"error": "internal error"})
 		}
@@ -281,18 +281,18 @@ func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Reques
 
 	key, err := h.realmManager.CreateAuthKeyByName(ctx, user.HeadscaleUser, 24*time.Hour, false)
 	if err != nil {
-		slog.Error("failed to create auth key for device", "error", err)
+		slog.Error("create auth key for device", "error", err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "failed to create auth key"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "create auth key"})
 		return
 	}
 
 	if err := h.store.Approve(ctx, req.UserCode, user.ID, user.HeadscaleUser, key.GetKey(), h.publicURL, h.publicURL); err != nil {
-		slog.Error("failed to approve device", "error", err)
+		slog.Error("approve device", "error", err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "failed to approve device"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "approve device"})
 		return
 	}
 
@@ -339,7 +339,7 @@ func (h *DeviceHandler) HandleDeviceToken(w http.ResponseWriter, r *http.Request
 			w.WriteHeader(http.StatusNotFound)
 			_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "invalid_device_code"})
 		} else {
-			slog.Error("failed to get device request", "error", err)
+			slog.Error("get device request", "error", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "internal_error"})
 		}
