@@ -8,7 +8,7 @@ GOFLAGS := -v
 
 # Version info: tag if tagged, "untagged" otherwise; sha with -dirty suffix if dirty
 GIT_SHA := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-GIT_DIRTY := $(shell git status --porcelain 2>/dev/null | head -1)
+GIT_DIRTY := $(shell git diff-index --quiet HEAD -- 2>/dev/null || echo "dirty")
 GIT_TAG := $(shell git describe --tags --exact-match 2>/dev/null)
 
 ifdef GIT_TAG
