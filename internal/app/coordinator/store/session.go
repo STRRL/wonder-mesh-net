@@ -8,7 +8,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/database"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/database/sqlc"
 )
 
 // Session represents a user session
@@ -34,11 +34,11 @@ type SessionStore interface {
 
 // DBSessionStore is a database implementation of SessionStore
 type DBSessionStore struct {
-	queries *database.Queries
+	queries *sqlc.Queries
 }
 
 // NewDBSessionStore creates a new database-backed session store
-func NewDBSessionStore(queries *database.Queries) *DBSessionStore {
+func NewDBSessionStore(queries *sqlc.Queries) *DBSessionStore {
 	return &DBSessionStore{queries: queries}
 }
 
@@ -57,7 +57,7 @@ func (s *DBSessionStore) Create(ctx context.Context, session *Session) error {
 		expiresAt = sql.NullTime{Time: *session.ExpiresAt, Valid: true}
 	}
 
-	return s.queries.CreateSession(ctx, database.CreateSessionParams{
+	return s.queries.CreateSession(ctx, sqlc.CreateSessionParams{
 		ID:         session.ID,
 		UserID:     session.UserID,
 		Issuer:     session.Issuer,
@@ -99,7 +99,7 @@ func (s *DBSessionStore) Get(ctx context.Context, id string) (*Session, error) {
 }
 
 func (s *DBSessionStore) UpdateLastUsed(ctx context.Context, id string) error {
-	return s.queries.UpdateSessionLastUsed(ctx, database.UpdateSessionLastUsedParams{
+	return s.queries.UpdateSessionLastUsed(ctx, sqlc.UpdateSessionLastUsedParams{
 		LastUsedAt: time.Now(),
 		ID:         id,
 	})

@@ -50,11 +50,14 @@ func NewServer(config *Config) (*Server, error) {
 		return nil, fmt.Errorf("create headscale data dir: %w", err)
 	}
 
-	db, err := database.NewManager(DefaultDatabasePath)
+	db, err := database.NewManager(database.Config{
+		Driver: database.DriverSQLite,
+		DSN:    DefaultDatabaseDSN,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("initialize database: %w", err)
 	}
-	slog.Info("database initialized", "path", DefaultDatabasePath)
+	slog.Info("database initialized", "driver", database.DriverSQLite, "dsn", DefaultDatabaseDSN)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()

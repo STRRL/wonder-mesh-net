@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/database"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/database/sqlc"
 )
 
 const (
@@ -49,11 +49,11 @@ type DeviceRequest struct {
 
 // DeviceRequestStore provides database-backed storage for device authorization requests
 type DeviceRequestStore struct {
-	queries *database.Queries
+	queries *sqlc.Queries
 }
 
 // NewDeviceRequestStore creates a new database-backed device request store
-func NewDeviceRequestStore(queries *database.Queries) *DeviceRequestStore {
+func NewDeviceRequestStore(queries *sqlc.Queries) *DeviceRequestStore {
 	return &DeviceRequestStore{queries: queries}
 }
 
@@ -86,7 +86,7 @@ func (s *DeviceRequestStore) Create(ctx context.Context) (*DeviceRequest, error)
 	now := time.Now()
 	expiresAt := now.Add(DefaultDeviceExpiry)
 
-	err = s.queries.CreateDeviceRequest(ctx, database.CreateDeviceRequestParams{
+	err = s.queries.CreateDeviceRequest(ctx, sqlc.CreateDeviceRequestParams{
 		DeviceCode: deviceCode,
 		UserCode:   userCode,
 		CreatedAt:  now,
@@ -143,7 +143,7 @@ func (s *DeviceRequestStore) GetByUserCode(ctx context.Context, userCode string)
 
 // Approve approves a device request and stores the approval details
 func (s *DeviceRequestStore) Approve(ctx context.Context, userCode, userID, headscaleUser, authkey, headscaleURL, coordinatorURL string) error {
-	return s.queries.ApproveDeviceRequest(ctx, database.ApproveDeviceRequestParams{
+	return s.queries.ApproveDeviceRequest(ctx, sqlc.ApproveDeviceRequestParams{
 		UserID:         sql.NullString{String: userID, Valid: true},
 		HeadscaleUser:  sql.NullString{String: headscaleUser, Valid: true},
 		Authkey:        sql.NullString{String: authkey, Valid: true},
@@ -163,7 +163,7 @@ func (s *DeviceRequestStore) DeleteExpired(ctx context.Context) error {
 	return s.queries.DeleteExpiredDeviceRequests(ctx)
 }
 
-func dbDeviceRequestToDeviceRequest(dbReq database.DeviceRequest) *DeviceRequest {
+func dbDeviceRequestToDeviceRequest(dbReq sqlc.DeviceRequest) *DeviceRequest {
 	return &DeviceRequest{
 		DeviceCode:     dbReq.DeviceCode,
 		UserCode:       dbReq.UserCode,

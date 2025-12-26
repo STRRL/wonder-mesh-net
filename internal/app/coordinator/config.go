@@ -73,7 +73,7 @@ const (
 	DefaultDataDir            = "/data"
 	DefaultHeadscaleDataDir   = "/data/headscale"
 	DefaultCoordinatorDataDir = "/data/coordinator"
-	DefaultDatabasePath       = "/data/coordinator/coordinator.db"
+	DefaultDatabaseDSN        = "file:/data/coordinator/coordinator.db?_journal_mode=WAL&_busy_timeout=5000"
 	DefaultHeadscaleURL       = "http://127.0.0.1:8080"
 	DefaultHeadscaleGRPCAddr  = "127.0.0.1:50443"
 )

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/database"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/database/sqlc"
 )
 
 const keyLength = 32
@@ -66,11 +66,11 @@ type APIKeyStore interface {
 
 // DBAPIKeyStore is a database implementation of APIKeyStore
 type DBAPIKeyStore struct {
-	queries *database.Queries
+	queries *sqlc.Queries
 }
 
 // NewDBAPIKeyStore creates a new database-backed API key store
-func NewDBAPIKeyStore(queries *database.Queries) *DBAPIKeyStore {
+func NewDBAPIKeyStore(queries *sqlc.Queries) *DBAPIKeyStore {
 	return &DBAPIKeyStore{queries: queries}
 }
 
@@ -89,7 +89,7 @@ func (s *DBAPIKeyStore) Create(ctx context.Context, userID, name, scopes string,
 		expiresAtSQL = sql.NullTime{Time: *expiresAt, Valid: true}
 	}
 
-	err := s.queries.CreateAPIKey(ctx, database.CreateAPIKeyParams{
+	err := s.queries.CreateAPIKey(ctx, sqlc.CreateAPIKeyParams{
 		ID:        id,
 		UserID:    userID,
 		Name:      name,
@@ -147,7 +147,7 @@ func (s *DBAPIKeyStore) List(ctx context.Context, userID string) ([]*APIKeyWithS
 }
 
 func (s *DBAPIKeyStore) Delete(ctx context.Context, id, userID string) error {
-	result, err := s.queries.DeleteAPIKeyByUser(ctx, database.DeleteAPIKeyByUserParams{
+	result, err := s.queries.DeleteAPIKeyByUser(ctx, sqlc.DeleteAPIKeyByUserParams{
 		ID:     id,
 		UserID: userID,
 	})
@@ -165,7 +165,7 @@ func (s *DBAPIKeyStore) Delete(ctx context.Context, id, userID string) error {
 }
 
 func (s *DBAPIKeyStore) UpdateLastUsed(ctx context.Context, id string) error {
-	return s.queries.UpdateAPIKeyLastUsed(ctx, database.UpdateAPIKeyLastUsedParams{
+	return s.queries.UpdateAPIKeyLastUsed(ctx, sqlc.UpdateAPIKeyLastUsedParams{
 		LastUsedAt: sql.NullTime{Time: time.Now(), Valid: true},
 		ID:         id,
 	})
@@ -182,7 +182,7 @@ func (s *DBAPIKeyStore) Get(ctx context.Context, id string) (*APIKeyWithSecret, 
 	return dbAPIKeyToAPIKeyWithSecret(dbKey), nil
 }
 
-func dbAPIKeyToAPIKey(dbKey database.ApiKey) *APIKey {
+func dbAPIKeyToAPIKey(dbKey sqlc.ApiKey) *APIKey {
 	apiKey := &APIKey{
 		ID:        dbKey.ID,
 		UserID:    dbKey.UserID,
@@ -199,7 +199,7 @@ func dbAPIKeyToAPIKey(dbKey database.ApiKey) *APIKey {
 	return apiKey
 }
 
-func dbAPIKeyToAPIKeyWithSecret(dbKey database.ApiKey) *APIKeyWithSecret {
+func dbAPIKeyToAPIKeyWithSecret(dbKey sqlc.ApiKey) *APIKeyWithSecret {
 	return &APIKeyWithSecret{
 		APIKey: *dbAPIKeyToAPIKey(dbKey),
 		Key:    dbKey.ApiKey,

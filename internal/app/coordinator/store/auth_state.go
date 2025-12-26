@@ -6,18 +6,18 @@ import (
 	"errors"
 	"time"
 
-	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/database"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/database/sqlc"
 	"github.com/strrl/wonder-mesh-net/pkg/oidc"
 )
 
 // DBAuthStateStore is a database implementation of AuthStateStore
 type DBAuthStateStore struct {
-	queries  *database.Queries
+	queries  *sqlc.Queries
 	stateTTL time.Duration
 }
 
 // NewDBAuthStateStore creates a new database-backed auth state store
-func NewDBAuthStateStore(queries *database.Queries, ttl time.Duration) *DBAuthStateStore {
+func NewDBAuthStateStore(queries *sqlc.Queries, ttl time.Duration) *DBAuthStateStore {
 	return &DBAuthStateStore{
 		queries:  queries,
 		stateTTL: ttl,
@@ -25,7 +25,7 @@ func NewDBAuthStateStore(queries *database.Queries, ttl time.Duration) *DBAuthSt
 }
 
 func (s *DBAuthStateStore) Create(ctx context.Context, state *oidc.AuthState) error {
-	return s.queries.CreateAuthState(ctx, database.CreateAuthStateParams{
+	return s.queries.CreateAuthState(ctx, sqlc.CreateAuthStateParams{
 		State:        state.State,
 		Nonce:        state.Nonce,
 		RedirectUri:  state.RedirectURI,

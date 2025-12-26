@@ -22,6 +22,7 @@ func NewCoordinatorCmd() *cobra.Command {
 	cmd.Flags().String("listen", ":9080", "Coordinator listen address")
 	cmd.Flags().String("public-url", "http://localhost:9080", "Public URL for callbacks")
 
+	// TODO: should map all env to flags, not only subset
 	_ = viper.BindPFlag("coordinator.listen", cmd.Flags().Lookup("listen"))
 	_ = viper.BindPFlag("coordinator.public_url", cmd.Flags().Lookup("public-url"))
 

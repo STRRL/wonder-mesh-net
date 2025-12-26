@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/database"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/database/sqlc"
 )
 
 // User represents a local user record
@@ -34,16 +34,16 @@ type UserStore interface {
 
 // DBUserStore is a database implementation of UserStore
 type DBUserStore struct {
-	queries *database.Queries
+	queries *sqlc.Queries
 }
 
 // NewDBUserStore creates a new database-backed user store
-func NewDBUserStore(queries *database.Queries) *DBUserStore {
+func NewDBUserStore(queries *sqlc.Queries) *DBUserStore {
 	return &DBUserStore{queries: queries}
 }
 
 func (s *DBUserStore) Create(ctx context.Context, user *User) error {
-	return s.queries.CreateUser(ctx, database.CreateUserParams{
+	return s.queries.CreateUser(ctx, sqlc.CreateUserParams{
 		ID:            user.ID,
 		HeadscaleUser: user.HeadscaleUser,
 		Issuer:        user.Issuer,
@@ -79,7 +79,7 @@ func (s *DBUserStore) GetByHeadscaleUser(ctx context.Context, headscaleUser stri
 }
 
 func (s *DBUserStore) GetByIssuerSubject(ctx context.Context, issuer, subject string) (*User, error) {
-	dbUser, err := s.queries.GetUserByIssuerSubject(ctx, database.GetUserByIssuerSubjectParams{
+	dbUser, err := s.queries.GetUserByIssuerSubject(ctx, sqlc.GetUserByIssuerSubjectParams{
 		Issuer:  issuer,
 		Subject: subject,
 	})
@@ -93,7 +93,7 @@ func (s *DBUserStore) GetByIssuerSubject(ctx context.Context, issuer, subject st
 }
 
 func (s *DBUserStore) Update(ctx context.Context, user *User) error {
-	return s.queries.UpdateUser(ctx, database.UpdateUserParams{
+	return s.queries.UpdateUser(ctx, sqlc.UpdateUserParams{
 		Email:     sql.NullString{String: user.Email, Valid: user.Email != ""},
 		Name:      sql.NullString{String: user.Name, Valid: user.Name != ""},
 		Picture:   sql.NullString{String: user.Picture, Valid: user.Picture != ""},
@@ -106,7 +106,7 @@ func (s *DBUserStore) Delete(ctx context.Context, id string) error {
 	return s.queries.DeleteUser(ctx, id)
 }
 
-func dbUserToUser(dbUser database.User) *User {
+func dbUserToUser(dbUser sqlc.User) *User {
 	return &User{
 		ID:            dbUser.ID,
 		HeadscaleUser: dbUser.HeadscaleUser,

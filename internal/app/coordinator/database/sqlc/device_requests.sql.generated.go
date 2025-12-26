@@ -3,7 +3,7 @@
 //   sqlc v1.30.0
 // source: device_requests.sql
 
-package database
+package sqlc
 
 import (
 	"context"

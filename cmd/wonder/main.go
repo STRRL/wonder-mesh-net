@@ -59,7 +59,7 @@ func main() {
 
 	rootCmd.AddCommand(commands.NewVersionCmd())
 	rootCmd.AddCommand(commands.NewCoordinatorCmd())
-	rootCmd.AddCommand(worker.NewCmd())
+	rootCmd.AddCommand(worker.NewWorkerCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
