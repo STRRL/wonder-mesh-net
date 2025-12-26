@@ -11,6 +11,8 @@ var (
 	gitSHA  = "unknown"
 )
 
+// NewVersionCmd creates the version subcommand that prints
+// the wonder binary version and git commit SHA.
 func NewVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",

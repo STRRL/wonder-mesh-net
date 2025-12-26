@@ -10,6 +10,7 @@ import (
 	"github.com/strrl/wonder-mesh-net/cmd/wonder/commands/worker"
 )
 
+// newRootCmd creates the root cobra command for the wonder CLI.
 func newRootCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "wonder",
@@ -19,6 +20,8 @@ to the internet, making them accessible to PaaS platforms and orchestration tool
 	}
 }
 
+// initConfig returns a configuration initializer that sets up viper
+// to read from config files and environment variables.
 func initConfig(cfgFile *string) func() {
 	return func() {
 		if *cfgFile != "" {

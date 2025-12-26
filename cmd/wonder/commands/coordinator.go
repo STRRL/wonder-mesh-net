@@ -9,6 +9,8 @@ import (
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator"
 )
 
+// NewCoordinatorCmd creates the coordinator subcommand that runs the
+// Wonder Mesh Net coordinator server with embedded Headscale.
 func NewCoordinatorCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "coordinator",
@@ -37,6 +39,8 @@ func NewCoordinatorCmd() *cobra.Command {
 	return cmd
 }
 
+// runCoordinator initializes and starts the coordinator server
+// using configuration from flags and environment variables.
 func runCoordinator(cmd *cobra.Command, args []string) {
 	var cfg coordinator.Config
 	cfg.Listen = viper.GetString("coordinator.listen")

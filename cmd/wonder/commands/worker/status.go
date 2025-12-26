@@ -7,6 +7,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// newStatusCmd creates the status subcommand that displays the current
+// worker node connection status and mesh network information.
 func newStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
@@ -16,6 +18,8 @@ func newStatusCmd() *cobra.Command {
 	}
 }
 
+// runStatus loads and displays the locally stored credentials including
+// user, coordinator URL, and join timestamp.
 func runStatus(cmd *cobra.Command, args []string) error {
 	creds, err := loadCredentials()
 	if err != nil {
@@ -27,8 +31,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 	fmt.Println("Worker Status")
 	fmt.Printf("  User: %s\n", creds.User)
-	fmt.Printf("  Coordinator: %s\n", creds.Coordinator)
-	fmt.Printf("  Headscale: %s\n", creds.HeadscaleURL)
+	fmt.Printf("  Coordinator: %s\n", creds.CoordinatorURL)
 	fmt.Printf("  Joined: %s\n", creds.JoinedAt.Format(time.RFC3339))
 
 	return nil

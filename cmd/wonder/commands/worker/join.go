@@ -17,6 +17,8 @@ import (
 
 var coordinatorURL string
 
+// newJoinCmd creates the join subcommand that connects this device
+// to the Wonder Mesh Net using either device authorization flow or a token.
 func newJoinCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "join [token]",
@@ -37,6 +39,7 @@ With a token, uses token-based join (legacy):
 	return cmd
 }
 
+// runJoin dispatches to token-based or device flow join based on arguments.
 func runJoin(cmd *cobra.Command, args []string) error {
 	if len(args) == 1 {
 		return runTokenJoin(args[0])
@@ -44,6 +47,8 @@ func runJoin(cmd *cobra.Command, args []string) error {
 	return runDeviceFlowJoin()
 }
 
+// runTokenJoin performs legacy token-based join by exchanging the JWT token
+// with the coordinator for a Headscale pre-auth key.
 func runTokenJoin(token string) error {
 	info, err := jointoken.GetJoinInfo(token)
 	if err != nil {
@@ -88,11 +93,13 @@ func runTokenJoin(token string) error {
 	return completeJoin(result.Authkey, result.HeadscaleURL, result.User, info.CoordinatorURL)
 }
 
+// runDeviceFlowJoin initiates OAuth 2.0 Device Authorization Flow,
+// displaying a verification URL and code for user authentication.
 func runDeviceFlowJoin() error {
 	if coordinatorURL == "" {
 		creds, err := loadCredentials()
-		if err == nil && creds.Coordinator != "" {
-			coordinatorURL = creds.Coordinator
+		if err == nil && creds.CoordinatorURL != "" {
+			coordinatorURL = creds.CoordinatorURL
 		} else {
 			return fmt.Errorf("--coordinator flag is required for device flow")
 		}
@@ -125,6 +132,8 @@ func runDeviceFlowJoin() error {
 	return completeJoin(authkey, headscaleURL, user, coordinatorURL)
 }
 
+// deviceCodeResponse represents the coordinator's response when requesting
+// a new device code for the OAuth 2.0 Device Authorization Flow.
 type deviceCodeResponse struct {
 	DeviceCode      string `json:"device_code"`
 	UserCode        string `json:"user_code"`
@@ -133,6 +142,8 @@ type deviceCodeResponse struct {
 	Interval        int    `json:"interval"`
 }
 
+// requestDeviceCode initiates the device authorization flow by requesting
+// a device code and user code from the coordinator.
 func requestDeviceCode(coordinator string) (deviceCode, userCode, verifyURL string, interval int, err error) {
 	resp, err := http.Post(
 		coordinator+"/coordinator/device/code",
@@ -157,6 +168,8 @@ func requestDeviceCode(coordinator string) (deviceCode, userCode, verifyURL stri
 	return result.DeviceCode, result.UserCode, result.VerificationURL, result.Interval, nil
 }
 
+// deviceTokenResponse represents the coordinator's response when polling
+// for token status during device authorization flow.
 type deviceTokenResponse struct {
 	Authkey      string `json:"authkey,omitempty"`
 	HeadscaleURL string `json:"headscale_url,omitempty"`
@@ -170,6 +183,8 @@ const (
 	maxConsecutiveErrors = 5
 )
 
+// pollOnce makes a single request to check if the user has authorized
+// the device. Returns done=true when authorization completes or fails permanently.
 func pollOnce(coordinator, deviceCode string) (authkey, headscaleURL, user string, done bool, err error) {
 	reqBody, _ := json.Marshal(map[string]string{"device_code": deviceCode})
 	resp, err := http.Post(
@@ -202,6 +217,8 @@ func pollOnce(coordinator, deviceCode string) (authkey, headscaleURL, user strin
 	}
 }
 
+// pollForToken repeatedly polls the coordinator until the user authorizes
+// the device, the request times out, or an unrecoverable error occurs.
 func pollForToken(coordinator, deviceCode string, interval int) (authkey, headscaleURL, user string, err error) {
 	if interval < 1 {
 		interval = defaultPollInterval
@@ -234,12 +251,13 @@ func pollForToken(coordinator, deviceCode string, interval int) (authkey, headsc
 	}
 }
 
+// completeJoin saves credentials locally, displays the tailscale command,
+// and optionally executes tailscale up to complete mesh network registration.
 func completeJoin(authkey, headscaleURL, user, coordinator string) error {
 	creds := &credentials{
-		User:         user,
-		Coordinator:  coordinator,
-		HeadscaleURL: headscaleURL,
-		JoinedAt:     time.Now(),
+		User:           user,
+		CoordinatorURL: coordinator,
+		JoinedAt:       time.Now(),
 	}
 	if err := saveCredentials(creds); err != nil {
 		fmt.Printf("Warning: save credentials: %v\n", err)
@@ -260,6 +278,8 @@ func completeJoin(authkey, headscaleURL, user, coordinator string) error {
 	return nil
 }
 
+// askRunTailscale prompts the user to confirm whether to execute
+// the tailscale up command automatically.
 func askRunTailscale() bool {
 	fmt.Print("Would you like to run this command now? [y/N]: ")
 	var answer string
@@ -267,6 +287,8 @@ func askRunTailscale() bool {
 	return answer == "y" || answer == "Y"
 }
 
+// runTailscaleUp executes the tailscale up command with the provided
+// login server and auth key to connect this device to the mesh network.
 func runTailscaleUp(headscaleURL, authkey string) error {
 	fmt.Println()
 	fmt.Println("Running tailscale up...")

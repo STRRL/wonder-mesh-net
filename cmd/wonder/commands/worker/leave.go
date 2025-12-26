@@ -7,6 +7,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// newLeaveCmd creates the leave subcommand that removes locally stored
+// credentials and disconnects this device from the mesh network.
 func newLeaveCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "leave",
@@ -16,6 +18,8 @@ func newLeaveCmd() *cobra.Command {
 	}
 }
 
+// runLeave removes the local credentials file and prints instructions
+// for fully disconnecting from the mesh network.
 func runLeave(cmd *cobra.Command, args []string) error {
 	credentialPath, err := getCredentialsPath()
 	if err != nil {
