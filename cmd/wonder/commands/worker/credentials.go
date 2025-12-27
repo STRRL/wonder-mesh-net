@@ -15,7 +15,7 @@ type credentials struct {
 	// User is the Headscale username assigned to this worker node.
 	User string `json:"user"`
 	// CoordinatorURL is the base URL of the Wonder Mesh Net coordinator server.
-	CoordinatorURL string `json:"coordinator"`
+	CoordinatorURL string `json:"coordinatorURL"`
 	// JoinedAt records the timestamp when this worker joined the mesh.
 	JoinedAt time.Time `json:"joined_at"`
 }
