@@ -18,7 +18,7 @@ import (
 // and handles graceful shutdown on SIGINT or SIGTERM with a 10-second timeout.
 func (s *Server) Run() error {
 	healthHandler := handlers.NewHealthHandler(s.headscaleClient)
-	authHelper := handlers.NewAuthHelper(s.sessionStore, s.userStore)
+	authHelper := handlers.NewAuthHelper(s.sessionStore, s.realmStore)
 	authHandler := handlers.NewAuthHandler(
 		s.config.PublicURL,
 		s.oidcRegistry,
@@ -26,6 +26,8 @@ func (s *Server) Run() error {
 		s.aclManager,
 		s.sessionStore,
 		s.userStore,
+		s.identityStore,
+		s.realmStore,
 	)
 	nodesHandler := handlers.NewNodesHandler(s.realmManager, s.apiKeyStore, authHelper)
 	apiKeyHandler := handlers.NewAPIKeyHandler(s.apiKeyStore, authHelper)
@@ -36,7 +38,7 @@ func (s *Server) Run() error {
 		s.realmManager,
 		s.tokenGenerator,
 		s.sessionStore,
-		s.userStore,
+		s.realmStore,
 	)
 	deviceHandler := handlers.NewDeviceHandler(
 		s.config.PublicURL,

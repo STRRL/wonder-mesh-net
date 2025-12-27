@@ -11,26 +11,22 @@ import (
 )
 
 const createAuthState = `-- name: CreateAuthState :exec
-INSERT INTO auth_states (state, nonce, redirect_uri, provider_name, created_at, expires_at)
-VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO auth_states (state, provider, redirect_url, created_at, expires_at)
+VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?)
 `
 
 type CreateAuthStateParams struct {
-	State        string    `json:"state"`
-	Nonce        string    `json:"nonce"`
-	RedirectUri  string    `json:"redirect_uri"`
-	ProviderName string    `json:"provider_name"`
-	CreatedAt    time.Time `json:"created_at"`
-	ExpiresAt    time.Time `json:"expires_at"`
+	State       string    `json:"state"`
+	Provider    string    `json:"provider"`
+	RedirectUrl string    `json:"redirect_url"`
+	ExpiresAt   time.Time `json:"expires_at"`
 }
 
 func (q *Queries) CreateAuthState(ctx context.Context, arg CreateAuthStateParams) error {
 	_, err := q.db.ExecContext(ctx, createAuthState,
 		arg.State,
-		arg.Nonce,
-		arg.RedirectUri,
-		arg.ProviderName,
-		arg.CreatedAt,
+		arg.Provider,
+		arg.RedirectUrl,
 		arg.ExpiresAt,
 	)
 	return err
@@ -55,7 +51,7 @@ func (q *Queries) DeleteExpiredAuthStates(ctx context.Context) error {
 }
 
 const getAuthState = `-- name: GetAuthState :one
-SELECT state, nonce, redirect_uri, provider_name, created_at, expires_at FROM auth_states WHERE state = ?
+SELECT state, provider, redirect_url, created_at, expires_at FROM auth_states WHERE state = ?
 `
 
 func (q *Queries) GetAuthState(ctx context.Context, state string) (AuthState, error) {
@@ -63,9 +59,8 @@ func (q *Queries) GetAuthState(ctx context.Context, state string) (AuthState, er
 	var i AuthState
 	err := row.Scan(
 		&i.State,
-		&i.Nonce,
-		&i.RedirectUri,
-		&i.ProviderName,
+		&i.Provider,
+		&i.RedirectUrl,
 		&i.CreatedAt,
 		&i.ExpiresAt,
 	)

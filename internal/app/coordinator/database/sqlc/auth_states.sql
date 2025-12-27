@@ -1,6 +1,6 @@
 -- name: CreateAuthState :exec
-INSERT INTO auth_states (state, nonce, redirect_uri, provider_name, created_at, expires_at)
-VALUES (?, ?, ?, ?, ?, ?);
+INSERT INTO auth_states (state, provider, redirect_url, created_at, expires_at)
+VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?);
 
 -- name: GetAuthState :one
 SELECT * FROM auth_states WHERE state = ?;

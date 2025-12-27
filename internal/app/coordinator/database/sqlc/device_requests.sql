@@ -11,7 +11,7 @@ SELECT * FROM device_requests WHERE user_code = ?;
 -- name: ApproveDeviceRequest :exec
 UPDATE device_requests
 SET status = 'approved',
-    user_id = ?,
+    realm_id = ?,
     headscale_user = ?,
     authkey = ?,
     headscale_url = ?,

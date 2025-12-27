@@ -8,34 +8,21 @@ package sqlc
 import (
 	"context"
 	"database/sql"
-	"time"
 )
 
 const createSession = `-- name: CreateSession :exec
-INSERT INTO sessions (id, user_id, issuer, subject, created_at, expires_at, last_used_at)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO sessions (id, user_id, created_at, expires_at, last_used_at)
+VALUES (?, ?, CURRENT_TIMESTAMP, ?, CURRENT_TIMESTAMP)
 `
 
 type CreateSessionParams struct {
-	ID         string       `json:"id"`
-	UserID     string       `json:"user_id"`
-	Issuer     string       `json:"issuer"`
-	Subject    string       `json:"subject"`
-	CreatedAt  time.Time    `json:"created_at"`
-	ExpiresAt  sql.NullTime `json:"expires_at"`
-	LastUsedAt time.Time    `json:"last_used_at"`
+	ID        string       `json:"id"`
+	UserID    string       `json:"user_id"`
+	ExpiresAt sql.NullTime `json:"expires_at"`
 }
 
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) error {
-	_, err := q.db.ExecContext(ctx, createSession,
-		arg.ID,
-		arg.UserID,
-		arg.Issuer,
-		arg.Subject,
-		arg.CreatedAt,
-		arg.ExpiresAt,
-		arg.LastUsedAt,
-	)
+	_, err := q.db.ExecContext(ctx, createSession, arg.ID, arg.UserID, arg.ExpiresAt)
 	return err
 }
 
@@ -67,7 +54,7 @@ func (q *Queries) DeleteUserSessions(ctx context.Context, userID string) error {
 }
 
 const getSession = `-- name: GetSession :one
-SELECT id, user_id, issuer, subject, created_at, expires_at, last_used_at FROM sessions WHERE id = ?
+SELECT id, user_id, created_at, expires_at, last_used_at FROM sessions WHERE id = ?
 `
 
 func (q *Queries) GetSession(ctx context.Context, id string) (Session, error) {
@@ -76,8 +63,6 @@ func (q *Queries) GetSession(ctx context.Context, id string) (Session, error) {
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
-		&i.Issuer,
-		&i.Subject,
 		&i.CreatedAt,
 		&i.ExpiresAt,
 		&i.LastUsedAt,
@@ -85,12 +70,12 @@ func (q *Queries) GetSession(ctx context.Context, id string) (Session, error) {
 	return i, err
 }
 
-const getSessionByUserID = `-- name: GetSessionByUserID :many
-SELECT id, user_id, issuer, subject, created_at, expires_at, last_used_at FROM sessions WHERE user_id = ? ORDER BY created_at DESC
+const getSessionsByUserID = `-- name: GetSessionsByUserID :many
+SELECT id, user_id, created_at, expires_at, last_used_at FROM sessions WHERE user_id = ? ORDER BY created_at DESC
 `
 
-func (q *Queries) GetSessionByUserID(ctx context.Context, userID string) ([]Session, error) {
-	rows, err := q.db.QueryContext(ctx, getSessionByUserID, userID)
+func (q *Queries) GetSessionsByUserID(ctx context.Context, userID string) ([]Session, error) {
+	rows, err := q.db.QueryContext(ctx, getSessionsByUserID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -101,8 +86,6 @@ func (q *Queries) GetSessionByUserID(ctx context.Context, userID string) ([]Sess
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserID,
-			&i.Issuer,
-			&i.Subject,
 			&i.CreatedAt,
 			&i.ExpiresAt,
 			&i.LastUsedAt,
@@ -121,15 +104,10 @@ func (q *Queries) GetSessionByUserID(ctx context.Context, userID string) ([]Sess
 }
 
 const updateSessionLastUsed = `-- name: UpdateSessionLastUsed :exec
-UPDATE sessions SET last_used_at = ? WHERE id = ?
+UPDATE sessions SET last_used_at = CURRENT_TIMESTAMP WHERE id = ?
 `
 
-type UpdateSessionLastUsedParams struct {
-	LastUsedAt time.Time `json:"last_used_at"`
-	ID         string    `json:"id"`
-}
-
-func (q *Queries) UpdateSessionLastUsed(ctx context.Context, arg UpdateSessionLastUsedParams) error {
-	_, err := q.db.ExecContext(ctx, updateSessionLastUsed, arg.LastUsedAt, arg.ID)
+func (q *Queries) UpdateSessionLastUsed(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, updateSessionLastUsed, id)
 	return err
 }

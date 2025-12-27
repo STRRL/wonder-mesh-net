@@ -11,55 +11,67 @@ import (
 
 type ApiKey struct {
 	ID         string       `json:"id"`
-	UserID     string       `json:"user_id"`
+	RealmID    string       `json:"realm_id"`
 	Name       string       `json:"name"`
 	ApiKey     string       `json:"api_key"`
-	Scopes     string       `json:"scopes"`
 	CreatedAt  time.Time    `json:"created_at"`
 	ExpiresAt  sql.NullTime `json:"expires_at"`
 	LastUsedAt sql.NullTime `json:"last_used_at"`
 }
 
 type AuthState struct {
-	State        string    `json:"state"`
-	Nonce        string    `json:"nonce"`
-	RedirectUri  string    `json:"redirect_uri"`
-	ProviderName string    `json:"provider_name"`
-	CreatedAt    time.Time `json:"created_at"`
-	ExpiresAt    time.Time `json:"expires_at"`
+	State       string    `json:"state"`
+	Provider    string    `json:"provider"`
+	RedirectUrl string    `json:"redirect_url"`
+	CreatedAt   time.Time `json:"created_at"`
+	ExpiresAt   time.Time `json:"expires_at"`
 }
 
 type DeviceRequest struct {
-	DeviceCode     string         `json:"device_code"`
-	UserCode       string         `json:"user_code"`
-	Status         string         `json:"status"`
-	HeadscaleUser  sql.NullString `json:"headscale_user"`
-	UserID         sql.NullString `json:"user_id"`
-	Authkey        sql.NullString `json:"authkey"`
-	HeadscaleUrl   sql.NullString `json:"headscale_url"`
-	CoordinatorUrl sql.NullString `json:"coordinator_url"`
-	CreatedAt      time.Time      `json:"created_at"`
-	ExpiresAt      time.Time      `json:"expires_at"`
+	DeviceCode     string    `json:"device_code"`
+	UserCode       string    `json:"user_code"`
+	Status         string    `json:"status"`
+	RealmID        string    `json:"realm_id"`
+	HeadscaleUser  string    `json:"headscale_user"`
+	Authkey        string    `json:"authkey"`
+	HeadscaleUrl   string    `json:"headscale_url"`
+	CoordinatorUrl string    `json:"coordinator_url"`
+	CreatedAt      time.Time `json:"created_at"`
+	ExpiresAt      time.Time `json:"expires_at"`
+}
+
+type OidcIdentity struct {
+	ID        string    `json:"id"`
+	UserID    string    `json:"user_id"`
+	Issuer    string    `json:"issuer"`
+	Subject   string    `json:"subject"`
+	Email     string    `json:"email"`
+	Name      string    `json:"name"`
+	Picture   string    `json:"picture"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type Realm struct {
+	ID            string    `json:"id"`
+	OwnerID       string    `json:"owner_id"`
+	HeadscaleUser string    `json:"headscale_user"`
+	DisplayName   string    `json:"display_name"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 type Session struct {
 	ID         string       `json:"id"`
 	UserID     string       `json:"user_id"`
-	Issuer     string       `json:"issuer"`
-	Subject    string       `json:"subject"`
 	CreatedAt  time.Time    `json:"created_at"`
 	ExpiresAt  sql.NullTime `json:"expires_at"`
 	LastUsedAt time.Time    `json:"last_used_at"`
 }
 
 type User struct {
-	ID            string         `json:"id"`
-	HeadscaleUser string         `json:"headscale_user"`
-	Issuer        string         `json:"issuer"`
-	Subject       string         `json:"subject"`
-	Email         sql.NullString `json:"email"`
-	Name          sql.NullString `json:"name"`
-	Picture       sql.NullString `json:"picture"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
+	ID          string    `json:"id"`
+	DisplayName string    `json:"display_name"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }

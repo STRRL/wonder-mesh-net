@@ -233,8 +233,8 @@ func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Reques
 
 	ctx := r.Context()
 
-	user, err := h.authHelper.GetUserFromRequest(ctx, r)
-	if err != nil || user == nil {
+	realm, err := h.authHelper.GetRealmFromRequest(ctx, r)
+	if err != nil || realm == nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "login required"})
@@ -279,7 +279,7 @@ func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	key, err := h.realmManager.CreateAuthKeyByName(ctx, user.HeadscaleUser, 24*time.Hour, false)
+	key, err := h.realmManager.CreateAuthKeyByName(ctx, realm.HeadscaleUser, 24*time.Hour, false)
 	if err != nil {
 		slog.Error("create auth key for device", "error", err)
 		w.Header().Set("Content-Type", "application/json")
@@ -292,7 +292,7 @@ func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Reques
 	// reverse-proxies all Tailscale control plane traffic to the embedded Headscale
 	// instance (see handlers/proxy.go). Workers use this single URL for both
 	// coordinator API calls and tailscale --login-server.
-	if err := h.store.Approve(ctx, req.UserCode, user.ID, user.HeadscaleUser, key.GetKey(), h.publicURL, h.publicURL); err != nil {
+	if err := h.store.Approve(ctx, req.UserCode, realm.ID, realm.HeadscaleUser, key.GetKey(), h.publicURL, h.publicURL); err != nil {
 		slog.Error("approve device", "error", err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)

@@ -31,18 +31,18 @@ func NewNodesHandler(
 
 // HandleListNodes handles GET /api/v1/nodes requests.
 // Supports two authentication methods:
-// 1. X-Session-Token header (user session)
+// 1. X-Session-Token header (realm session)
 // 2. Authorization: Bearer <api_key> header (third-party integration)
 func (h *NodesHandler) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	user, err := h.authenticate(r)
+	realm, err := h.authenticate(r)
 	if err != nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	nodes, err := h.realmManager.GetRealmNodes(ctx, user.HeadscaleUser)
+	nodes, err := h.realmManager.GetRealmNodes(ctx, realm.HeadscaleUser)
 	if err != nil {
 		slog.Error("list nodes", "error", err)
 		http.Error(w, "list nodes", http.StatusInternalServerError)
@@ -69,7 +69,7 @@ func (h *NodesHandler) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *NodesHandler) authenticate(r *http.Request) (*store.User, error) {
+func (h *NodesHandler) authenticate(r *http.Request) (*store.Realm, error) {
 	ctx := r.Context()
 
 	if key := GetBearerToken(r); key != "" {
@@ -81,15 +81,11 @@ func (h *NodesHandler) authenticate(r *http.Request) (*store.User, error) {
 			return nil, ErrInvalidAPIKey
 		}
 
-		if !store.HasScope(apiKey.Scopes, "nodes:read") {
-			return nil, ErrInsufficientScope
-		}
-
 		if err := h.apiKeyStore.UpdateLastUsed(ctx, apiKey.ID); err != nil {
 			slog.Warn("update API key last used", "error", err)
 		}
 
-		return h.auth.GetUserByID(ctx, apiKey.UserID)
+		return h.auth.GetRealmByID(ctx, apiKey.RealmID)
 	}
 
 	return h.auth.AuthenticateSession(r)

@@ -55,23 +55,18 @@ func (h *DeployerHandler) HandleDeployerJoin(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if !store.HasScope(apiKey.Scopes, "deployer:connect") {
-		http.Error(w, "insufficient scope: deployer:connect required", http.StatusForbidden)
-		return
-	}
-
 	if err := h.apiKeyStore.UpdateLastUsed(ctx, apiKey.ID); err != nil {
 		slog.Warn("update API key last used", "error", err)
 	}
 
-	user, err := h.auth.GetUserByID(ctx, apiKey.UserID)
+	realm, err := h.auth.GetRealmByID(ctx, apiKey.RealmID)
 	if err != nil {
-		slog.Error("get user", "error", err)
-		http.Error(w, "user not found", http.StatusInternalServerError)
+		slog.Error("get realm", "error", err)
+		http.Error(w, "realm not found", http.StatusInternalServerError)
 		return
 	}
 
-	authKey, err := h.realmManager.CreateAuthKeyByName(ctx, user.HeadscaleUser, 24*time.Hour, false)
+	authKey, err := h.realmManager.CreateAuthKeyByName(ctx, realm.HeadscaleUser, 24*time.Hour, false)
 	if err != nil {
 		slog.Error("create auth key", "error", err)
 		http.Error(w, "create auth key", http.StatusInternalServerError)
@@ -84,6 +79,6 @@ func (h *DeployerHandler) HandleDeployerJoin(w http.ResponseWriter, r *http.Requ
 	_ = json.NewEncoder(w).Encode(DeployerJoinResponse{
 		AuthKey:      authKey.GetKey(),
 		HeadscaleURL: h.publicURL,
-		User:         user.HeadscaleUser,
+		User:         realm.HeadscaleUser,
 	})
 }

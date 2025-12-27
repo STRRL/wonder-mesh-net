@@ -39,7 +39,7 @@ type DeviceRequest struct {
 	UserCode       string
 	Status         DeviceStatus
 	HeadscaleUser  string
-	UserID         string
+	RealmID        string
 	ExpiresAt      time.Time
 	CreatedAt      time.Time
 	Authkey        string
@@ -142,13 +142,13 @@ func (s *DeviceRequestStore) GetByUserCode(ctx context.Context, userCode string)
 }
 
 // Approve approves a device request and stores the approval details
-func (s *DeviceRequestStore) Approve(ctx context.Context, userCode, userID, headscaleUser, authkey, headscaleURL, coordinatorURL string) error {
+func (s *DeviceRequestStore) Approve(ctx context.Context, userCode, realmID, headscaleUser, authkey, headscaleURL, coordinatorURL string) error {
 	return s.queries.ApproveDeviceRequest(ctx, sqlc.ApproveDeviceRequestParams{
-		UserID:         sql.NullString{String: userID, Valid: true},
-		HeadscaleUser:  sql.NullString{String: headscaleUser, Valid: true},
-		Authkey:        sql.NullString{String: authkey, Valid: true},
-		HeadscaleUrl:   sql.NullString{String: headscaleURL, Valid: true},
-		CoordinatorUrl: sql.NullString{String: coordinatorURL, Valid: true},
+		RealmID:        realmID,
+		HeadscaleUser:  headscaleUser,
+		Authkey:        authkey,
+		HeadscaleUrl:   headscaleURL,
+		CoordinatorUrl: coordinatorURL,
 		UserCode:       userCode,
 	})
 }
@@ -168,11 +168,11 @@ func dbDeviceRequestToDeviceRequest(dbReq sqlc.DeviceRequest) *DeviceRequest {
 		DeviceCode:     dbReq.DeviceCode,
 		UserCode:       dbReq.UserCode,
 		Status:         DeviceStatus(dbReq.Status),
-		HeadscaleUser:  dbReq.HeadscaleUser.String,
-		UserID:         dbReq.UserID.String,
-		Authkey:        dbReq.Authkey.String,
-		HeadscaleURL:   dbReq.HeadscaleUrl.String,
-		CoordinatorURL: dbReq.CoordinatorUrl.String,
+		HeadscaleUser:  dbReq.HeadscaleUser,
+		RealmID:        dbReq.RealmID,
+		Authkey:        dbReq.Authkey,
+		HeadscaleURL:   dbReq.HeadscaleUrl,
+		CoordinatorURL: dbReq.CoordinatorUrl,
 		CreatedAt:      dbReq.CreatedAt,
 		ExpiresAt:      dbReq.ExpiresAt,
 	}

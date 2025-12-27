@@ -7,39 +7,20 @@ package sqlc
 
 import (
 	"context"
-	"database/sql"
-	"time"
 )
 
 const createUser = `-- name: CreateUser :exec
-INSERT INTO users (id, headscale_user, issuer, subject, email, name, picture, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO users (id, display_name, created_at, updated_at)
+VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 `
 
 type CreateUserParams struct {
-	ID            string         `json:"id"`
-	HeadscaleUser string         `json:"headscale_user"`
-	Issuer        string         `json:"issuer"`
-	Subject       string         `json:"subject"`
-	Email         sql.NullString `json:"email"`
-	Name          sql.NullString `json:"name"`
-	Picture       sql.NullString `json:"picture"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
-	_, err := q.db.ExecContext(ctx, createUser,
-		arg.ID,
-		arg.HeadscaleUser,
-		arg.Issuer,
-		arg.Subject,
-		arg.Email,
-		arg.Name,
-		arg.Picture,
-		arg.CreatedAt,
-		arg.UpdatedAt,
-	)
+	_, err := q.db.ExecContext(ctx, createUser, arg.ID, arg.DisplayName)
 	return err
 }
 
@@ -53,7 +34,7 @@ func (q *Queries) DeleteUser(ctx context.Context, id string) error {
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, headscale_user, issuer, subject, email, name, picture, created_at, updated_at FROM users WHERE id = ?
+SELECT id, display_name, created_at, updated_at FROM users WHERE id = ?
 `
 
 func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
@@ -61,59 +42,7 @@ func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.HeadscaleUser,
-		&i.Issuer,
-		&i.Subject,
-		&i.Email,
-		&i.Name,
-		&i.Picture,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const getUserByHeadscaleUser = `-- name: GetUserByHeadscaleUser :one
-SELECT id, headscale_user, issuer, subject, email, name, picture, created_at, updated_at FROM users WHERE headscale_user = ?
-`
-
-func (q *Queries) GetUserByHeadscaleUser(ctx context.Context, headscaleUser string) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUserByHeadscaleUser, headscaleUser)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.HeadscaleUser,
-		&i.Issuer,
-		&i.Subject,
-		&i.Email,
-		&i.Name,
-		&i.Picture,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const getUserByIssuerSubject = `-- name: GetUserByIssuerSubject :one
-SELECT id, headscale_user, issuer, subject, email, name, picture, created_at, updated_at FROM users WHERE issuer = ? AND subject = ?
-`
-
-type GetUserByIssuerSubjectParams struct {
-	Issuer  string `json:"issuer"`
-	Subject string `json:"subject"`
-}
-
-func (q *Queries) GetUserByIssuerSubject(ctx context.Context, arg GetUserByIssuerSubjectParams) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUserByIssuerSubject, arg.Issuer, arg.Subject)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.HeadscaleUser,
-		&i.Issuer,
-		&i.Subject,
-		&i.Email,
-		&i.Name,
-		&i.Picture,
+		&i.DisplayName,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -121,7 +50,7 @@ func (q *Queries) GetUserByIssuerSubject(ctx context.Context, arg GetUserByIssue
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, headscale_user, issuer, subject, email, name, picture, created_at, updated_at FROM users ORDER BY created_at DESC
+SELECT id, display_name, created_at, updated_at FROM users ORDER BY created_at DESC
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -135,12 +64,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 		var i User
 		if err := rows.Scan(
 			&i.ID,
-			&i.HeadscaleUser,
-			&i.Issuer,
-			&i.Subject,
-			&i.Email,
-			&i.Name,
-			&i.Picture,
+			&i.DisplayName,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -158,26 +82,15 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 }
 
 const updateUser = `-- name: UpdateUser :exec
-UPDATE users
-SET email = ?, name = ?, picture = ?, updated_at = ?
-WHERE id = ?
+UPDATE users SET display_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
 `
 
 type UpdateUserParams struct {
-	Email     sql.NullString `json:"email"`
-	Name      sql.NullString `json:"name"`
-	Picture   sql.NullString `json:"picture"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	ID        string         `json:"id"`
+	DisplayName string `json:"display_name"`
+	ID          string `json:"id"`
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) error {
-	_, err := q.db.ExecContext(ctx, updateUser,
-		arg.Email,
-		arg.Name,
-		arg.Picture,
-		arg.UpdatedAt,
-		arg.ID,
-	)
+	_, err := q.db.ExecContext(ctx, updateUser, arg.DisplayName, arg.ID)
 	return err
 }

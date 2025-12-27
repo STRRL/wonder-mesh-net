@@ -12,27 +12,25 @@ import (
 
 // RealmManager manages realms (users) in Headscale
 type RealmManager struct {
-	client v1.HeadscaleServiceClient
+	headscaleClient v1.HeadscaleServiceClient
 }
 
 // NewRealmManager creates a new RealmManager
 func NewRealmManager(client v1.HeadscaleServiceClient) *RealmManager {
-	return &RealmManager{client: client}
+	return &RealmManager{headscaleClient: client}
 }
 
-// GenerateRealmID generates a random UUID for a new realm
-func GenerateRealmID() string {
-	return uuid.New().String()
-}
-
-// RealmName returns the Headscale user name for a realm
-func RealmName(realmID string) string {
-	return "realm-" + realmID[:12]
+// NewRealmIdentifiers generates a new realm ID and Headscale username.
+// This should be called once when creating a new realm.
+// The headscale_user follows the pattern "realm-{first12CharsOfUUID}".
+func NewRealmIdentifiers() (realmID string, headscaleUser string) {
+	id := uuid.New().String()
+	return id, "realm-" + id[:12]
 }
 
 // GetOrCreateRealm gets an existing realm or creates a new one by name
 func (rm *RealmManager) GetOrCreateRealm(ctx context.Context, realmName string) (*v1.User, error) {
-	listResp, err := rm.client.ListUsers(ctx, &v1.ListUsersRequest{})
+	listResp, err := rm.headscaleClient.ListUsers(ctx, &v1.ListUsersRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("list users: %w", err)
 	}
@@ -43,28 +41,7 @@ func (rm *RealmManager) GetOrCreateRealm(ctx context.Context, realmName string) 
 		}
 	}
 
-	createResp, err := rm.client.CreateUser(ctx, &v1.CreateUserRequest{Name: realmName})
-	if err != nil {
-		return nil, fmt.Errorf("create user: %w", err)
-	}
-
-	return createResp.GetUser(), nil
-}
-
-// EnsureUser ensures a user exists in Headscale by name, creating if needed
-func (rm *RealmManager) EnsureUser(ctx context.Context, name string) (*v1.User, error) {
-	listResp, err := rm.client.ListUsers(ctx, &v1.ListUsersRequest{})
-	if err != nil {
-		return nil, fmt.Errorf("list users: %w", err)
-	}
-
-	for _, u := range listResp.GetUsers() {
-		if u.GetName() == name {
-			return u, nil
-		}
-	}
-
-	createResp, err := rm.client.CreateUser(ctx, &v1.CreateUserRequest{Name: name})
+	createResp, err := rm.headscaleClient.CreateUser(ctx, &v1.CreateUserRequest{Name: realmName})
 	if err != nil {
 		return nil, fmt.Errorf("create user: %w", err)
 	}
@@ -76,7 +53,7 @@ func (rm *RealmManager) EnsureUser(ctx context.Context, name string) (*v1.User, 
 func (rm *RealmManager) CreateAuthKey(ctx context.Context, userID uint64, ttl time.Duration, reusable bool) (*v1.PreAuthKey, error) {
 	expiration := time.Now().Add(ttl)
 
-	resp, err := rm.client.CreatePreAuthKey(ctx, &v1.CreatePreAuthKeyRequest{
+	resp, err := rm.headscaleClient.CreatePreAuthKey(ctx, &v1.CreatePreAuthKeyRequest{
 		User:       userID,
 		Reusable:   reusable,
 		Ephemeral:  false,
@@ -93,9 +70,9 @@ func (rm *RealmManager) CreateAuthKey(ctx context.Context, userID uint64, ttl ti
 // This method ensures the user exists in Headscale before creating the key,
 // making it resilient to Headscale restarts.
 func (rm *RealmManager) CreateAuthKeyByName(ctx context.Context, username string, ttl time.Duration, reusable bool) (*v1.PreAuthKey, error) {
-	headscaleUser, err := rm.EnsureUser(ctx, username)
+	headscaleUser, err := rm.GetOrCreateRealm(ctx, username)
 	if err != nil {
-		return nil, fmt.Errorf("ensure user: %w", err)
+		return nil, fmt.Errorf("get/create realm: %w", err)
 	}
 
 	return rm.CreateAuthKey(ctx, headscaleUser.GetId(), ttl, reusable)
@@ -103,7 +80,7 @@ func (rm *RealmManager) CreateAuthKeyByName(ctx context.Context, username string
 
 // GetRealmNodes gets all nodes for a realm
 func (rm *RealmManager) GetRealmNodes(ctx context.Context, username string) ([]*v1.Node, error) {
-	resp, err := rm.client.ListNodes(ctx, &v1.ListNodesRequest{User: username})
+	resp, err := rm.headscaleClient.ListNodes(ctx, &v1.ListNodesRequest{User: username})
 	if err != nil {
 		return nil, fmt.Errorf("list nodes: %w", err)
 	}

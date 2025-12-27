@@ -30,7 +30,7 @@ func (h *APIKeyHandler) HandleCreateAPIKey(w http.ResponseWriter, r *http.Reques
 
 	ctx := r.Context()
 
-	user, err := h.auth.AuthenticateSession(r)
+	realm, err := h.auth.AuthenticateSession(r)
 	if err != nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -38,7 +38,6 @@ func (h *APIKeyHandler) HandleCreateAPIKey(w http.ResponseWriter, r *http.Reques
 
 	var req struct {
 		Name      string `json:"name"`
-		Scopes    string `json:"scopes"`
 		ExpiresIn string `json:"expires_in"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -49,11 +48,6 @@ func (h *APIKeyHandler) HandleCreateAPIKey(w http.ResponseWriter, r *http.Reques
 	if req.Name == "" {
 		http.Error(w, "name is required", http.StatusBadRequest)
 		return
-	}
-
-	scopes := req.Scopes
-	if scopes == "" {
-		scopes = "nodes:read"
 	}
 
 	var expiresAt *time.Time
@@ -67,7 +61,7 @@ func (h *APIKeyHandler) HandleCreateAPIKey(w http.ResponseWriter, r *http.Reques
 		expiresAt = &t
 	}
 
-	apiKeyWithSecret, err := h.apiKeyStore.Create(ctx, user.ID, req.Name, scopes, expiresAt)
+	apiKeyWithSecret, err := h.apiKeyStore.Create(ctx, realm.ID, req.Name, expiresAt)
 	if err != nil {
 		slog.Error("create API key", "error", err)
 		http.Error(w, "create API key", http.StatusInternalServerError)
@@ -79,7 +73,6 @@ func (h *APIKeyHandler) HandleCreateAPIKey(w http.ResponseWriter, r *http.Reques
 		ID:        apiKeyWithSecret.ID,
 		Key:       apiKeyWithSecret.Key,
 		Name:      apiKeyWithSecret.Name,
-		Scopes:    apiKeyWithSecret.Scopes,
 		CreatedAt: apiKeyWithSecret.CreatedAt,
 		ExpiresAt: apiKeyWithSecret.ExpiresAt,
 	})
@@ -89,13 +82,13 @@ func (h *APIKeyHandler) HandleCreateAPIKey(w http.ResponseWriter, r *http.Reques
 func (h *APIKeyHandler) HandleListAPIKeys(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	user, err := h.auth.AuthenticateSession(r)
+	realm, err := h.auth.AuthenticateSession(r)
 	if err != nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	keys, err := h.apiKeyStore.List(ctx, user.ID)
+	keys, err := h.apiKeyStore.List(ctx, realm.ID)
 	if err != nil {
 		slog.Error("list API keys", "error", err)
 		http.Error(w, "list API keys", http.StatusInternalServerError)
@@ -108,7 +101,6 @@ func (h *APIKeyHandler) HandleListAPIKeys(w http.ResponseWriter, r *http.Request
 			ID:         key.ID,
 			Key:        key.Key,
 			Name:       key.Name,
-			Scopes:     key.Scopes,
 			CreatedAt:  key.CreatedAt,
 			ExpiresAt:  key.ExpiresAt,
 			LastUsedAt: key.LastUsedAt,
@@ -123,7 +115,7 @@ func (h *APIKeyHandler) HandleListAPIKeys(w http.ResponseWriter, r *http.Request
 func (h *APIKeyHandler) HandleDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	user, err := h.auth.AuthenticateSession(r)
+	realm, err := h.auth.AuthenticateSession(r)
 	if err != nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -135,7 +127,7 @@ func (h *APIKeyHandler) HandleDeleteAPIKey(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err := h.apiKeyStore.Delete(ctx, keyID, user.ID); err != nil {
+	if err := h.apiKeyStore.Delete(ctx, keyID, realm.ID); err != nil {
 		if errors.Is(err, store.ErrAPIKeyNotFound) {
 			http.Error(w, "api key not found", http.StatusNotFound)
 			return

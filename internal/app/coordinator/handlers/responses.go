@@ -7,7 +7,6 @@ type APIKeyResponse struct {
 	ID         string     `json:"id"`
 	Key        string     `json:"key,omitempty"`
 	Name       string     `json:"name"`
-	Scopes     string     `json:"scopes"`
 	CreatedAt  time.Time  `json:"created_at"`
 	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
 	LastUsedAt *time.Time `json:"last_used_at,omitempty"`

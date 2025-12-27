@@ -31,8 +31,10 @@ type Server struct {
 	aclManager              *headscale.ACLManager
 	oidcRegistry            *oidc.Registry
 	tokenGenerator          *jointoken.Generator
-	sessionStore            *store.DBSessionStore
 	userStore               *store.DBUserStore
+	sessionStore            *store.DBSessionStore
+	realmStore              *store.DBRealmStore
+	identityStore           *store.DBOIDCIdentityStore
 	apiKeyStore             *store.DBAPIKeyStore
 	deviceFlowStore         *store.DeviceRequestStore
 }
@@ -133,8 +135,10 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 		aclManager:              headscale.NewACLManager(headscaleClient),
 		oidcRegistry:            oidcRegistry,
 		tokenGenerator:          tokenGenerator,
-		sessionStore:            store.NewDBSessionStore(db.Queries()),
 		userStore:               store.NewDBUserStore(db.Queries()),
+		sessionStore:            store.NewDBSessionStore(db.Queries()),
+		realmStore:              store.NewDBRealmStore(db.Queries()),
+		identityStore:           store.NewDBOIDCIdentityStore(db.Queries()),
 		apiKeyStore:             store.NewDBAPIKeyStore(db.Queries()),
 		deviceFlowStore:         store.NewDeviceRequestStore(db.Queries()),
 	}, nil

@@ -2,120 +2,97 @@ package store
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/database/sqlc"
 )
 
-// User represents a local user record
+// User represents a system user.
 type User struct {
-	ID            string
-	HeadscaleUser string
-	Issuer        string
-	Subject       string
-	Email         string
-	Name          string
-	Picture       string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID          string
+	DisplayName string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
-// UserStore is the interface for storing users
+// UserStore defines the interface for user storage operations.
 type UserStore interface {
-	Create(ctx context.Context, user *User) error
+	Create(ctx context.Context, displayName string) (*User, error)
 	Get(ctx context.Context, id string) (*User, error)
-	GetByHeadscaleUser(ctx context.Context, headscaleUser string) (*User, error)
-	GetByIssuerSubject(ctx context.Context, issuer, subject string) (*User, error)
 	Update(ctx context.Context, user *User) error
 	Delete(ctx context.Context, id string) error
+	List(ctx context.Context) ([]*User, error)
 }
 
-// DBUserStore is a database implementation of UserStore
+// DBUserStore implements UserStore using the database.
 type DBUserStore struct {
 	queries *sqlc.Queries
 }
 
-// NewDBUserStore creates a new database-backed user store
+// NewDBUserStore creates a new DBUserStore.
 func NewDBUserStore(queries *sqlc.Queries) *DBUserStore {
 	return &DBUserStore{queries: queries}
 }
 
-func (s *DBUserStore) Create(ctx context.Context, user *User) error {
-	return s.queries.CreateUser(ctx, sqlc.CreateUserParams{
-		ID:            user.ID,
-		HeadscaleUser: user.HeadscaleUser,
-		Issuer:        user.Issuer,
-		Subject:       user.Subject,
-		Email:         sql.NullString{String: user.Email, Valid: user.Email != ""},
-		Name:          sql.NullString{String: user.Name, Valid: user.Name != ""},
-		Picture:       sql.NullString{String: user.Picture, Valid: user.Picture != ""},
-		CreatedAt:     user.CreatedAt,
-		UpdatedAt:     user.UpdatedAt,
+// Create creates a new user.
+func (s *DBUserStore) Create(ctx context.Context, displayName string) (*User, error) {
+	id := uuid.New().String()
+
+	err := s.queries.CreateUser(ctx, sqlc.CreateUserParams{
+		ID:          id,
+		DisplayName: displayName,
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	return s.Get(ctx, id)
 }
 
+// Get retrieves a user by ID.
 func (s *DBUserStore) Get(ctx context.Context, id string) (*User, error) {
-	dbUser, err := s.queries.GetUser(ctx, id)
+	row, err := s.queries.GetUser(ctx, id)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
-		}
 		return nil, err
 	}
-	return dbUserToUser(dbUser), nil
+
+	return &User{
+		ID:          row.ID,
+		DisplayName: row.DisplayName,
+		CreatedAt:   row.CreatedAt,
+		UpdatedAt:   row.UpdatedAt,
+	}, nil
 }
 
-func (s *DBUserStore) GetByHeadscaleUser(ctx context.Context, headscaleUser string) (*User, error) {
-	dbUser, err := s.queries.GetUserByHeadscaleUser(ctx, headscaleUser)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return dbUserToUser(dbUser), nil
-}
-
-func (s *DBUserStore) GetByIssuerSubject(ctx context.Context, issuer, subject string) (*User, error) {
-	dbUser, err := s.queries.GetUserByIssuerSubject(ctx, sqlc.GetUserByIssuerSubjectParams{
-		Issuer:  issuer,
-		Subject: subject,
-	})
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return dbUserToUser(dbUser), nil
-}
-
+// Update updates a user.
 func (s *DBUserStore) Update(ctx context.Context, user *User) error {
 	return s.queries.UpdateUser(ctx, sqlc.UpdateUserParams{
-		Email:     sql.NullString{String: user.Email, Valid: user.Email != ""},
-		Name:      sql.NullString{String: user.Name, Valid: user.Name != ""},
-		Picture:   sql.NullString{String: user.Picture, Valid: user.Picture != ""},
-		UpdatedAt: time.Now(),
-		ID:        user.ID,
+		DisplayName: user.DisplayName,
+		ID:          user.ID,
 	})
 }
 
+// Delete deletes a user.
 func (s *DBUserStore) Delete(ctx context.Context, id string) error {
 	return s.queries.DeleteUser(ctx, id)
 }
 
-func dbUserToUser(dbUser sqlc.User) *User {
-	return &User{
-		ID:            dbUser.ID,
-		HeadscaleUser: dbUser.HeadscaleUser,
-		Issuer:        dbUser.Issuer,
-		Subject:       dbUser.Subject,
-		Email:         dbUser.Email.String,
-		Name:          dbUser.Name.String,
-		Picture:       dbUser.Picture.String,
-		CreatedAt:     dbUser.CreatedAt,
-		UpdatedAt:     dbUser.UpdatedAt,
+// List lists all users.
+func (s *DBUserStore) List(ctx context.Context) ([]*User, error) {
+	rows, err := s.queries.ListUsers(ctx)
+	if err != nil {
+		return nil, err
 	}
+
+	users := make([]*User, len(rows))
+	for i, row := range rows {
+		users[i] = &User{
+			ID:          row.ID,
+			DisplayName: row.DisplayName,
+			CreatedAt:   row.CreatedAt,
+			UpdatedAt:   row.UpdatedAt,
+		}
+	}
+	return users, nil
 }

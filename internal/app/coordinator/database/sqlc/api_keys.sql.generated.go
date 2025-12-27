@@ -8,32 +8,27 @@ package sqlc
 import (
 	"context"
 	"database/sql"
-	"time"
 )
 
 const createAPIKey = `-- name: CreateAPIKey :exec
-INSERT INTO api_keys (id, user_id, name, api_key, scopes, created_at, expires_at)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO api_keys (id, realm_id, name, api_key, created_at, expires_at)
+VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
 `
 
 type CreateAPIKeyParams struct {
 	ID        string       `json:"id"`
-	UserID    string       `json:"user_id"`
+	RealmID   string       `json:"realm_id"`
 	Name      string       `json:"name"`
 	ApiKey    string       `json:"api_key"`
-	Scopes    string       `json:"scopes"`
-	CreatedAt time.Time    `json:"created_at"`
 	ExpiresAt sql.NullTime `json:"expires_at"`
 }
 
 func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) error {
 	_, err := q.db.ExecContext(ctx, createAPIKey,
 		arg.ID,
-		arg.UserID,
+		arg.RealmID,
 		arg.Name,
 		arg.ApiKey,
-		arg.Scopes,
-		arg.CreatedAt,
 		arg.ExpiresAt,
 	)
 	return err
@@ -48,21 +43,21 @@ func (q *Queries) DeleteAPIKey(ctx context.Context, id string) error {
 	return err
 }
 
-const deleteAPIKeyByUser = `-- name: DeleteAPIKeyByUser :execresult
-DELETE FROM api_keys WHERE id = ? AND user_id = ?
+const deleteAPIKeyByRealm = `-- name: DeleteAPIKeyByRealm :execresult
+DELETE FROM api_keys WHERE id = ? AND realm_id = ?
 `
 
-type DeleteAPIKeyByUserParams struct {
-	ID     string `json:"id"`
-	UserID string `json:"user_id"`
+type DeleteAPIKeyByRealmParams struct {
+	ID      string `json:"id"`
+	RealmID string `json:"realm_id"`
 }
 
-func (q *Queries) DeleteAPIKeyByUser(ctx context.Context, arg DeleteAPIKeyByUserParams) (sql.Result, error) {
-	return q.db.ExecContext(ctx, deleteAPIKeyByUser, arg.ID, arg.UserID)
+func (q *Queries) DeleteAPIKeyByRealm(ctx context.Context, arg DeleteAPIKeyByRealmParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, deleteAPIKeyByRealm, arg.ID, arg.RealmID)
 }
 
 const getAPIKey = `-- name: GetAPIKey :one
-SELECT id, user_id, name, api_key, scopes, created_at, expires_at, last_used_at FROM api_keys WHERE id = ?
+SELECT id, realm_id, name, api_key, created_at, expires_at, last_used_at FROM api_keys WHERE id = ?
 `
 
 func (q *Queries) GetAPIKey(ctx context.Context, id string) (ApiKey, error) {
@@ -70,10 +65,9 @@ func (q *Queries) GetAPIKey(ctx context.Context, id string) (ApiKey, error) {
 	var i ApiKey
 	err := row.Scan(
 		&i.ID,
-		&i.UserID,
+		&i.RealmID,
 		&i.Name,
 		&i.ApiKey,
-		&i.Scopes,
 		&i.CreatedAt,
 		&i.ExpiresAt,
 		&i.LastUsedAt,
@@ -82,7 +76,7 @@ func (q *Queries) GetAPIKey(ctx context.Context, id string) (ApiKey, error) {
 }
 
 const getAPIKeyByKey = `-- name: GetAPIKeyByKey :one
-SELECT id, user_id, name, api_key, scopes, created_at, expires_at, last_used_at FROM api_keys WHERE api_key = ?
+SELECT id, realm_id, name, api_key, created_at, expires_at, last_used_at FROM api_keys WHERE api_key = ?
 `
 
 func (q *Queries) GetAPIKeyByKey(ctx context.Context, apiKey string) (ApiKey, error) {
@@ -90,10 +84,9 @@ func (q *Queries) GetAPIKeyByKey(ctx context.Context, apiKey string) (ApiKey, er
 	var i ApiKey
 	err := row.Scan(
 		&i.ID,
-		&i.UserID,
+		&i.RealmID,
 		&i.Name,
 		&i.ApiKey,
-		&i.Scopes,
 		&i.CreatedAt,
 		&i.ExpiresAt,
 		&i.LastUsedAt,
@@ -101,12 +94,12 @@ func (q *Queries) GetAPIKeyByKey(ctx context.Context, apiKey string) (ApiKey, er
 	return i, err
 }
 
-const listAPIKeysByUser = `-- name: ListAPIKeysByUser :many
-SELECT id, user_id, name, api_key, scopes, created_at, expires_at, last_used_at FROM api_keys WHERE user_id = ? ORDER BY created_at DESC
+const listAPIKeysByRealm = `-- name: ListAPIKeysByRealm :many
+SELECT id, realm_id, name, api_key, created_at, expires_at, last_used_at FROM api_keys WHERE realm_id = ? ORDER BY created_at DESC
 `
 
-func (q *Queries) ListAPIKeysByUser(ctx context.Context, userID string) ([]ApiKey, error) {
-	rows, err := q.db.QueryContext(ctx, listAPIKeysByUser, userID)
+func (q *Queries) ListAPIKeysByRealm(ctx context.Context, realmID string) ([]ApiKey, error) {
+	rows, err := q.db.QueryContext(ctx, listAPIKeysByRealm, realmID)
 	if err != nil {
 		return nil, err
 	}
@@ -116,10 +109,9 @@ func (q *Queries) ListAPIKeysByUser(ctx context.Context, userID string) ([]ApiKe
 		var i ApiKey
 		if err := rows.Scan(
 			&i.ID,
-			&i.UserID,
+			&i.RealmID,
 			&i.Name,
 			&i.ApiKey,
-			&i.Scopes,
 			&i.CreatedAt,
 			&i.ExpiresAt,
 			&i.LastUsedAt,
@@ -138,15 +130,10 @@ func (q *Queries) ListAPIKeysByUser(ctx context.Context, userID string) ([]ApiKe
 }
 
 const updateAPIKeyLastUsed = `-- name: UpdateAPIKeyLastUsed :exec
-UPDATE api_keys SET last_used_at = ? WHERE id = ?
+UPDATE api_keys SET last_used_at = CURRENT_TIMESTAMP WHERE id = ?
 `
 
-type UpdateAPIKeyLastUsedParams struct {
-	LastUsedAt sql.NullTime `json:"last_used_at"`
-	ID         string       `json:"id"`
-}
-
-func (q *Queries) UpdateAPIKeyLastUsed(ctx context.Context, arg UpdateAPIKeyLastUsedParams) error {
-	_, err := q.db.ExecContext(ctx, updateAPIKeyLastUsed, arg.LastUsedAt, arg.ID)
+func (q *Queries) UpdateAPIKeyLastUsed(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, updateAPIKeyLastUsed, id)
 	return err
 }

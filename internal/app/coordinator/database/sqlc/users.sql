@@ -1,20 +1,12 @@
 -- name: CreateUser :exec
-INSERT INTO users (id, headscale_user, issuer, subject, email, name, picture, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO users (id, display_name, created_at, updated_at)
+VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- name: GetUser :one
 SELECT * FROM users WHERE id = ?;
 
--- name: GetUserByHeadscaleUser :one
-SELECT * FROM users WHERE headscale_user = ?;
-
--- name: GetUserByIssuerSubject :one
-SELECT * FROM users WHERE issuer = ? AND subject = ?;
-
 -- name: UpdateUser :exec
-UPDATE users
-SET email = ?, name = ?, picture = ?, updated_at = ?
-WHERE id = ?;
+UPDATE users SET display_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;
 
 -- name: DeleteUser :exec
 DELETE FROM users WHERE id = ?;

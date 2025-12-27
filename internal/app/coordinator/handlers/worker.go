@@ -19,7 +19,7 @@ type WorkerHandler struct {
 	realmManager   *headscale.RealmManager
 	tokenGenerator *jointoken.Generator
 	sessionStore   store.SessionStore
-	userStore      store.UserStore
+	realmStore     store.RealmStore
 }
 
 // NewWorkerHandler creates a new WorkerHandler.
@@ -29,7 +29,7 @@ func NewWorkerHandler(
 	realmManager *headscale.RealmManager,
 	tokenGenerator *jointoken.Generator,
 	sessionStore store.SessionStore,
-	userStore store.UserStore,
+	realmStore store.RealmStore,
 ) *WorkerHandler {
 	return &WorkerHandler{
 		publicURL:      publicURL,
@@ -37,7 +37,7 @@ func NewWorkerHandler(
 		realmManager:   realmManager,
 		tokenGenerator: tokenGenerator,
 		sessionStore:   sessionStore,
-		userStore:      userStore,
+		realmStore:     realmStore,
 	}
 }
 
@@ -71,11 +71,17 @@ func (h *WorkerHandler) HandleCreateJoinToken(w http.ResponseWriter, r *http.Req
 		slog.Warn("update session last used", "error", err, "session_id", sessionID)
 	}
 
-	user, err := h.userStore.Get(ctx, session.UserID)
-	if err != nil || user == nil {
-		http.Error(w, "user not found", http.StatusUnauthorized)
+	realms, err := h.realmStore.ListByOwner(ctx, session.UserID)
+	if err != nil {
+		slog.Error("list user realms", "error", err)
+		http.Error(w, "list realms", http.StatusInternalServerError)
 		return
 	}
+	if len(realms) == 0 {
+		http.Error(w, "no realm found", http.StatusBadRequest)
+		return
+	}
+	realm := realms[0]
 
 	var req struct {
 		TTL string `json:"ttl"`
@@ -94,7 +100,7 @@ func (h *WorkerHandler) HandleCreateJoinToken(w http.ResponseWriter, r *http.Req
 		ttl = parsed
 	}
 
-	token, err := h.tokenGenerator.Generate(user.ID, user.HeadscaleUser, ttl)
+	token, err := h.tokenGenerator.Generate(realm.ID, realm.HeadscaleUser, ttl)
 	if err != nil {
 		slog.Error("generate join token", "error", err)
 		http.Error(w, "generate join token", http.StatusInternalServerError)
@@ -134,9 +140,9 @@ func (h *WorkerHandler) HandleWorkerJoin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	user, err := h.userStore.Get(ctx, claims.UserID)
-	if err != nil || user == nil {
-		http.Error(w, "invalid user in token", http.StatusUnauthorized)
+	realm, err := h.realmStore.Get(ctx, claims.RealmID)
+	if err != nil || realm == nil {
+		http.Error(w, "invalid realm in token", http.StatusUnauthorized)
 		return
 	}
 

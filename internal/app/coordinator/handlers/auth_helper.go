@@ -11,29 +11,30 @@ import (
 
 // Authentication errors
 var (
-	ErrNoCredentials     = errors.New("no credentials provided")
-	ErrInvalidSession    = errors.New("invalid session")
-	ErrInvalidAPIKey     = errors.New("invalid API key")
-	ErrInsufficientScope = errors.New("insufficient scope")
-	ErrUserNotFound      = errors.New("user not found")
+	ErrNoCredentials  = errors.New("no credentials provided")
+	ErrInvalidSession = errors.New("invalid session")
+	ErrInvalidAPIKey  = errors.New("invalid API key")
+	ErrRealmNotFound  = errors.New("realm not found")
+	ErrNoRealm        = errors.New("user has no realm")
 )
 
 // AuthHelper provides common authentication methods for handlers.
 type AuthHelper struct {
 	sessionStore store.SessionStore
-	userStore    store.UserStore
+	realmStore   store.RealmStore
 }
 
 // NewAuthHelper creates a new AuthHelper.
-func NewAuthHelper(sessionStore store.SessionStore, userStore store.UserStore) *AuthHelper {
+func NewAuthHelper(sessionStore store.SessionStore, realmStore store.RealmStore) *AuthHelper {
 	return &AuthHelper{
 		sessionStore: sessionStore,
-		userStore:    userStore,
+		realmStore:   realmStore,
 	}
 }
 
 // AuthenticateSession authenticates a request using X-Session-Token header.
-func (h *AuthHelper) AuthenticateSession(r *http.Request) (*store.User, error) {
+// Returns the user's first realm.
+func (h *AuthHelper) AuthenticateSession(r *http.Request) (*store.Realm, error) {
 	sessionID := r.Header.Get("X-Session-Token")
 	if sessionID == "" {
 		return nil, ErrNoCredentials
@@ -49,19 +50,18 @@ func (h *AuthHelper) AuthenticateSession(r *http.Request) (*store.User, error) {
 		return nil, ErrInvalidSession
 	}
 
-	user, err := h.userStore.Get(ctx, session.UserID)
+	realms, err := h.realmStore.ListByOwner(ctx, session.UserID)
 	if err != nil {
 		return nil, err
 	}
-	if user == nil {
-		return nil, ErrUserNotFound
+	if len(realms) == 0 {
+		return nil, ErrNoRealm
 	}
 
-	return user, nil
+	return realms[0], nil
 }
 
 // GetBearerToken extracts bearer token from Authorization header.
-// Returns empty string if not present or not a Bearer token.
 func GetBearerToken(r *http.Request) string {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
@@ -73,20 +73,20 @@ func GetBearerToken(r *http.Request) string {
 	return strings.TrimPrefix(authHeader, "Bearer ")
 }
 
-// GetUserByID retrieves a user by ID.
-func (h *AuthHelper) GetUserByID(ctx context.Context, userID string) (*store.User, error) {
-	user, err := h.userStore.Get(ctx, userID)
+// GetRealmByID retrieves a realm by ID.
+func (h *AuthHelper) GetRealmByID(ctx context.Context, realmID string) (*store.Realm, error) {
+	realm, err := h.realmStore.Get(ctx, realmID)
 	if err != nil {
 		return nil, err
 	}
-	if user == nil {
-		return nil, ErrUserNotFound
+	if realm == nil {
+		return nil, ErrRealmNotFound
 	}
-	return user, nil
+	return realm, nil
 }
 
-// GetUserFromRequest tries to authenticate user from header or cookie.
-func (h *AuthHelper) GetUserFromRequest(ctx context.Context, r *http.Request) (*store.User, error) {
+// GetRealmFromRequest authenticates and gets user's first realm from header or cookie.
+func (h *AuthHelper) GetRealmFromRequest(ctx context.Context, r *http.Request) (*store.Realm, error) {
 	sessionID := r.Header.Get("X-Session-Token")
 	if sessionID == "" {
 		cookie, err := r.Cookie("wonder_session")
@@ -107,13 +107,13 @@ func (h *AuthHelper) GetUserFromRequest(ctx context.Context, r *http.Request) (*
 		return nil, ErrInvalidSession
 	}
 
-	user, err := h.userStore.Get(ctx, session.UserID)
+	realms, err := h.realmStore.ListByOwner(ctx, session.UserID)
 	if err != nil {
 		return nil, err
 	}
-	if user == nil {
-		return nil, ErrUserNotFound
+	if len(realms) == 0 {
+		return nil, ErrNoRealm
 	}
 
-	return user, nil
+	return realms[0], nil
 }

@@ -15,7 +15,7 @@ type Claims struct {
 	jwt.RegisteredClaims
 	CoordinatorURL string `json:"coordinator_url"`
 	HeadscaleURL   string `json:"headscale_url"`
-	UserID         string `json:"user_id"`
+	RealmID        string `json:"realm_id"`
 	HeadscaleUser  string `json:"headscale_user"`
 }
 
@@ -35,8 +35,8 @@ func NewGenerator(signingKey, coordinatorURL, headscaleURL string) *Generator {
 	}
 }
 
-// Generate creates a new join token for a user
-func (g *Generator) Generate(userID, headscaleUser string, ttl time.Duration) (string, error) {
+// Generate creates a new join token for a realm
+func (g *Generator) Generate(realmID, headscaleUser string, ttl time.Duration) (string, error) {
 	now := time.Now()
 	claims := &Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -46,7 +46,7 @@ func (g *Generator) Generate(userID, headscaleUser string, ttl time.Duration) (s
 		},
 		CoordinatorURL: g.coordinatorURL,
 		HeadscaleURL:   g.headscaleURL,
-		UserID:         userID,
+		RealmID:        realmID,
 		HeadscaleUser:  headscaleUser,
 	}
 

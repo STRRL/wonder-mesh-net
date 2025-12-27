@@ -15,12 +15,14 @@ import (
 
 // AuthHandler handles authentication-related requests.
 type AuthHandler struct {
-	publicURL    string
-	oidcRegistry *oidc.Registry
-	realmManager *headscale.RealmManager
-	aclManager   *headscale.ACLManager
-	sessionStore store.SessionStore
-	userStore    store.UserStore
+	publicURL     string
+	oidcRegistry  *oidc.Registry
+	realmManager  *headscale.RealmManager
+	aclManager    *headscale.ACLManager
+	sessionStore  store.SessionStore
+	userStore     store.UserStore
+	identityStore store.OIDCIdentityStore
+	realmStore    store.RealmStore
 }
 
 // NewAuthHandler creates a new AuthHandler.
@@ -31,14 +33,18 @@ func NewAuthHandler(
 	aclManager *headscale.ACLManager,
 	sessionStore store.SessionStore,
 	userStore store.UserStore,
+	identityStore store.OIDCIdentityStore,
+	realmStore store.RealmStore,
 ) *AuthHandler {
 	return &AuthHandler{
-		publicURL:    publicURL,
-		oidcRegistry: oidcRegistry,
-		realmManager: realmManager,
-		aclManager:   aclManager,
-		sessionStore: sessionStore,
-		userStore:    userStore,
+		publicURL:     publicURL,
+		oidcRegistry:  oidcRegistry,
+		realmManager:  realmManager,
+		aclManager:    aclManager,
+		sessionStore:  sessionStore,
+		userStore:     userStore,
+		identityStore: identityStore,
+		realmStore:    realmStore,
 	}
 }
 
@@ -119,59 +125,88 @@ func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existingUser, err := h.userStore.GetByIssuerSubject(ctx, provider.Issuer(), userInfo.Subject)
+	existingIdentity, err := h.identityStore.GetByIssuerSubject(ctx, provider.Issuer(), userInfo.Subject)
 	if err != nil {
-		slog.Error("check existing user", "error", err)
-		http.Error(w, "check user", http.StatusInternalServerError)
+		slog.Error("check existing identity", "error", err)
+		http.Error(w, "check identity", http.StatusInternalServerError)
 		return
 	}
 
-	now := time.Now()
-	var userID, realmName string
+	var userID string
+	var headscaleUserName string
 
-	if existingUser != nil {
-		userID = existingUser.ID
-		realmName = existingUser.HeadscaleUser
+	if existingIdentity != nil {
+		userID = existingIdentity.UserID
 
-		existingUser.Email = userInfo.Email
-		existingUser.Name = userInfo.Name
-		existingUser.Picture = userInfo.Picture
-		if err := h.userStore.Update(ctx, existingUser); err != nil {
-			slog.Warn("update user info", "error", err, "user_id", existingUser.ID)
+		existingIdentity.Email = userInfo.Email
+		existingIdentity.Name = userInfo.Name
+		existingIdentity.Picture = userInfo.Picture
+		if err := h.identityStore.Update(ctx, existingIdentity); err != nil {
+			slog.Warn("update identity info", "error", err, "identity_id", existingIdentity.ID)
+		}
+
+		realms, err := h.realmStore.ListByOwner(ctx, userID)
+		if err != nil {
+			slog.Error("list user realms", "error", err)
+			http.Error(w, "list realms", http.StatusInternalServerError)
+			return
+		}
+
+		if len(realms) > 0 {
+			headscaleUserName = realms[0].HeadscaleUser
 		}
 	} else {
-		userID = headscale.GenerateRealmID()
-		realmName = headscale.RealmName(userID)
-
-		newUser := &store.User{
-			ID:            userID,
-			HeadscaleUser: realmName,
-			Issuer:        provider.Issuer(),
-			Subject:       userInfo.Subject,
-			Email:         userInfo.Email,
-			Name:          userInfo.Name,
-			Picture:       userInfo.Picture,
-			CreatedAt:     now,
-			UpdatedAt:     now,
-		}
-		if err := h.userStore.Create(ctx, newUser); err != nil {
+		newUser, err := h.userStore.Create(ctx, userInfo.Name)
+		if err != nil {
 			slog.Error("create user", "error", err)
 			http.Error(w, "create user", http.StatusInternalServerError)
 			return
 		}
+		userID = newUser.ID
+
+		newIdentity := &store.OIDCIdentity{
+			UserID:  userID,
+			Issuer:  provider.Issuer(),
+			Subject: userInfo.Subject,
+			Email:   userInfo.Email,
+			Name:    userInfo.Name,
+			Picture: userInfo.Picture,
+		}
+		if err := h.identityStore.Create(ctx, newIdentity); err != nil {
+			slog.Error("create identity", "error", err)
+			http.Error(w, "create identity", http.StatusInternalServerError)
+			return
+		}
+
+		realmID, hsUser := headscale.NewRealmIdentifiers()
+		newRealm := &store.Realm{
+			ID:            realmID,
+			OwnerID:       userID,
+			HeadscaleUser: hsUser,
+			DisplayName:   userInfo.Name + "'s Realm",
+		}
+		if err := h.realmStore.Create(ctx, newRealm); err != nil {
+			slog.Error("create realm", "error", err)
+			http.Error(w, "create realm", http.StatusInternalServerError)
+			return
+		}
+
+		headscaleUserName = hsUser
 	}
 
-	headscaleUser, err := h.realmManager.GetOrCreateRealm(ctx, realmName)
-	if err != nil {
-		slog.Error("get/create realm", "error", err)
-		http.Error(w, "create realm", http.StatusInternalServerError)
-		return
-	}
+	if headscaleUserName != "" {
+		headscaleUser, err := h.realmManager.GetOrCreateRealm(ctx, headscaleUserName)
+		if err != nil {
+			slog.Error("get/create headscale realm", "error", err)
+			http.Error(w, "create headscale realm", http.StatusInternalServerError)
+			return
+		}
 
-	if err := h.aclManager.AddRealmToPolicy(ctx, headscaleUser.GetName()); err != nil {
-		slog.Error("update ACL policy", "error", err, "user", headscaleUser.GetName())
-		http.Error(w, "update ACL policy", http.StatusInternalServerError)
-		return
+		if err := h.aclManager.AddRealmToPolicy(ctx, headscaleUser.GetName()); err != nil {
+			slog.Error("update ACL policy", "error", err, "user", headscaleUser.GetName())
+			http.Error(w, "update ACL policy", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	sessionID, err := store.GenerateSessionID()
@@ -182,15 +217,11 @@ func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sessionTTL := 7 * 24 * time.Hour
-	expiresAt := now.Add(sessionTTL)
+	expiresAt := time.Now().Add(sessionTTL)
 	session := &store.Session{
-		ID:         sessionID,
-		UserID:     userID,
-		Issuer:     provider.Issuer(),
-		Subject:    userInfo.Subject,
-		CreatedAt:  now,
-		ExpiresAt:  &expiresAt,
-		LastUsedAt: now,
+		ID:        sessionID,
+		UserID:    userID,
+		ExpiresAt: &expiresAt,
 	}
 	if err := h.sessionStore.Create(ctx, session); err != nil {
 		slog.Error("create session", "error", err)
@@ -210,7 +241,7 @@ func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	})
 	http.SetCookie(w, &http.Cookie{
 		Name:     "wonder_user",
-		Value:    realmName,
+		Value:    headscaleUserName,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   secure,
@@ -276,11 +307,17 @@ func (h *AuthHandler) HandleCreateAuthKey(w http.ResponseWriter, r *http.Request
 		slog.Warn("update session last used", "error", err, "session_id", sessionID)
 	}
 
-	user, err := h.userStore.Get(ctx, session.UserID)
-	if err != nil || user == nil {
-		http.Error(w, "user not found", http.StatusUnauthorized)
+	realms, err := h.realmStore.ListByOwner(ctx, session.UserID)
+	if err != nil {
+		slog.Error("list user realms", "error", err)
+		http.Error(w, "list realms", http.StatusInternalServerError)
 		return
 	}
+	if len(realms) == 0 {
+		http.Error(w, "no realm found", http.StatusBadRequest)
+		return
+	}
+	realm := realms[0]
 
 	var req struct {
 		TTL      string `json:"ttl"`
@@ -301,7 +338,7 @@ func (h *AuthHandler) HandleCreateAuthKey(w http.ResponseWriter, r *http.Request
 		ttl = parsed
 	}
 
-	key, err := h.realmManager.CreateAuthKeyByName(ctx, user.HeadscaleUser, ttl, req.Reusable)
+	key, err := h.realmManager.CreateAuthKeyByName(ctx, realm.HeadscaleUser, ttl, req.Reusable)
 	if err != nil {
 		slog.Error("create auth key", "error", err)
 		http.Error(w, "create auth key", http.StatusInternalServerError)
@@ -319,7 +356,6 @@ func (h *AuthHandler) HandleCreateAuthKey(w http.ResponseWriter, r *http.Request
 }
 
 // isValidRedirectURI validates that the redirect URI is same-origin as publicURL.
-// This prevents open redirect attacks by comparing scheme and host explicitly.
 func isValidRedirectURI(publicURL, redirectURI string) bool {
 	parsedPublic, err := url.Parse(publicURL)
 	if err != nil {
