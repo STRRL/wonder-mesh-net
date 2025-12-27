@@ -22,23 +22,23 @@ const minJWTSecretLength = 32
 
 // Server is the coordinator server that manages multi-realm Headscale access.
 type Server struct {
-	config           *Config
-	db               *database.Manager
-	headscaleConn    *grpc.ClientConn
-	headscaleClient  v1.HeadscaleServiceClient
-	headscaleProcess *headscale.ProcessManager
-	realmManager     *headscale.RealmManager
-	aclManager       *headscale.ACLManager
-	oidcRegistry     *oidc.Registry
-	tokenGenerator   *jointoken.Generator
-	sessionStore     *store.DBSessionStore
-	userStore        *store.DBUserStore
-	apiKeyStore      *store.DBAPIKeyStore
-	deviceFlowStore  *store.DeviceRequestStore
+	config                  *Config
+	db                      *database.Manager
+	headscaleConn           *grpc.ClientConn
+	headscaleClient         v1.HeadscaleServiceClient
+	headscaleProcessManager *headscale.ProcessManager
+	realmManager            *headscale.RealmManager
+	aclManager              *headscale.ACLManager
+	oidcRegistry            *oidc.Registry
+	tokenGenerator          *jointoken.Generator
+	sessionStore            *store.DBSessionStore
+	userStore               *store.DBUserStore
+	apiKeyStore             *store.DBAPIKeyStore
+	deviceFlowStore         *store.DeviceRequestStore
 }
 
-// NewServer creates a new coordinator server.
-func NewServer(config *Config) (*Server, error) {
+// BootstrapNewServer creates a new coordinator server.
+func BootstrapNewServer(config *Config) (*Server, error) {
 	if len(config.JWTSecret) < minJWTSecretLength {
 		return nil, fmt.Errorf("JWT secret must be at least %d bytes", minJWTSecretLength)
 	}
@@ -65,28 +65,28 @@ func NewServer(config *Config) (*Server, error) {
 	slog.Info("starting embedded Headscale")
 
 	configPath := filepath.Join(DefaultHeadscaleConfigDir, "config.yaml")
-	headscaleProcess := headscale.NewProcessManager(headscale.ProcessConfig{
+	headscaleProcessManager := headscale.NewProcessManager(headscale.ProcessConfig{
 		BinaryPath: DefaultHeadscaleBinary,
 		ConfigPath: configPath,
 		DataDir:    DefaultHeadscaleDataDir,
 	})
 
-	if err := headscaleProcess.Start(ctx); err != nil {
+	if err := headscaleProcessManager.Start(ctx); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("start headscale: %w", err)
 	}
 
-	if err := headscaleProcess.WaitReady(ctx, 30*time.Second); err != nil {
-		_ = headscaleProcess.Stop()
+	if err := headscaleProcessManager.WaitReady(ctx, 30*time.Second); err != nil {
+		_ = headscaleProcessManager.Stop()
 		_ = db.Close()
 		return nil, fmt.Errorf("headscale not ready: %w", err)
 	}
 
 	slog.Info("Headscale started successfully")
 
-	apiKey, err := headscaleProcess.CreateAPIKey(ctx)
+	apiKey, err := headscaleProcessManager.CreateAPIKey(ctx)
 	if err != nil {
-		_ = headscaleProcess.Stop()
+		_ = headscaleProcessManager.Stop()
 		_ = db.Close()
 		return nil, fmt.Errorf("create headscale API key: %w", err)
 	}
@@ -98,7 +98,7 @@ func NewServer(config *Config) (*Server, error) {
 		grpc.WithPerRPCCredentials(&headscale.APIKeyCredentials{APIKey: apiKey}),
 	)
 	if err != nil {
-		_ = headscaleProcess.Stop()
+		_ = headscaleProcessManager.Stop()
 		_ = db.Close()
 		return nil, fmt.Errorf("connect to headscale gRPC: %w", err)
 	}
@@ -124,19 +124,19 @@ func NewServer(config *Config) (*Server, error) {
 	)
 
 	return &Server{
-		config:           config,
-		db:               db,
-		headscaleConn:    headscaleConn,
-		headscaleClient:  headscaleClient,
-		headscaleProcess: headscaleProcess,
-		realmManager:     headscale.NewRealmManager(headscaleClient),
-		aclManager:       headscale.NewACLManager(headscaleClient),
-		oidcRegistry:     oidcRegistry,
-		tokenGenerator:   tokenGenerator,
-		sessionStore:     store.NewDBSessionStore(db.Queries()),
-		userStore:        store.NewDBUserStore(db.Queries()),
-		apiKeyStore:      store.NewDBAPIKeyStore(db.Queries()),
-		deviceFlowStore:  store.NewDeviceRequestStore(db.Queries()),
+		config:                  config,
+		db:                      db,
+		headscaleConn:           headscaleConn,
+		headscaleClient:         headscaleClient,
+		headscaleProcessManager: headscaleProcessManager,
+		realmManager:            headscale.NewRealmManager(headscaleClient),
+		aclManager:              headscale.NewACLManager(headscaleClient),
+		oidcRegistry:            oidcRegistry,
+		tokenGenerator:          tokenGenerator,
+		sessionStore:            store.NewDBSessionStore(db.Queries()),
+		userStore:               store.NewDBUserStore(db.Queries()),
+		apiKeyStore:             store.NewDBAPIKeyStore(db.Queries()),
+		deviceFlowStore:         store.NewDeviceRequestStore(db.Queries()),
 	}, nil
 }
 
@@ -145,8 +145,8 @@ func (s *Server) Close() error {
 	if s.headscaleConn != nil {
 		_ = s.headscaleConn.Close()
 	}
-	if s.headscaleProcess != nil {
-		if err := s.headscaleProcess.Stop(); err != nil {
+	if s.headscaleProcessManager != nil {
+		if err := s.headscaleProcessManager.Stop(); err != nil {
 			slog.Warn("stop headscale", "error", err)
 		}
 	}

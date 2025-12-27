@@ -1,8 +1,14 @@
 package headscale
 
-import "context"
+import (
+	"context"
 
-// APIKeyCredentials implements grpc.PerRPCCredentials for API key authentication
+	"google.golang.org/grpc/credentials"
+)
+
+var _ credentials.PerRPCCredentials = (*APIKeyCredentials)(nil)
+
+// APIKeyCredentials implements credentials.PerRPCCredentials for API key authentication
 type APIKeyCredentials struct {
 	APIKey string
 }
