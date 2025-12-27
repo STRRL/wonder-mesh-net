@@ -17,31 +17,31 @@ import (
 // It registers all API routes, starts listening on the configured address,
 // and handles graceful shutdown on SIGINT or SIGTERM with a 10-second timeout.
 func (s *Server) Run() error {
-	healthHandler := handlers.NewHealthHandler(s.HeadscaleClient)
-	authHelper := handlers.NewAuthHelper(s.SessionStore, s.UserStore)
+	healthHandler := handlers.NewHealthHandler(s.headscaleClient)
+	authHelper := handlers.NewAuthHelper(s.sessionStore, s.userStore)
 	authHandler := handlers.NewAuthHandler(
-		s.Config.PublicURL,
-		s.OIDCRegistry,
-		s.RealmManager,
-		s.ACLManager,
-		s.SessionStore,
-		s.UserStore,
+		s.config.PublicURL,
+		s.oidcRegistry,
+		s.realmManager,
+		s.aclManager,
+		s.sessionStore,
+		s.userStore,
 	)
-	nodesHandler := handlers.NewNodesHandler(s.RealmManager, s.APIKeyStore, authHelper)
-	apiKeyHandler := handlers.NewAPIKeyHandler(s.APIKeyStore, authHelper)
-	deployerHandler := handlers.NewDeployerHandler(s.Config.PublicURL, s.RealmManager, s.APIKeyStore, authHelper)
+	nodesHandler := handlers.NewNodesHandler(s.realmManager, s.apiKeyStore, authHelper)
+	apiKeyHandler := handlers.NewAPIKeyHandler(s.apiKeyStore, authHelper)
+	deployerHandler := handlers.NewDeployerHandler(s.config.PublicURL, s.realmManager, s.apiKeyStore, authHelper)
 	workerHandler := handlers.NewWorkerHandler(
-		s.Config.PublicURL,
-		s.Config.JWTSecret,
-		s.RealmManager,
-		s.TokenGenerator,
-		s.SessionStore,
-		s.UserStore,
+		s.config.PublicURL,
+		s.config.JWTSecret,
+		s.realmManager,
+		s.tokenGenerator,
+		s.sessionStore,
+		s.userStore,
 	)
 	deviceHandler := handlers.NewDeviceHandler(
-		s.Config.PublicURL,
-		s.DeviceFlowStore,
-		s.RealmManager,
+		s.config.PublicURL,
+		s.deviceFlowStore,
+		s.realmManager,
 		authHelper,
 	)
 
@@ -76,22 +76,22 @@ func (s *Server) Run() error {
 
 	slog.Info("initializing ACL policy")
 	ctx := context.Background()
-	if err := s.ACLManager.SetAutogroupSelfPolicy(ctx); err != nil {
+	if err := s.aclManager.SetAutogroupSelfPolicy(ctx); err != nil {
 		slog.Warn("initialize ACL policy", "error", err)
 	} else {
 		slog.Info("ACL policy initialized successfully")
 	}
 
 	httpServer := &http.Server{
-		Addr:    s.Config.Listen,
+		Addr:    s.config.Listen,
 		Handler: rootRouter,
 	}
 
 	go func() {
 		slog.Info("starting coordinator",
-			"listen", s.Config.Listen,
-			"coordinator_api", s.Config.PublicURL+"/coordinator/*",
-			"headscale", s.Config.PublicURL+"/*")
+			"listen", s.config.Listen,
+			"coordinator_api", s.config.PublicURL+"/coordinator/*",
+			"headscale", s.config.PublicURL+"/*")
 		if err := httpServer.ListenAndServe(); err != http.ErrServerClosed {
 			slog.Error("server error", "error", err)
 			os.Exit(1)
@@ -102,7 +102,7 @@ func (s *Server) Run() error {
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
-			if err := s.DeviceFlowStore.DeleteExpired(context.Background()); err != nil {
+			if err := s.deviceFlowStore.DeleteExpired(context.Background()); err != nil {
 				slog.Warn("cleanup expired device requests", "error", err)
 			}
 		}

@@ -22,19 +22,19 @@ const minJWTSecretLength = 32
 
 // Server is the coordinator server that manages multi-realm Headscale access.
 type Server struct {
-	Config          *Config
-	DB              *database.Manager
-	HeadscaleConn    *grpc.ClientConn
-	HeadscaleClient  v1.HeadscaleServiceClient
-	HeadscaleProcess *headscale.ProcessManager
-	RealmManager    *headscale.RealmManager
-	ACLManager      *headscale.ACLManager
-	OIDCRegistry    *oidc.Registry
-	TokenGenerator  *jointoken.Generator
-	SessionStore    *store.DBSessionStore
-	UserStore       *store.DBUserStore
-	APIKeyStore     *store.DBAPIKeyStore
-	DeviceFlowStore *store.DeviceRequestStore
+	config           *Config
+	db               *database.Manager
+	headscaleConn    *grpc.ClientConn
+	headscaleClient  v1.HeadscaleServiceClient
+	headscaleProcess *headscale.ProcessManager
+	realmManager     *headscale.RealmManager
+	aclManager       *headscale.ACLManager
+	oidcRegistry     *oidc.Registry
+	tokenGenerator   *jointoken.Generator
+	sessionStore     *store.DBSessionStore
+	userStore        *store.DBUserStore
+	apiKeyStore      *store.DBAPIKeyStore
+	deviceFlowStore  *store.DeviceRequestStore
 }
 
 // NewServer creates a new coordinator server.
@@ -124,34 +124,34 @@ func NewServer(config *Config) (*Server, error) {
 	)
 
 	return &Server{
-		Config:          config,
-		DB:              db,
-		HeadscaleConn:    headscaleConn,
-		HeadscaleClient:  headscaleClient,
-		HeadscaleProcess: headscaleProcess,
-		RealmManager:     headscale.NewRealmManager(headscaleClient),
-		ACLManager:       headscale.NewACLManager(headscaleClient),
-		OIDCRegistry:    oidcRegistry,
-		TokenGenerator:  tokenGenerator,
-		SessionStore:    store.NewDBSessionStore(db.Queries()),
-		UserStore:       store.NewDBUserStore(db.Queries()),
-		APIKeyStore:     store.NewDBAPIKeyStore(db.Queries()),
-		DeviceFlowStore: store.NewDeviceRequestStore(db.Queries()),
+		config:           config,
+		db:               db,
+		headscaleConn:    headscaleConn,
+		headscaleClient:  headscaleClient,
+		headscaleProcess: headscaleProcess,
+		realmManager:     headscale.NewRealmManager(headscaleClient),
+		aclManager:       headscale.NewACLManager(headscaleClient),
+		oidcRegistry:     oidcRegistry,
+		tokenGenerator:   tokenGenerator,
+		sessionStore:     store.NewDBSessionStore(db.Queries()),
+		userStore:        store.NewDBUserStore(db.Queries()),
+		apiKeyStore:      store.NewDBAPIKeyStore(db.Queries()),
+		deviceFlowStore:  store.NewDeviceRequestStore(db.Queries()),
 	}, nil
 }
 
 // Close closes all server resources
 func (s *Server) Close() error {
-	if s.HeadscaleConn != nil {
-		_ = s.HeadscaleConn.Close()
+	if s.headscaleConn != nil {
+		_ = s.headscaleConn.Close()
 	}
-	if s.HeadscaleProcess != nil {
-		if err := s.HeadscaleProcess.Stop(); err != nil {
+	if s.headscaleProcess != nil {
+		if err := s.headscaleProcess.Stop(); err != nil {
 			slog.Warn("stop headscale", "error", err)
 		}
 	}
-	if s.DB != nil {
-		return s.DB.Close()
+	if s.db != nil {
+		return s.db.Close()
 	}
 	return nil
 }
