@@ -293,18 +293,18 @@ func runTailscaleUp(headscaleURL, authkey string) error {
 	fmt.Println()
 	fmt.Println("Running tailscale up...")
 
-	var tsCmd *exec.Cmd
+	var tailscaleCmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		tsCmd = exec.Command("tailscale", "up", "--login-server="+headscaleURL, "--authkey="+authkey)
+		tailscaleCmd = exec.Command("tailscale", "up", "--login-server="+headscaleURL, "--authkey="+authkey)
 	} else {
-		tsCmd = exec.Command("sudo", "tailscale", "up", "--login-server="+headscaleURL, "--authkey="+authkey)
+		tailscaleCmd = exec.Command("sudo", "tailscale", "up", "--login-server="+headscaleURL, "--authkey="+authkey)
 	}
 
-	tsCmd.Stdout = os.Stdout
-	tsCmd.Stderr = os.Stderr
-	tsCmd.Stdin = os.Stdin
+	tailscaleCmd.Stdout = os.Stdout
+	tailscaleCmd.Stderr = os.Stderr
+	tailscaleCmd.Stdin = os.Stdin
 
-	if err := tsCmd.Run(); err != nil {
+	if err := tailscaleCmd.Run(); err != nil {
 		return fmt.Errorf("tailscale up failed: %w", err)
 	}
 

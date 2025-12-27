@@ -24,9 +24,9 @@ const minJWTSecretLength = 32
 type Server struct {
 	Config          *Config
 	DB              *database.Manager
-	HSConn          *grpc.ClientConn
-	HSClient        v1.HeadscaleServiceClient
-	HSProcess       *headscale.ProcessManager
+	HeadscaleConn    *grpc.ClientConn
+	HeadscaleClient  v1.HeadscaleServiceClient
+	HeadscaleProcess *headscale.ProcessManager
 	RealmManager    *headscale.RealmManager
 	ACLManager      *headscale.ACLManager
 	OIDCRegistry    *oidc.Registry
@@ -65,44 +65,44 @@ func NewServer(config *Config) (*Server, error) {
 	slog.Info("starting embedded Headscale")
 
 	configPath := filepath.Join(DefaultHeadscaleConfigDir, "config.yaml")
-	hsProcess := headscale.NewProcessManager(headscale.ProcessConfig{
+	headscaleProcess := headscale.NewProcessManager(headscale.ProcessConfig{
 		BinaryPath: DefaultHeadscaleBinary,
 		ConfigPath: configPath,
 		DataDir:    DefaultHeadscaleDataDir,
 	})
 
-	if err := hsProcess.Start(ctx); err != nil {
+	if err := headscaleProcess.Start(ctx); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("start headscale: %w", err)
 	}
 
-	if err := hsProcess.WaitReady(ctx, 30*time.Second); err != nil {
-		_ = hsProcess.Stop()
+	if err := headscaleProcess.WaitReady(ctx, 30*time.Second); err != nil {
+		_ = headscaleProcess.Stop()
 		_ = db.Close()
 		return nil, fmt.Errorf("headscale not ready: %w", err)
 	}
 
 	slog.Info("Headscale started successfully")
 
-	apiKey, err := hsProcess.CreateAPIKey(ctx)
+	apiKey, err := headscaleProcess.CreateAPIKey(ctx)
 	if err != nil {
-		_ = hsProcess.Stop()
+		_ = headscaleProcess.Stop()
 		_ = db.Close()
 		return nil, fmt.Errorf("create headscale API key: %w", err)
 	}
 	slog.Info("Headscale API key created")
 
-	hsConn, err := grpc.NewClient(
+	headscaleConn, err := grpc.NewClient(
 		DefaultHeadscaleGRPCAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithPerRPCCredentials(&headscale.APIKeyCredentials{APIKey: apiKey}),
 	)
 	if err != nil {
-		_ = hsProcess.Stop()
+		_ = headscaleProcess.Stop()
 		_ = db.Close()
 		return nil, fmt.Errorf("connect to headscale gRPC: %w", err)
 	}
-	hsClient := v1.NewHeadscaleServiceClient(hsConn)
+	headscaleClient := v1.NewHeadscaleServiceClient(headscaleConn)
 
 	stateStore := store.NewDBAuthStateStore(db.Queries(), 10*time.Minute)
 	oidcRegistry := oidc.NewRegistryWithStore(stateStore)
@@ -126,11 +126,11 @@ func NewServer(config *Config) (*Server, error) {
 	return &Server{
 		Config:          config,
 		DB:              db,
-		HSConn:          hsConn,
-		HSClient:        hsClient,
-		HSProcess:       hsProcess,
-		RealmManager:    headscale.NewRealmManager(hsClient),
-		ACLManager:      headscale.NewACLManager(hsClient),
+		HeadscaleConn:    headscaleConn,
+		HeadscaleClient:  headscaleClient,
+		HeadscaleProcess: headscaleProcess,
+		RealmManager:     headscale.NewRealmManager(headscaleClient),
+		ACLManager:       headscale.NewACLManager(headscaleClient),
 		OIDCRegistry:    oidcRegistry,
 		TokenGenerator:  tokenGenerator,
 		SessionStore:    store.NewDBSessionStore(db.Queries()),
@@ -142,11 +142,11 @@ func NewServer(config *Config) (*Server, error) {
 
 // Close closes all server resources
 func (s *Server) Close() error {
-	if s.HSConn != nil {
-		_ = s.HSConn.Close()
+	if s.HeadscaleConn != nil {
+		_ = s.HeadscaleConn.Close()
 	}
-	if s.HSProcess != nil {
-		if err := s.HSProcess.Stop(); err != nil {
+	if s.HeadscaleProcess != nil {
+		if err := s.HeadscaleProcess.Stop(); err != nil {
 			slog.Warn("stop headscale", "error", err)
 		}
 	}

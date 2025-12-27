@@ -93,12 +93,12 @@ func (rm *RealmManager) CreateAuthKey(ctx context.Context, userID uint64, ttl ti
 // This method ensures the user exists in Headscale before creating the key,
 // making it resilient to Headscale restarts.
 func (rm *RealmManager) CreateAuthKeyByName(ctx context.Context, username string, ttl time.Duration, reusable bool) (*v1.PreAuthKey, error) {
-	hsUser, err := rm.EnsureUser(ctx, username)
+	headscaleUser, err := rm.EnsureUser(ctx, username)
 	if err != nil {
 		return nil, fmt.Errorf("ensure user: %w", err)
 	}
 
-	return rm.CreateAuthKey(ctx, hsUser.GetId(), ttl, reusable)
+	return rm.CreateAuthKey(ctx, headscaleUser.GetId(), ttl, reusable)
 }
 
 // GetRealmNodes gets all nodes for a realm

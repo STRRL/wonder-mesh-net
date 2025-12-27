@@ -9,18 +9,18 @@ import (
 
 // HealthHandler handles health check requests.
 type HealthHandler struct {
-	hsClient v1.HeadscaleServiceClient
+	headscaleClient v1.HeadscaleServiceClient
 }
 
 // NewHealthHandler creates a new HealthHandler.
-func NewHealthHandler(hsClient v1.HeadscaleServiceClient) *HealthHandler {
-	return &HealthHandler{hsClient: hsClient}
+func NewHealthHandler(headscaleClient v1.HeadscaleServiceClient) *HealthHandler {
+	return &HealthHandler{headscaleClient: headscaleClient}
 }
 
 // ServeHTTP handles GET /health requests (readiness check).
 func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	_, err := h.hsClient.ListUsers(ctx, &v1.ListUsersRequest{})
+	_, err := h.headscaleClient.ListUsers(ctx, &v1.ListUsersRequest{})
 	if err != nil {
 		http.Error(w, "headscale unhealthy", http.StatusServiceUnavailable)
 		return

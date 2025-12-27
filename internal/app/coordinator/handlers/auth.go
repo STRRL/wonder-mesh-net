@@ -161,15 +161,15 @@ func (h *AuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	hsUser, err := h.realmManager.GetOrCreateRealm(ctx, realmName)
+	headscaleUser, err := h.realmManager.GetOrCreateRealm(ctx, realmName)
 	if err != nil {
 		slog.Error("get/create realm", "error", err)
 		http.Error(w, "create realm", http.StatusInternalServerError)
 		return
 	}
 
-	if err := h.aclManager.AddRealmToPolicy(ctx, hsUser.GetName()); err != nil {
-		slog.Error("update ACL policy", "error", err, "user", hsUser.GetName())
+	if err := h.aclManager.AddRealmToPolicy(ctx, headscaleUser.GetName()); err != nil {
+		slog.Error("update ACL policy", "error", err, "user", headscaleUser.GetName())
 		http.Error(w, "update ACL policy", http.StatusInternalServerError)
 		return
 	}

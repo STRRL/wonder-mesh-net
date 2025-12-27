@@ -17,7 +17,7 @@ import (
 // It registers all API routes, starts listening on the configured address,
 // and handles graceful shutdown on SIGINT or SIGTERM with a 10-second timeout.
 func (s *Server) Run() error {
-	healthHandler := handlers.NewHealthHandler(s.HSClient)
+	healthHandler := handlers.NewHealthHandler(s.HeadscaleClient)
 	authHelper := handlers.NewAuthHelper(s.SessionStore, s.UserStore)
 	authHandler := handlers.NewAuthHandler(
 		s.Config.PublicURL,
@@ -45,7 +45,7 @@ func (s *Server) Run() error {
 		authHelper,
 	)
 
-	hsProxy, err := handlers.NewHeadscaleProxyHandler("http://127.0.0.1:8080")
+	headscaleProxy, err := handlers.NewHeadscaleProxyHandler("http://127.0.0.1:8080")
 	if err != nil {
 		return err
 	}
@@ -72,7 +72,7 @@ func (s *Server) Run() error {
 
 	rootRouter := chi.NewRouter()
 	rootRouter.Mount("/coordinator", coordinatorRouter)
-	rootRouter.NotFound(hsProxy.ServeHTTP)
+	rootRouter.NotFound(headscaleProxy.ServeHTTP)
 
 	slog.Info("initializing ACL policy")
 	ctx := context.Background()

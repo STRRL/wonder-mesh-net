@@ -116,23 +116,23 @@ func (p *GitHubProvider) ExchangeCode(ctx context.Context, code string) (*UserIn
 		return nil, fmt.Errorf("github API error: %s", string(body))
 	}
 
-	var ghUser struct {
+	var githubUser struct {
 		ID        int64  `json:"id"`
 		Login     string `json:"login"`
 		Name      string `json:"name"`
 		Email     string `json:"email"`
 		AvatarURL string `json:"avatar_url"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&ghUser); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&githubUser); err != nil {
 		return nil, fmt.Errorf("decode user info: %w", err)
 	}
 
 	return &UserInfo{
-		Subject:       fmt.Sprintf("%d", ghUser.ID),
-		Email:         ghUser.Email,
-		EmailVerified: ghUser.Email != "",
-		Name:          ghUser.Name,
-		Picture:       ghUser.AvatarURL,
+		Subject:       fmt.Sprintf("%d", githubUser.ID),
+		Email:         githubUser.Email,
+		EmailVerified: githubUser.Email != "",
+		Name:          githubUser.Name,
+		Picture:       githubUser.AvatarURL,
 	}, nil
 }
 
