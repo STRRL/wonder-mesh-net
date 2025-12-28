@@ -12,13 +12,11 @@ import (
 
 // Authentication errors returned by AuthService methods.
 var (
-	ErrNoCredentials   = errors.New("no credentials provided")
-	ErrInvalidSession  = errors.New("invalid session")
-	ErrInvalidAPIKey   = errors.New("invalid API key")
-	ErrRealmNotFound   = errors.New("realm not found")
-	ErrNoRealm         = errors.New("user has no realm")
-	ErrSessionRequired = errors.New("session token required, API key not allowed")
-	ErrAPIKeyRequired  = errors.New("API key required, session token not allowed")
+	ErrNoCredentials  = errors.New("no credentials provided")
+	ErrInvalidSession = errors.New("invalid session")
+	ErrInvalidAPIKey  = errors.New("invalid API key")
+	ErrRealmNotFound  = errors.New("realm not found")
+	ErrNoRealm        = errors.New("user has no realm")
 )
 
 // AuthService provides authentication and session management.
@@ -88,14 +86,21 @@ func (s *AuthService) AuthenticateAPIKey(ctx context.Context, apiKey string) (*r
 }
 
 // Authenticate tries to authenticate using a bearer token.
-// The token can be either a session token or an API key - both are tried in order.
+// Priority: Session tokens are tried first, then API keys.
+// Only falls back to API key auth if session auth fails due to invalid/missing session.
+// Database errors and other system failures are not masked.
 func (s *AuthService) Authenticate(ctx context.Context, token string) (*repository.Realm, error) {
 	if token == "" {
 		return nil, ErrNoCredentials
 	}
 
-	if realm, err := s.AuthenticateSession(ctx, token); err == nil {
+	realm, err := s.AuthenticateSession(ctx, token)
+	if err == nil {
 		return realm, nil
+	}
+
+	if err != ErrInvalidSession && err != ErrNoRealm && err != ErrNoCredentials {
+		return nil, err
 	}
 
 	return s.AuthenticateAPIKey(ctx, token)
