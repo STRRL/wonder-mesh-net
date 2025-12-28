@@ -26,6 +26,7 @@ func NewNodesController(
 }
 
 // HandleListNodes handles GET /api/v1/nodes requests.
+// Accepts both session tokens and API keys (read-only, safe for third-party integrations).
 func (c *NodesController) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

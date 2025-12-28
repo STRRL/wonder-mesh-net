@@ -75,12 +75,18 @@ pkg/
 **Coordinator endpoints**:
 - `/oidc/login?provider=github` - Start OIDC flow
 - `/oidc/callback` - OIDC callback, creates realm
-- `/api/v1/join-token` - Generate JWT for worker join (needs `Authorization: Bearer <token>`)
-- `/api/v1/worker/join` - Worker exchanges JWT for Headscale PreAuthKey
-- `/api/v1/nodes` - List nodes (needs `Authorization: Bearer <token>`)
-- `/api/v1/api-keys` - Manage API keys for third-party integrations (needs `Authorization: Bearer <token>`)
+- `/api/v1/join-token` - Generate JWT for worker join (session only)
+- `/api/v1/authkey` - Create Headscale auth key (session only)
+- `/api/v1/worker/join` - Worker exchanges JWT for Headscale PreAuthKey (no auth required)
+- `/api/v1/nodes` - List nodes (session or API key)
+- `/api/v1/api-keys` - Manage API keys (session only)
+- `/api/v1/deployer/join` - Deployer joins mesh (API key only)
 
-**Authentication**: All protected endpoints use `Authorization: Bearer <token>` header. The token can be either a session token (from OIDC login) or an API key. Browser-based flows also support `wonder_session` cookie as fallback.
+**Authentication**: Protected endpoints use `Authorization: Bearer <token>` header. Auth requirements vary by endpoint:
+- **Session only**: Privileged endpoints (`/api/v1/join-token`, `/api/v1/authkey`, `/api/v1/api-keys`) - prevents API key privilege escalation
+- **Session or API key**: Read-only endpoints (`/api/v1/nodes`) - safe for third-party integrations
+- **API key only**: Third-party integration endpoints (`/api/v1/deployer/join`)
+- Browser-based flows also support `wonder_session` cookie as fallback for session auth.
 
 ## Running Locally
 
