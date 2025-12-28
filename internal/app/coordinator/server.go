@@ -11,6 +11,7 @@ import (
 	v1 "github.com/juanfont/headscale/gen/go/headscale/v1"
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/database"
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/repository"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/service"
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
 	"github.com/strrl/wonder-mesh-net/pkg/jointoken"
 	"github.com/strrl/wonder-mesh-net/pkg/oidc"
@@ -27,16 +28,18 @@ type Server struct {
 	headscaleConn           *grpc.ClientConn
 	headscaleClient         v1.HeadscaleServiceClient
 	headscaleProcessManager *headscale.ProcessManager
-	realmManager            *headscale.RealmManager
-	aclManager              *headscale.ACLManager
-	oidcRegistry            *oidc.Registry
-	tokenGenerator          *jointoken.Generator
-	userRepository          *repository.DBUserRepository
-	sessionRepository       *repository.DBSessionRepository
-	realmRepository         *repository.DBRealmRepository
-	identityRepository      *repository.DBOIDCIdentityRepository
-	apiKeyRepository        *repository.DBAPIKeyRepository
-	deviceFlowRepository    *repository.DeviceRequestRepository
+
+	// Repositories
+	apiKeyRepository     *repository.APIKeyRepository
+	deviceFlowRepository *repository.DeviceRequestRepository
+
+	// Services
+	authService       *service.AuthService
+	realmService      *service.RealmService
+	oidcService       *service.OIDCService
+	workerService     *service.WorkerService
+	deviceFlowService *service.DeviceFlowService
+	nodesService      *service.NodesService
 }
 
 // BootstrapNewServer creates a new coordinator server.
@@ -106,7 +109,7 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 	}
 	headscaleClient := v1.NewHeadscaleServiceClient(headscaleConn)
 
-	authStateRepository := repository.NewDBAuthStateRepository(db.Queries(), 10*time.Minute)
+	authStateRepository := repository.NewAuthStateRepository(db.Queries(), 10*time.Minute)
 	oidcRegistry := oidc.NewRegistryWithStore(authStateRepository)
 
 	for _, providerConfig := range config.OIDCProviders() {
@@ -125,22 +128,39 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 		config.PublicURL,
 	)
 
+	// Create repositories
+	userRepository := repository.NewUserRepository(db.Queries())
+	sessionRepository := repository.NewSessionRepository(db.Queries())
+	realmRepository := repository.NewRealmRepository(db.Queries())
+	identityRepository := repository.NewOIDCIdentityRepository(db.Queries())
+	apiKeyRepository := repository.NewAPIKeyRepository(db.Queries())
+	deviceFlowRepository := repository.NewDeviceRequestRepository(db.Queries())
+
+	// Create services
+	realmManager := headscale.NewRealmManager(headscaleClient)
+	aclManager := headscale.NewACLManager(headscaleClient)
+
+	authService := service.NewAuthService(sessionRepository, realmRepository, apiKeyRepository)
+	realmService := service.NewRealmService(realmRepository, realmManager, aclManager, config.PublicURL)
+	oidcService := service.NewOIDCService(oidcRegistry, userRepository, identityRepository, realmRepository, realmService)
+	workerService := service.NewWorkerService(tokenGenerator, config.JWTSecret, realmRepository, realmService)
+	deviceFlowService := service.NewDeviceFlowService(deviceFlowRepository, realmService, config.PublicURL)
+	nodesService := service.NewNodesService(realmManager)
+
 	return &Server{
 		config:                  config,
 		db:                      db,
 		headscaleConn:           headscaleConn,
 		headscaleClient:         headscaleClient,
 		headscaleProcessManager: headscaleProcessManager,
-		realmManager:            headscale.NewRealmManager(headscaleClient),
-		aclManager:              headscale.NewACLManager(headscaleClient),
-		oidcRegistry:            oidcRegistry,
-		tokenGenerator:          tokenGenerator,
-		userRepository:          repository.NewDBUserRepository(db.Queries()),
-		sessionRepository:       repository.NewDBSessionRepository(db.Queries()),
-		realmRepository:         repository.NewDBRealmRepository(db.Queries()),
-		identityRepository:      repository.NewDBOIDCIdentityRepository(db.Queries()),
-		apiKeyRepository:        repository.NewDBAPIKeyRepository(db.Queries()),
-		deviceFlowRepository:    repository.NewDeviceRequestRepository(db.Queries()),
+		apiKeyRepository:        apiKeyRepository,
+		deviceFlowRepository:    deviceFlowRepository,
+		authService:             authService,
+		realmService:            realmService,
+		oidcService:             oidcService,
+		workerService:           workerService,
+		deviceFlowService:       deviceFlowService,
+		nodesService:            nodesService,
 	}, nil
 }
 

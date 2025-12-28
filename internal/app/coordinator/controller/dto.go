@@ -1,4 +1,5 @@
-package handlers
+// Package controller provides HTTP handlers for the coordinator API.
+package controller
 
 import "time"
 
@@ -17,7 +18,7 @@ type APIKeyListResponse struct {
 	APIKeys []APIKeyResponse `json:"api_keys"`
 }
 
-// NodeResponse represents a node in JSON responses.
+// NodeResponse represents a mesh network node in JSON responses.
 type NodeResponse struct {
 	ID       uint64   `json:"id"`
 	Name     string   `json:"name"`
@@ -32,9 +33,26 @@ type NodeListResponse struct {
 	Count int            `json:"count"`
 }
 
-// DeployerJoinResponse represents the response for deployer join requests.
-type DeployerJoinResponse struct {
+// JoinCredentialsResponse contains credentials for joining the mesh.
+type JoinCredentialsResponse struct {
 	AuthKey      string `json:"authkey"`
 	HeadscaleURL string `json:"headscale_url"`
 	User         string `json:"user"`
+}
+
+// DeviceCodeResponse represents the response from device code initiation.
+type DeviceCodeResponse struct {
+	DeviceCode      string `json:"device_code"`
+	UserCode        string `json:"user_code"`
+	VerificationURL string `json:"verification_url"`
+	ExpiresIn       int    `json:"expires_in"`
+	Interval        int    `json:"interval"`
+}
+
+// DeviceTokenResponse represents the response from device token polling.
+type DeviceTokenResponse struct {
+	Authkey      string `json:"authkey,omitempty"`
+	HeadscaleURL string `json:"headscale_url,omitempty"`
+	User         string `json:"user,omitempty"`
+	Error        string `json:"error,omitempty"`
 }

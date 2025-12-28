@@ -1,4 +1,4 @@
-package handlers
+package controller
 
 import (
 	"encoding/json"
@@ -6,74 +6,59 @@ import (
 	"html"
 	"log/slog"
 	"net/http"
-	"regexp"
-	"time"
 
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/repository"
-	"github.com/strrl/wonder-mesh-net/pkg/headscale"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/service"
 )
 
-var userCodePattern = regexp.MustCompile(`^[A-Z0-9]{4}-[A-Z0-9]{4}$`)
-var deviceCodePattern = regexp.MustCompile(`^[a-f0-9]{32}$`)
-
-type DeviceHandler struct {
-	publicURL               string
-	deviceRequestRepository *repository.DeviceRequestRepository
-	realmManager            *headscale.RealmManager
-	authHelper              *AuthHelper
+// DeviceController handles OAuth 2.0 Device Authorization Grant (RFC 8628).
+type DeviceController struct {
+	deviceFlowService *service.DeviceFlowService
+	authService       *service.AuthService
+	publicURL         string
 }
 
-func NewDeviceHandler(
+// NewDeviceController creates a new DeviceController.
+func NewDeviceController(
+	deviceFlowService *service.DeviceFlowService,
+	authService *service.AuthService,
 	publicURL string,
-	deviceRequestRepository *repository.DeviceRequestRepository,
-	realmManager *headscale.RealmManager,
-	authHelper *AuthHelper,
-) *DeviceHandler {
-	return &DeviceHandler{
-		publicURL:               publicURL,
-		deviceRequestRepository: deviceRequestRepository,
-		realmManager:            realmManager,
-		authHelper:              authHelper,
+) *DeviceController {
+	return &DeviceController{
+		deviceFlowService: deviceFlowService,
+		authService:       authService,
+		publicURL:         publicURL,
 	}
 }
 
-type DeviceCodeResponse struct {
-	DeviceCode      string `json:"device_code"`
-	UserCode        string `json:"user_code"`
-	VerificationURL string `json:"verification_url"`
-	ExpiresIn       int    `json:"expires_in"`
-	Interval        int    `json:"interval"`
-}
-
-func (h *DeviceHandler) HandleDeviceCode(w http.ResponseWriter, r *http.Request) {
+// HandleDeviceCode handles POST /device/code requests.
+func (c *DeviceController) HandleDeviceCode(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	ctx := r.Context()
-	req, err := h.deviceRequestRepository.Create(ctx)
+	init, err := c.deviceFlowService.InitiateDeviceFlow(r.Context())
 	if err != nil {
 		slog.Error("create device request", "error", err)
 		http.Error(w, "create device request", http.StatusInternalServerError)
 		return
 	}
 
-	resp := DeviceCodeResponse{
-		DeviceCode:      req.DeviceCode,
-		UserCode:        req.UserCode,
-		VerificationURL: h.publicURL + "/coordinator/device/verify",
-		ExpiresIn:       int(time.Until(req.ExpiresAt).Seconds()),
-		Interval:        int(repository.PollInterval.Seconds()),
-	}
-
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
+	if err := json.NewEncoder(w).Encode(DeviceCodeResponse{
+		DeviceCode:      init.DeviceCode,
+		UserCode:        init.UserCode,
+		VerificationURL: init.VerificationURL,
+		ExpiresIn:       init.ExpiresIn,
+		Interval:        init.Interval,
+	}); err != nil {
 		slog.Error("encode device code response", "error", err)
 	}
 }
 
-func (h *DeviceHandler) HandleDeviceVerifyPage(w http.ResponseWriter, r *http.Request) {
+// HandleDeviceVerifyPage handles GET /device/verify requests.
+func (c *DeviceController) HandleDeviceVerifyPage(w http.ResponseWriter, r *http.Request) {
 	userCode := html.EscapeString(r.URL.Query().Get("code"))
 
 	htmlContent := `<!DOCTYPE html>
@@ -225,7 +210,8 @@ func (h *DeviceHandler) HandleDeviceVerifyPage(w http.ResponseWriter, r *http.Re
 	}
 }
 
-func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Request) {
+// HandleDeviceVerify handles POST /device/verify requests.
+func (c *DeviceController) HandleDeviceVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -233,7 +219,7 @@ func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Reques
 
 	ctx := r.Context()
 
-	realm, err := h.authHelper.GetRealmFromRequest(ctx, r)
+	realm, err := c.authService.GetRealmFromRequest(ctx, r)
 	if err != nil || realm == nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
@@ -251,52 +237,27 @@ func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if !userCodePattern.MatchString(req.UserCode) {
+	if !c.deviceFlowService.ValidateUserCode(req.UserCode) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid code format, expected XXXX-XXXX"})
 		return
 	}
 
-	deviceReq, err := h.deviceRequestRepository.GetByUserCode(ctx, req.UserCode)
+	err = c.deviceFlowService.ApproveDevice(ctx, req.UserCode, realm)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		if errors.Is(err, repository.ErrDeviceRequestNotFound) {
 			w.WriteHeader(http.StatusNotFound)
 			_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid or expired code"})
+		} else if errors.Is(err, service.ErrCodeAlreadyUsed) {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "code already used"})
 		} else {
-			slog.Error("get device request", "error", err)
+			slog.Error("approve device", "error", err)
 			w.WriteHeader(http.StatusInternalServerError)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "internal error"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "approve device"})
 		}
-		return
-	}
-
-	if deviceReq.Status != repository.DeviceStatusPending {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "code already used"})
-		return
-	}
-
-	key, err := h.realmManager.CreateAuthKeyByName(ctx, realm.HeadscaleUser, 24*time.Hour, false)
-	if err != nil {
-		slog.Error("create auth key for device", "error", err)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "create auth key"})
-		return
-	}
-
-	// Both headscaleURL and coordinatorURL use publicURL because the coordinator
-	// reverse-proxies all Tailscale control plane traffic to the embedded Headscale
-	// instance (see handlers/proxy.go). Workers use this single URL for both
-	// coordinator API calls and tailscale --login-server.
-	if err := h.deviceRequestRepository.Approve(ctx, req.UserCode, realm.ID, realm.HeadscaleUser, key.GetKey(), h.publicURL, h.publicURL); err != nil {
-		slog.Error("approve device", "error", err)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "approve device"})
 		return
 	}
 
@@ -304,20 +265,12 @@ func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Reques
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "approved"})
 }
 
-type DeviceTokenResponse struct {
-	Authkey      string `json:"authkey,omitempty"`
-	HeadscaleURL string `json:"headscale_url,omitempty"`
-	User         string `json:"user,omitempty"`
-	Error        string `json:"error,omitempty"`
-}
-
-func (h *DeviceHandler) HandleDeviceToken(w http.ResponseWriter, r *http.Request) {
+// HandleDeviceToken handles POST /device/token requests.
+func (c *DeviceController) HandleDeviceToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
-	ctx := r.Context()
 
 	var req struct {
 		DeviceCode string `json:"device_code"`
@@ -329,21 +282,21 @@ func (h *DeviceHandler) HandleDeviceToken(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if !deviceCodePattern.MatchString(req.DeviceCode) {
+	if !c.deviceFlowService.ValidateDeviceCode(req.DeviceCode) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "invalid_device_code_format"})
 		return
 	}
 
-	deviceReq, err := h.deviceRequestRepository.GetByDeviceCode(ctx, req.DeviceCode)
+	result, err := c.deviceFlowService.PollDeviceToken(r.Context(), req.DeviceCode)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		if errors.Is(err, repository.ErrDeviceRequestNotFound) {
 			w.WriteHeader(http.StatusNotFound)
 			_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "invalid_device_code"})
 		} else {
-			slog.Error("get device request", "error", err)
+			slog.Error("poll device token", "error", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "internal_error"})
 		}
@@ -352,27 +305,21 @@ func (h *DeviceHandler) HandleDeviceToken(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set("Content-Type", "application/json")
 
-	switch deviceReq.Status {
-	case repository.DeviceStatusPending:
+	switch result.Status {
+	case "authorization_pending":
 		w.WriteHeader(http.StatusAccepted)
 		_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "authorization_pending"})
-
-	case repository.DeviceStatusApproved:
-		h.deviceRequestRepository.Delete(ctx, req.DeviceCode)
+	case "approved":
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(DeviceTokenResponse{
-			Authkey:      deviceReq.Authkey,
-			HeadscaleURL: deviceReq.HeadscaleURL,
-			User:         deviceReq.HeadscaleUser,
+			Authkey:      result.AuthKey,
+			HeadscaleURL: result.HeadscaleURL,
+			User:         result.User,
 		})
-
-	case repository.DeviceStatusExpired:
-		h.deviceRequestRepository.Delete(ctx, req.DeviceCode)
+	case "expired_token":
 		w.WriteHeader(http.StatusGone)
 		_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "expired_token"})
-
-	case repository.DeviceStatusDenied:
-		h.deviceRequestRepository.Delete(ctx, req.DeviceCode)
+	case "access_denied":
 		w.WriteHeader(http.StatusForbidden)
 		_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "access_denied"})
 	}

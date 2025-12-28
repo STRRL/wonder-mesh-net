@@ -33,28 +33,18 @@ type APIKeyWithSecret struct {
 	Key string
 }
 
-// APIKeyRepository is the interface for storing API keys.
-type APIKeyRepository interface {
-	Create(ctx context.Context, realmID, name string, expiresAt *time.Time) (*APIKeyWithSecret, error)
-	Get(ctx context.Context, id string) (*APIKeyWithSecret, error)
-	GetByKey(ctx context.Context, key string) (*APIKey, error)
-	List(ctx context.Context, realmID string) ([]*APIKeyWithSecret, error)
-	Delete(ctx context.Context, id, realmID string) error
-	UpdateLastUsed(ctx context.Context, id string) error
-}
-
-// DBAPIKeyRepository is a database implementation of APIKeyRepository.
-type DBAPIKeyRepository struct {
+// APIKeyRepository provides API key storage operations.
+type APIKeyRepository struct {
 	queries *sqlc.Queries
 }
 
-// NewDBAPIKeyRepository creates a new database-backed API key repository.
-func NewDBAPIKeyRepository(queries *sqlc.Queries) *DBAPIKeyRepository {
-	return &DBAPIKeyRepository{queries: queries}
+// NewAPIKeyRepository creates a new database-backed API key repository.
+func NewAPIKeyRepository(queries *sqlc.Queries) *APIKeyRepository {
+	return &APIKeyRepository{queries: queries}
 }
 
 // Create creates a new API key.
-func (s *DBAPIKeyRepository) Create(ctx context.Context, realmID, name string, expiresAt *time.Time) (*APIKeyWithSecret, error) {
+func (s *APIKeyRepository) Create(ctx context.Context, realmID, name string, expiresAt *time.Time) (*APIKeyWithSecret, error) {
 	keyBytes := make([]byte, keyLength)
 	if _, err := rand.Read(keyBytes); err != nil {
 		return nil, err
@@ -93,7 +83,7 @@ func (s *DBAPIKeyRepository) Create(ctx context.Context, realmID, name string, e
 }
 
 // GetByKey retrieves an API key by its key value.
-func (s *DBAPIKeyRepository) GetByKey(ctx context.Context, key string) (*APIKey, error) {
+func (s *APIKeyRepository) GetByKey(ctx context.Context, key string) (*APIKey, error) {
 	dbKey, err := s.queries.GetAPIKeyByKey(ctx, key)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -112,7 +102,7 @@ func (s *DBAPIKeyRepository) GetByKey(ctx context.Context, key string) (*APIKey,
 }
 
 // List lists all API keys for a realm.
-func (s *DBAPIKeyRepository) List(ctx context.Context, realmID string) ([]*APIKeyWithSecret, error) {
+func (s *APIKeyRepository) List(ctx context.Context, realmID string) ([]*APIKeyWithSecret, error) {
 	dbKeys, err := s.queries.ListAPIKeysByRealm(ctx, realmID)
 	if err != nil {
 		return nil, err
@@ -126,7 +116,7 @@ func (s *DBAPIKeyRepository) List(ctx context.Context, realmID string) ([]*APIKe
 }
 
 // Delete deletes an API key.
-func (s *DBAPIKeyRepository) Delete(ctx context.Context, id, realmID string) error {
+func (s *APIKeyRepository) Delete(ctx context.Context, id, realmID string) error {
 	result, err := s.queries.DeleteAPIKeyByRealm(ctx, sqlc.DeleteAPIKeyByRealmParams{
 		ID:      id,
 		RealmID: realmID,
@@ -145,12 +135,12 @@ func (s *DBAPIKeyRepository) Delete(ctx context.Context, id, realmID string) err
 }
 
 // UpdateLastUsed updates the last used timestamp.
-func (s *DBAPIKeyRepository) UpdateLastUsed(ctx context.Context, id string) error {
+func (s *APIKeyRepository) UpdateLastUsed(ctx context.Context, id string) error {
 	return s.queries.UpdateAPIKeyLastUsed(ctx, id)
 }
 
 // Get retrieves an API key by ID.
-func (s *DBAPIKeyRepository) Get(ctx context.Context, id string) (*APIKeyWithSecret, error) {
+func (s *APIKeyRepository) Get(ctx context.Context, id string) (*APIKeyWithSecret, error) {
 	dbKey, err := s.queries.GetAPIKey(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

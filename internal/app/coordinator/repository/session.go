@@ -20,24 +20,14 @@ type Session struct {
 	LastUsedAt time.Time
 }
 
-// SessionRepository is the interface for storing sessions.
-type SessionRepository interface {
-	Create(ctx context.Context, session *Session) error
-	Get(ctx context.Context, id string) (*Session, error)
-	UpdateLastUsed(ctx context.Context, id string) error
-	Delete(ctx context.Context, id string) error
-	DeleteExpired(ctx context.Context) error
-	DeleteUserSessions(ctx context.Context, userID string) error
-}
-
-// DBSessionRepository is a database implementation of SessionRepository.
-type DBSessionRepository struct {
+// SessionRepository provides session storage operations.
+type SessionRepository struct {
 	queries *sqlc.Queries
 }
 
-// NewDBSessionRepository creates a new database-backed session repository.
-func NewDBSessionRepository(queries *sqlc.Queries) *DBSessionRepository {
-	return &DBSessionRepository{queries: queries}
+// NewSessionRepository creates a new database-backed session repository.
+func NewSessionRepository(queries *sqlc.Queries) *SessionRepository {
+	return &SessionRepository{queries: queries}
 }
 
 // GenerateSessionID generates a random session ID.
@@ -50,7 +40,7 @@ func GenerateSessionID() (string, error) {
 }
 
 // Create creates a new session.
-func (s *DBSessionRepository) Create(ctx context.Context, session *Session) error {
+func (s *SessionRepository) Create(ctx context.Context, session *Session) error {
 	var expiresAt sql.NullTime
 	if session.ExpiresAt != nil {
 		expiresAt = sql.NullTime{Time: *session.ExpiresAt, Valid: true}
@@ -64,7 +54,7 @@ func (s *DBSessionRepository) Create(ctx context.Context, session *Session) erro
 }
 
 // Get retrieves a session by ID.
-func (s *DBSessionRepository) Get(ctx context.Context, id string) (*Session, error) {
+func (s *SessionRepository) Get(ctx context.Context, id string) (*Session, error) {
 	row, err := s.queries.GetSession(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -93,21 +83,21 @@ func (s *DBSessionRepository) Get(ctx context.Context, id string) (*Session, err
 }
 
 // UpdateLastUsed updates the last used timestamp.
-func (s *DBSessionRepository) UpdateLastUsed(ctx context.Context, id string) error {
+func (s *SessionRepository) UpdateLastUsed(ctx context.Context, id string) error {
 	return s.queries.UpdateSessionLastUsed(ctx, id)
 }
 
 // Delete deletes a session.
-func (s *DBSessionRepository) Delete(ctx context.Context, id string) error {
+func (s *SessionRepository) Delete(ctx context.Context, id string) error {
 	return s.queries.DeleteSession(ctx, id)
 }
 
 // DeleteExpired deletes all expired sessions.
-func (s *DBSessionRepository) DeleteExpired(ctx context.Context) error {
+func (s *SessionRepository) DeleteExpired(ctx context.Context) error {
 	return s.queries.DeleteExpiredSessions(ctx)
 }
 
 // DeleteUserSessions deletes all sessions for a user.
-func (s *DBSessionRepository) DeleteUserSessions(ctx context.Context, userID string) error {
+func (s *SessionRepository) DeleteUserSessions(ctx context.Context, userID string) error {
 	return s.queries.DeleteUserSessions(ctx, userID)
 }

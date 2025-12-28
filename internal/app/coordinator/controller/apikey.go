@@ -1,4 +1,4 @@
-package handlers
+package controller
 
 import (
 	"encoding/json"
@@ -9,28 +9,32 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/repository"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/service"
 )
 
-// APIKeyHandler handles API key management requests.
-type APIKeyHandler struct {
-	apiKeyRepository repository.APIKeyRepository
-	auth             *AuthHelper
+// APIKeyController manages API key CRUD operations.
+type APIKeyController struct {
+	apiKeyRepository *repository.APIKeyRepository
+	authService      *service.AuthService
 }
 
-// NewAPIKeyHandler creates a new APIKeyHandler.
-func NewAPIKeyHandler(apiKeyRepository repository.APIKeyRepository, auth *AuthHelper) *APIKeyHandler {
-	return &APIKeyHandler{
+// NewAPIKeyController creates a new APIKeyController.
+func NewAPIKeyController(
+	apiKeyRepository *repository.APIKeyRepository,
+	authService *service.AuthService,
+) *APIKeyController {
+	return &APIKeyController{
 		apiKeyRepository: apiKeyRepository,
-		auth:             auth,
+		authService:      authService,
 	}
 }
 
 // HandleCreateAPIKey handles POST /api/v1/api-keys requests.
-func (h *APIKeyHandler) HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
-
+func (c *APIKeyController) HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	realm, err := h.auth.AuthenticateSession(r)
+	sessionID := r.Header.Get("X-Session-Token")
+	realm, err := c.authService.AuthenticateSession(ctx, sessionID)
 	if err != nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -61,7 +65,7 @@ func (h *APIKeyHandler) HandleCreateAPIKey(w http.ResponseWriter, r *http.Reques
 		expiresAt = &t
 	}
 
-	apiKeyWithSecret, err := h.apiKeyRepository.Create(ctx, realm.ID, req.Name, expiresAt)
+	apiKeyWithSecret, err := c.apiKeyRepository.Create(ctx, realm.ID, req.Name, expiresAt)
 	if err != nil {
 		slog.Error("create API key", "error", err)
 		http.Error(w, "create API key", http.StatusInternalServerError)
@@ -79,16 +83,17 @@ func (h *APIKeyHandler) HandleCreateAPIKey(w http.ResponseWriter, r *http.Reques
 }
 
 // HandleListAPIKeys handles GET /api/v1/api-keys requests.
-func (h *APIKeyHandler) HandleListAPIKeys(w http.ResponseWriter, r *http.Request) {
+func (c *APIKeyController) HandleListAPIKeys(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	realm, err := h.auth.AuthenticateSession(r)
+	sessionID := r.Header.Get("X-Session-Token")
+	realm, err := c.authService.AuthenticateSession(ctx, sessionID)
 	if err != nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	keys, err := h.apiKeyRepository.List(ctx, realm.ID)
+	keys, err := c.apiKeyRepository.List(ctx, realm.ID)
 	if err != nil {
 		slog.Error("list API keys", "error", err)
 		http.Error(w, "list API keys", http.StatusInternalServerError)
@@ -112,10 +117,11 @@ func (h *APIKeyHandler) HandleListAPIKeys(w http.ResponseWriter, r *http.Request
 }
 
 // HandleDeleteAPIKey handles DELETE /api/v1/api-keys/{id} requests.
-func (h *APIKeyHandler) HandleDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
+func (c *APIKeyController) HandleDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	realm, err := h.auth.AuthenticateSession(r)
+	sessionID := r.Header.Get("X-Session-Token")
+	realm, err := c.authService.AuthenticateSession(ctx, sessionID)
 	if err != nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -127,7 +133,7 @@ func (h *APIKeyHandler) HandleDeleteAPIKey(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err := h.apiKeyRepository.Delete(ctx, keyID, realm.ID); err != nil {
+	if err := c.apiKeyRepository.Delete(ctx, keyID, realm.ID); err != nil {
 		if errors.Is(err, repository.ErrAPIKeyNotFound) {
 			http.Error(w, "api key not found", http.StatusNotFound)
 			return

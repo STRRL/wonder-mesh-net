@@ -23,29 +23,18 @@ type OIDCIdentity struct {
 	UpdatedAt time.Time
 }
 
-// OIDCIdentityRepository is the interface for storing OIDC identities.
-type OIDCIdentityRepository interface {
-	Create(ctx context.Context, identity *OIDCIdentity) error
-	Get(ctx context.Context, id string) (*OIDCIdentity, error)
-	GetByIssuerSubject(ctx context.Context, issuer, subject string) (*OIDCIdentity, error)
-	ListByUser(ctx context.Context, userID string) ([]*OIDCIdentity, error)
-	Update(ctx context.Context, identity *OIDCIdentity) error
-	Delete(ctx context.Context, id string) error
-	DeleteByUser(ctx context.Context, userID string) error
-}
-
-// DBOIDCIdentityRepository is a database implementation of OIDCIdentityRepository.
-type DBOIDCIdentityRepository struct {
+// OIDCIdentityRepository provides OIDC identity storage operations.
+type OIDCIdentityRepository struct {
 	queries *sqlc.Queries
 }
 
-// NewDBOIDCIdentityRepository creates a new database-backed OIDC identity repository.
-func NewDBOIDCIdentityRepository(queries *sqlc.Queries) *DBOIDCIdentityRepository {
-	return &DBOIDCIdentityRepository{queries: queries}
+// NewOIDCIdentityRepository creates a new database-backed OIDC identity repository.
+func NewOIDCIdentityRepository(queries *sqlc.Queries) *OIDCIdentityRepository {
+	return &OIDCIdentityRepository{queries: queries}
 }
 
 // Create creates a new OIDC identity.
-func (s *DBOIDCIdentityRepository) Create(ctx context.Context, identity *OIDCIdentity) error {
+func (s *OIDCIdentityRepository) Create(ctx context.Context, identity *OIDCIdentity) error {
 	if identity.ID == "" {
 		identity.ID = uuid.New().String()
 	}
@@ -61,7 +50,7 @@ func (s *DBOIDCIdentityRepository) Create(ctx context.Context, identity *OIDCIde
 }
 
 // Get retrieves an OIDC identity by ID.
-func (s *DBOIDCIdentityRepository) Get(ctx context.Context, id string) (*OIDCIdentity, error) {
+func (s *OIDCIdentityRepository) Get(ctx context.Context, id string) (*OIDCIdentity, error) {
 	row, err := s.queries.GetOIDCIdentity(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -73,7 +62,7 @@ func (s *DBOIDCIdentityRepository) Get(ctx context.Context, id string) (*OIDCIde
 }
 
 // GetByIssuerSubject retrieves an OIDC identity by issuer and subject.
-func (s *DBOIDCIdentityRepository) GetByIssuerSubject(ctx context.Context, issuer, subject string) (*OIDCIdentity, error) {
+func (s *OIDCIdentityRepository) GetByIssuerSubject(ctx context.Context, issuer, subject string) (*OIDCIdentity, error) {
 	row, err := s.queries.GetOIDCIdentityByIssuerSubject(ctx, sqlc.GetOIDCIdentityByIssuerSubjectParams{
 		Issuer:  issuer,
 		Subject: subject,
@@ -88,7 +77,7 @@ func (s *DBOIDCIdentityRepository) GetByIssuerSubject(ctx context.Context, issue
 }
 
 // ListByUser lists all OIDC identities for a user.
-func (s *DBOIDCIdentityRepository) ListByUser(ctx context.Context, userID string) ([]*OIDCIdentity, error) {
+func (s *OIDCIdentityRepository) ListByUser(ctx context.Context, userID string) ([]*OIDCIdentity, error) {
 	rows, err := s.queries.ListOIDCIdentitiesByUser(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -101,7 +90,7 @@ func (s *DBOIDCIdentityRepository) ListByUser(ctx context.Context, userID string
 }
 
 // Update updates an OIDC identity.
-func (s *DBOIDCIdentityRepository) Update(ctx context.Context, identity *OIDCIdentity) error {
+func (s *OIDCIdentityRepository) Update(ctx context.Context, identity *OIDCIdentity) error {
 	return s.queries.UpdateOIDCIdentity(ctx, sqlc.UpdateOIDCIdentityParams{
 		Email:   identity.Email,
 		Name:    identity.Name,
@@ -111,12 +100,12 @@ func (s *DBOIDCIdentityRepository) Update(ctx context.Context, identity *OIDCIde
 }
 
 // Delete deletes an OIDC identity.
-func (s *DBOIDCIdentityRepository) Delete(ctx context.Context, id string) error {
+func (s *OIDCIdentityRepository) Delete(ctx context.Context, id string) error {
 	return s.queries.DeleteOIDCIdentity(ctx, id)
 }
 
 // DeleteByUser deletes all OIDC identities for a user.
-func (s *DBOIDCIdentityRepository) DeleteByUser(ctx context.Context, userID string) error {
+func (s *OIDCIdentityRepository) DeleteByUser(ctx context.Context, userID string) error {
 	return s.queries.DeleteOIDCIdentitiesByUser(ctx, userID)
 }
 

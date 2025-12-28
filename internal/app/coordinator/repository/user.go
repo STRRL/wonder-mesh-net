@@ -16,27 +16,18 @@ type User struct {
 	UpdatedAt   time.Time
 }
 
-// UserRepository defines the interface for user storage operations.
-type UserRepository interface {
-	Create(ctx context.Context, displayName string) (*User, error)
-	Get(ctx context.Context, id string) (*User, error)
-	Update(ctx context.Context, user *User) error
-	Delete(ctx context.Context, id string) error
-	List(ctx context.Context) ([]*User, error)
-}
-
-// DBUserRepository implements UserRepository using the database.
-type DBUserRepository struct {
+// UserRepository provides user storage operations.
+type UserRepository struct {
 	queries *sqlc.Queries
 }
 
-// NewDBUserRepository creates a new DBUserRepository.
-func NewDBUserRepository(queries *sqlc.Queries) *DBUserRepository {
-	return &DBUserRepository{queries: queries}
+// NewUserRepository creates a new UserRepository.
+func NewUserRepository(queries *sqlc.Queries) *UserRepository {
+	return &UserRepository{queries: queries}
 }
 
 // Create creates a new user.
-func (s *DBUserRepository) Create(ctx context.Context, displayName string) (*User, error) {
+func (s *UserRepository) Create(ctx context.Context, displayName string) (*User, error) {
 	id := uuid.New().String()
 
 	err := s.queries.CreateUser(ctx, sqlc.CreateUserParams{
@@ -51,7 +42,7 @@ func (s *DBUserRepository) Create(ctx context.Context, displayName string) (*Use
 }
 
 // Get retrieves a user by ID.
-func (s *DBUserRepository) Get(ctx context.Context, id string) (*User, error) {
+func (s *UserRepository) Get(ctx context.Context, id string) (*User, error) {
 	row, err := s.queries.GetUser(ctx, id)
 	if err != nil {
 		return nil, err
@@ -66,7 +57,7 @@ func (s *DBUserRepository) Get(ctx context.Context, id string) (*User, error) {
 }
 
 // Update updates a user.
-func (s *DBUserRepository) Update(ctx context.Context, user *User) error {
+func (s *UserRepository) Update(ctx context.Context, user *User) error {
 	return s.queries.UpdateUser(ctx, sqlc.UpdateUserParams{
 		DisplayName: user.DisplayName,
 		ID:          user.ID,
@@ -74,12 +65,12 @@ func (s *DBUserRepository) Update(ctx context.Context, user *User) error {
 }
 
 // Delete deletes a user.
-func (s *DBUserRepository) Delete(ctx context.Context, id string) error {
+func (s *UserRepository) Delete(ctx context.Context, id string) error {
 	return s.queries.DeleteUser(ctx, id)
 }
 
 // List lists all users.
-func (s *DBUserRepository) List(ctx context.Context) ([]*User, error) {
+func (s *UserRepository) List(ctx context.Context) ([]*User, error) {
 	rows, err := s.queries.ListUsers(ctx)
 	if err != nil {
 		return nil, err
