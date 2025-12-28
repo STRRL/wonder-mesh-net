@@ -23,7 +23,7 @@ func (s *Server) Run() error {
 	apiKeyController := controller.NewAPIKeyController(s.apiKeyRepository, s.authService)
 	deployerController := controller.NewDeployerController(s.realmService, s.authService)
 	workerController := controller.NewWorkerController(s.workerService, s.authService)
-	deviceController := controller.NewDeviceController(s.deviceFlowService, s.authService, s.config.PublicURL)
+	deviceFlowController := controller.NewDeviceFlowController(s.deviceFlowService, s.authService, s.config.PublicURL)
 
 	headscaleProxy, err := controller.NewHeadscaleProxyController("http://127.0.0.1:8080")
 	if err != nil {
@@ -44,10 +44,10 @@ func (s *Server) Run() error {
 	coordinatorRouter.Post("/api/v1/join-token", workerController.HandleCreateJoinToken)
 	coordinatorRouter.Post("/api/v1/worker/join", workerController.HandleWorkerJoin)
 	coordinatorRouter.Post("/api/v1/deployer/join", deployerController.HandleDeployerJoin)
-	coordinatorRouter.Post("/device/code", deviceController.HandleDeviceCode)
-	coordinatorRouter.Get("/device/verify", deviceController.HandleDeviceVerifyPage)
-	coordinatorRouter.Post("/device/verify", deviceController.HandleDeviceVerify)
-	coordinatorRouter.Post("/device/token", deviceController.HandleDeviceToken)
+	coordinatorRouter.Post("/device/code", deviceFlowController.HandleDeviceCode)
+	coordinatorRouter.Get("/device/verify", deviceFlowController.HandleDeviceVerifyPage)
+	coordinatorRouter.Post("/device/verify", deviceFlowController.HandleDeviceVerify)
+	coordinatorRouter.Post("/device/token", deviceFlowController.HandleDeviceToken)
 
 	rootRouter := chi.NewRouter()
 	rootRouter.Mount("/coordinator", coordinatorRouter)
