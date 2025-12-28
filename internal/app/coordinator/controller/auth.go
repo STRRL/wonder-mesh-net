@@ -160,15 +160,9 @@ func (c *AuthController) HandleCreateAuthKey(w http.ResponseWriter, r *http.Requ
 
 	ctx := r.Context()
 
-	sessionID := r.Header.Get("X-Session-Token")
-	if sessionID == "" {
-		http.Error(w, "session token required", http.StatusUnauthorized)
-		return
-	}
-
-	realm, err := c.authService.AuthenticateSession(ctx, sessionID)
+	realm, err := c.authService.GetRealmFromRequest(ctx, r)
 	if err != nil {
-		http.Error(w, "invalid session", http.StatusUnauthorized)
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 

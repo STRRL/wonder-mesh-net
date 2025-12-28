@@ -36,16 +36,20 @@ type Node struct {
 	LastSeen  string   `json:"lastSeen,omitempty"`
 }
 
-// ListNodes returns all nodes for a user session
-func (c *Client) ListNodes(ctx context.Context, sessionToken string) ([]Node, error) {
+// ListNodes returns all nodes for a user session or API key.
+// If token is provided, it is used as Bearer token; otherwise falls back to client's apiKey.
+func (c *Client) ListNodes(ctx context.Context, token string) ([]Node, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/api/v1/nodes", nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	req.Header.Set("X-Session-Token", sessionToken)
-	if c.apiKey != "" {
-		req.Header.Set("X-API-Key", c.apiKey)
+	bearerToken := token
+	if bearerToken == "" {
+		bearerToken = c.apiKey
+	}
+	if bearerToken != "" {
+		req.Header.Set("Authorization", "Bearer "+bearerToken)
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -69,9 +73,9 @@ func (c *Client) ListNodes(ctx context.Context, sessionToken string) ([]Node, er
 	return result.Nodes, nil
 }
 
-// GetOnlineNodes returns only online nodes for a user session
-func (c *Client) GetOnlineNodes(ctx context.Context, sessionToken string) ([]Node, error) {
-	nodes, err := c.ListNodes(ctx, sessionToken)
+// GetOnlineNodes returns only online nodes for a user session or API key.
+func (c *Client) GetOnlineNodes(ctx context.Context, token string) ([]Node, error) {
+	nodes, err := c.ListNodes(ctx, token)
 	if err != nil {
 		return nil, err
 	}

@@ -137,7 +137,7 @@ log_info "Session token obtained: ${SESSION:0:20}..."
 
 log_info "Creating join token..."
 JOIN_TOKEN_RESPONSE=$(curl -s -X POST \
-    -H "X-Session-Token: $SESSION" \
+    -H "Authorization: Bearer $SESSION" \
     -H "Content-Type: application/json" \
     -d '{"ttl": "1h"}' \
     "http://localhost:9080/coordinator/api/v1/join-token")
@@ -156,7 +156,7 @@ log_info "=== Testing API Key functionality ==="
 
 log_info "Creating API key..."
 API_KEY_RESPONSE=$(curl -s -X POST \
-    -H "X-Session-Token: $SESSION" \
+    -H "Authorization: Bearer $SESSION" \
     -H "Content-Type: application/json" \
     -d '{"name": "test-api-key", "scopes": "nodes:read"}' \
     "http://localhost:9080/coordinator/api/v1/api-keys")
@@ -173,7 +173,7 @@ log_info "API key ID: $API_KEY_ID"
 
 log_info "Listing API keys..."
 API_KEYS_LIST=$(curl -s \
-    -H "X-Session-Token: $SESSION" \
+    -H "Authorization: Bearer $SESSION" \
     "http://localhost:9080/coordinator/api/v1/api-keys")
 
 if ! echo "$API_KEYS_LIST" | grep -q "$API_KEY_ID"; then
@@ -185,7 +185,7 @@ log_info "API key found in list"
 
 log_info "Testing nodes endpoint with session token..."
 NODES_BY_SESSION=$(curl -s \
-    -H "X-Session-Token: $SESSION" \
+    -H "Authorization: Bearer $SESSION" \
     "http://localhost:9080/coordinator/api/v1/nodes")
 
 if ! echo "$NODES_BY_SESSION" | grep -q '"nodes"'; then
@@ -209,7 +209,7 @@ log_info "Nodes endpoint works with API key (third-party integration ready)"
 
 log_info "Creating second API key for deletion test..."
 API_KEY2_RESPONSE=$(curl -s -X POST \
-    -H "X-Session-Token: $SESSION" \
+    -H "Authorization: Bearer $SESSION" \
     -H "Content-Type: application/json" \
     -d '{"name": "test-api-key-2", "scopes": "nodes:read", "expires_in": "24h"}' \
     "http://localhost:9080/coordinator/api/v1/api-keys")
@@ -223,7 +223,7 @@ log_info "Second API key created: $API_KEY2_ID"
 
 log_info "Deleting second API key..."
 DELETE_RESPONSE=$(curl -s -X DELETE \
-    -H "X-Session-Token: $SESSION" \
+    -H "Authorization: Bearer $SESSION" \
     -w "\nHTTP_CODE:%{http_code}" \
     "http://localhost:9080/coordinator/api/v1/api-keys/$API_KEY2_ID")
 
@@ -236,7 +236,7 @@ log_info "API key deleted successfully"
 
 log_info "Verifying deleted API key is gone..."
 API_KEYS_LIST_AFTER=$(curl -s \
-    -H "X-Session-Token: $SESSION" \
+    -H "Authorization: Bearer $SESSION" \
     "http://localhost:9080/coordinator/api/v1/api-keys")
 
 if echo "$API_KEYS_LIST_AFTER" | grep -q "$API_KEY2_ID"; then
@@ -468,7 +468,7 @@ log_info "=== Testing Deployer ==="
 # Create API key with deployer:connect scope
 log_info "Creating API key with deployer:connect scope..."
 DEPLOYER_KEY_RESPONSE=$(curl -s -X POST \
-    -H "X-Session-Token: $SESSION" \
+    -H "Authorization: Bearer $SESSION" \
     -H "Content-Type: application/json" \
     -d '{"name": "deployer-key", "scopes": "nodes:read,deployer:connect"}' \
     "http://localhost:9080/coordinator/api/v1/api-keys")

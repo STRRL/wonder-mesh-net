@@ -33,8 +33,7 @@ func NewAPIKeyController(
 func (c *APIKeyController) HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	sessionID := r.Header.Get("X-Session-Token")
-	realm, err := c.authService.AuthenticateSession(ctx, sessionID)
+	realm, err := c.authService.GetRealmFromRequest(ctx, r)
 	if err != nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -86,8 +85,7 @@ func (c *APIKeyController) HandleCreateAPIKey(w http.ResponseWriter, r *http.Req
 func (c *APIKeyController) HandleListAPIKeys(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	sessionID := r.Header.Get("X-Session-Token")
-	realm, err := c.authService.AuthenticateSession(ctx, sessionID)
+	realm, err := c.authService.GetRealmFromRequest(ctx, r)
 	if err != nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -120,8 +118,7 @@ func (c *APIKeyController) HandleListAPIKeys(w http.ResponseWriter, r *http.Requ
 func (c *APIKeyController) HandleDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	sessionID := r.Header.Get("X-Session-Token")
-	realm, err := c.authService.AuthenticateSession(ctx, sessionID)
+	realm, err := c.authService.GetRealmFromRequest(ctx, r)
 	if err != nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return

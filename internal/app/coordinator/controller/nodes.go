@@ -29,10 +29,7 @@ func NewNodesController(
 func (c *NodesController) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	sessionToken := r.Header.Get("X-Session-Token")
-	apiKey := service.GetBearerToken(r)
-
-	realm, err := c.authService.Authenticate(ctx, sessionToken, apiKey)
+	realm, err := c.authService.GetRealmFromRequest(ctx, r)
 	if err != nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return

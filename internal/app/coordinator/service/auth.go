@@ -85,12 +85,18 @@ func (s *AuthService) AuthenticateAPIKey(ctx context.Context, apiKey string) (*r
 	return s.GetRealmByID(ctx, key.RealmID)
 }
 
-// Authenticate tries API key first, then falls back to session token.
-func (s *AuthService) Authenticate(ctx context.Context, sessionToken, apiKey string) (*repository.Realm, error) {
-	if apiKey != "" {
-		return s.AuthenticateAPIKey(ctx, apiKey)
+// Authenticate tries to authenticate using a bearer token.
+// The token can be either a session token or an API key - both are tried in order.
+func (s *AuthService) Authenticate(ctx context.Context, token string) (*repository.Realm, error) {
+	if token == "" {
+		return nil, ErrNoCredentials
 	}
-	return s.AuthenticateSession(ctx, sessionToken)
+
+	if realm, err := s.AuthenticateSession(ctx, token); err == nil {
+		return realm, nil
+	}
+
+	return s.AuthenticateAPIKey(ctx, token)
 }
 
 // GetRealmByID retrieves a realm by its ID.
@@ -105,17 +111,18 @@ func (s *AuthService) GetRealmByID(ctx context.Context, realmID string) (*reposi
 	return realm, nil
 }
 
-// GetRealmFromRequest authenticates using session header or cookie.
+// GetRealmFromRequest authenticates using Bearer token or cookie.
+// Checks Authorization: Bearer header first, then falls back to wonder_session cookie.
 func (s *AuthService) GetRealmFromRequest(ctx context.Context, r *http.Request) (*repository.Realm, error) {
-	sessionID := r.Header.Get("X-Session-Token")
-	if sessionID == "" {
+	token := GetBearerToken(r)
+	if token == "" {
 		cookie, err := r.Cookie("wonder_session")
 		if err == nil && cookie.Value != "" {
-			sessionID = cookie.Value
+			token = cookie.Value
 		}
 	}
 
-	return s.AuthenticateSession(ctx, sessionID)
+	return s.Authenticate(ctx, token)
 }
 
 // CreateSession creates a new session for a user.

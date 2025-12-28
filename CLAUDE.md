@@ -75,10 +75,12 @@ pkg/
 **Coordinator endpoints**:
 - `/auth/login?provider=github` - Start OIDC flow
 - `/auth/callback` - OIDC callback, creates realm
-- `/api/v1/join-token` - Generate JWT for worker join (needs `X-Session-Token` header)
+- `/api/v1/join-token` - Generate JWT for worker join (needs `Authorization: Bearer <token>`)
 - `/api/v1/worker/join` - Worker exchanges JWT for Headscale PreAuthKey
-- `/api/v1/nodes` - List nodes (supports `X-Session-Token` or `Authorization: Bearer <api_key>`)
-- `/api/v1/api-keys` - Manage API keys for third-party integrations (GET/POST, needs session)
+- `/api/v1/nodes` - List nodes (needs `Authorization: Bearer <token>`)
+- `/api/v1/api-keys` - Manage API keys for third-party integrations (needs `Authorization: Bearer <token>`)
+
+**Authentication**: All protected endpoints use `Authorization: Bearer <token>` header. The token can be either a session token (from OIDC login) or an API key. Browser-based flows also support `wonder_session` cookie as fallback.
 
 ## Running Locally
 
