@@ -47,6 +47,9 @@ func (s *Server) Run() error {
 	mux.HandleFunc("GET /coordinator/device/verify", deviceController.HandleDeviceVerifyPage)
 	mux.HandleFunc("POST /coordinator/device/verify", deviceController.HandleDeviceVerify)
 	mux.HandleFunc("POST /coordinator/device/token", deviceController.HandleDeviceToken)
+	mux.HandleFunc("/coordinator/", func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	})
 	mux.Handle("/", headscaleProxy)
 
 	slog.Info("initializing ACL policy")
