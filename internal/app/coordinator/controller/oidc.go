@@ -10,22 +10,22 @@ import (
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/service"
 )
 
-// AuthController handles OIDC authentication flows.
-type AuthController struct {
+// OIDCController handles OIDC authentication flows.
+type OIDCController struct {
 	oidcService  *service.OIDCService
 	authService  *service.AuthService
 	realmService *service.RealmService
 	publicURL    string
 }
 
-// NewAuthController creates a new AuthController.
-func NewAuthController(
+// NewOIDCController creates a new OIDCController.
+func NewOIDCController(
 	oidcService *service.OIDCService,
 	authService *service.AuthService,
 	realmService *service.RealmService,
 	publicURL string,
-) *AuthController {
-	return &AuthController{
+) *OIDCController {
+	return &OIDCController{
 		oidcService:  oidcService,
 		authService:  authService,
 		realmService: realmService,
@@ -33,8 +33,8 @@ func NewAuthController(
 	}
 }
 
-// HandleProviders handles GET /auth/providers requests.
-func (c *AuthController) HandleProviders(w http.ResponseWriter, r *http.Request) {
+// HandleProviders handles GET /oidc/providers requests.
+func (c *OIDCController) HandleProviders(w http.ResponseWriter, r *http.Request) {
 	providers := c.oidcService.ListProviders()
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
@@ -44,8 +44,8 @@ func (c *AuthController) HandleProviders(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// HandleLogin handles GET /auth/login requests.
-func (c *AuthController) HandleLogin(w http.ResponseWriter, r *http.Request) {
+// HandleLogin handles GET /oidc/login requests.
+func (c *OIDCController) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	providerName := r.URL.Query().Get("provider")
 	if providerName == "" {
 		http.Error(w, "provider parameter required", http.StatusBadRequest)
@@ -70,8 +70,8 @@ func (c *AuthController) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, authURL, http.StatusFound)
 }
 
-// HandleCallback handles GET /auth/callback requests.
-func (c *AuthController) HandleCallback(w http.ResponseWriter, r *http.Request) {
+// HandleCallback handles GET /oidc/callback requests.
+func (c *OIDCController) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	code := r.URL.Query().Get("code")
@@ -126,8 +126,8 @@ func (c *AuthController) HandleCallback(w http.ResponseWriter, r *http.Request) 
 	http.Redirect(w, r, redirectURI, http.StatusFound)
 }
 
-// HandleComplete handles GET /auth/complete requests.
-func (c *AuthController) HandleComplete(w http.ResponseWriter, r *http.Request) {
+// HandleComplete handles GET /oidc/complete requests.
+func (c *OIDCController) HandleComplete(w http.ResponseWriter, r *http.Request) {
 	var session, user string
 
 	if cookie, err := r.Cookie("wonder_session"); err == nil {
@@ -152,7 +152,7 @@ func (c *AuthController) HandleComplete(w http.ResponseWriter, r *http.Request) 
 }
 
 // HandleCreateAuthKey handles POST /api/v1/authkey requests.
-func (c *AuthController) HandleCreateAuthKey(w http.ResponseWriter, r *http.Request) {
+func (c *OIDCController) HandleCreateAuthKey(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return

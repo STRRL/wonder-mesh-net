@@ -18,7 +18,7 @@ import (
 // and handles graceful shutdown on SIGINT or SIGTERM with a 10-second timeout.
 func (s *Server) Run() error {
 	healthController := controller.NewHealthController(s.headscaleClient)
-	authController := controller.NewAuthController(s.oidcService, s.authService, s.realmService, s.config.PublicURL)
+	oidcController := controller.NewOIDCController(s.oidcService, s.authService, s.realmService, s.config.PublicURL)
 	nodesController := controller.NewNodesController(s.nodesService, s.authService)
 	apiKeyController := controller.NewAPIKeyController(s.apiKeyRepository, s.authService)
 	deployerController := controller.NewDeployerController(s.realmService, s.authService)
@@ -32,11 +32,11 @@ func (s *Server) Run() error {
 
 	coordinatorRouter := chi.NewRouter()
 	coordinatorRouter.Get("/health", healthController.ServeHTTP)
-	coordinatorRouter.Get("/auth/providers", authController.HandleProviders)
-	coordinatorRouter.Get("/auth/login", authController.HandleLogin)
-	coordinatorRouter.Get("/auth/callback", authController.HandleCallback)
-	coordinatorRouter.Get("/auth/complete", authController.HandleComplete)
-	coordinatorRouter.Post("/api/v1/authkey", authController.HandleCreateAuthKey)
+	coordinatorRouter.Get("/oidc/providers", oidcController.HandleProviders)
+	coordinatorRouter.Get("/oidc/login", oidcController.HandleLogin)
+	coordinatorRouter.Get("/oidc/callback", oidcController.HandleCallback)
+	coordinatorRouter.Get("/oidc/complete", oidcController.HandleComplete)
+	coordinatorRouter.Post("/api/v1/authkey", oidcController.HandleCreateAuthKey)
 	coordinatorRouter.Get("/api/v1/nodes", nodesController.HandleListNodes)
 	coordinatorRouter.Get("/api/v1/api-keys", apiKeyController.HandleListAPIKeys)
 	coordinatorRouter.Post("/api/v1/api-keys", apiKeyController.HandleCreateAPIKey)

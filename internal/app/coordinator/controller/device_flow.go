@@ -187,7 +187,7 @@ func (c *DeviceFlowController) HandleDeviceVerifyPage(w http.ResponseWriter, r *
                 } else if (resp.status === 401) {
                     loginPrompt.style.display = 'block';
                     document.getElementById('login-link').href =
-                        '/coordinator/auth/login?provider=github&redirect=' +
+                        '/coordinator/oidc/login?provider=github&redirect=' +
                         encodeURIComponent(window.location.href);
                     errorDiv.textContent = data.error || 'Please login first';
                 } else {

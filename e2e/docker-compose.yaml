@@ -26,7 +26,7 @@ services:
       OIDC_ISSUER: http://localhost:9090/realms/wonder
       OIDC_CLIENT_ID: wonder
       OIDC_CLIENT_SECRET: wonder-secret
-      OIDC_REDIRECT_URI: http://localhost:9080/coordinator/auth/callback
+      OIDC_REDIRECT_URI: http://localhost:9080/coordinator/oidc/callback
     volumes:
       - ./headscale-config.yaml:/etc/headscale/config.yaml
       - coordinator-data:/data
