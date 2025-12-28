@@ -73,8 +73,8 @@ pkg/
 **Auth flow**: User logs in via OIDC -> coordinator creates Headscale user -> generates session token -> user creates join token -> worker exchanges token for PreAuthKey -> runs `tailscale up` with authkey.
 
 **Coordinator endpoints**:
-- `/auth/login?provider=github` - Start OIDC flow
-- `/auth/callback` - OIDC callback, creates realm
+- `/oidc/login?provider=github` - Start OIDC flow
+- `/oidc/callback` - OIDC callback, creates realm
 - `/api/v1/join-token` - Generate JWT for worker join (needs `Authorization: Bearer <token>`)
 - `/api/v1/worker/join` - Worker exchanges JWT for Headscale PreAuthKey
 - `/api/v1/nodes` - List nodes (needs `Authorization: Bearer <token>`)
