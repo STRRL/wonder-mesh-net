@@ -27,11 +27,11 @@ type Config struct {
 }
 
 // OIDCProviders returns the configured OIDC providers based on the config fields.
-// RedirectURL is set to {PublicURL}/coordinator/auth/callback for all providers.
+// RedirectURL is set to {PublicURL}/coordinator/oidc/callback for all providers.
 func (c *Config) OIDCProviders() []oidc.ProviderConfig {
 	var providers []oidc.ProviderConfig
 
-	redirectURL := c.PublicURL + "/coordinator/auth/callback"
+	redirectURL := c.PublicURL + "/coordinator/oidc/callback"
 
 	if c.GithubClientID != "" {
 		providers = append(providers, oidc.ProviderConfig{
