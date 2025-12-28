@@ -54,7 +54,7 @@ func (s *OIDCService) InitiateLogin(ctx context.Context, providerName, redirectU
 	}
 
 	if redirectURI == "" {
-		redirectURI = publicURL + "/coordinator/auth/complete"
+		redirectURI = publicURL + "/coordinator/oidc/complete"
 	} else if !isValidRedirectURI(publicURL, redirectURI) {
 		return "", ErrInvalidRedirectURI
 	}

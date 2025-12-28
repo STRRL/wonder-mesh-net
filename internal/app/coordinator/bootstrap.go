@@ -17,7 +17,7 @@ import (
 // and handles graceful shutdown on SIGINT or SIGTERM with a 10-second timeout.
 func (s *Server) Run() error {
 	healthController := controller.NewHealthController(s.headscaleClient)
-	authController := controller.NewAuthController(s.oidcService, s.authService, s.realmService, s.config.PublicURL)
+	oidcController := controller.NewOIDCController(s.oidcService, s.authService, s.realmService, s.config.PublicURL)
 	nodesController := controller.NewNodesController(s.nodesService, s.authService)
 	apiKeyController := controller.NewAPIKeyController(s.apiKeyRepository, s.authService)
 	deployerController := controller.NewDeployerController(s.realmService, s.authService)
@@ -31,11 +31,11 @@ func (s *Server) Run() error {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /coordinator/health", healthController.ServeHTTP)
-	mux.HandleFunc("GET /coordinator/auth/providers", authController.HandleProviders)
-	mux.HandleFunc("GET /coordinator/auth/login", authController.HandleLogin)
-	mux.HandleFunc("GET /coordinator/auth/callback", authController.HandleCallback)
-	mux.HandleFunc("GET /coordinator/auth/complete", authController.HandleComplete)
-	mux.HandleFunc("POST /coordinator/api/v1/authkey", authController.HandleCreateAuthKey)
+	mux.HandleFunc("GET /coordinator/oidc/providers", oidcController.HandleProviders)
+	mux.HandleFunc("GET /coordinator/oidc/login", oidcController.HandleLogin)
+	mux.HandleFunc("GET /coordinator/oidc/callback", oidcController.HandleCallback)
+	mux.HandleFunc("GET /coordinator/oidc/complete", oidcController.HandleComplete)
+	mux.HandleFunc("POST /coordinator/api/v1/authkey", oidcController.HandleCreateAuthKey)
 	mux.HandleFunc("GET /coordinator/api/v1/nodes", nodesController.HandleListNodes)
 	mux.HandleFunc("GET /coordinator/api/v1/api-keys", apiKeyController.HandleListAPIKeys)
 	mux.HandleFunc("POST /coordinator/api/v1/api-keys", apiKeyController.HandleCreateAPIKey)
