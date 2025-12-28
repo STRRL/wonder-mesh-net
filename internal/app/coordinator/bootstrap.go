@@ -22,7 +22,7 @@ func (s *Server) Run() error {
 	apiKeyController := controller.NewAPIKeyController(s.apiKeyRepository, s.authService)
 	deployerController := controller.NewDeployerController(s.realmService, s.authService)
 	workerController := controller.NewWorkerController(s.workerService, s.authService)
-	deviceController := controller.NewDeviceController(s.deviceFlowService, s.authService, s.config.PublicURL)
+	deviceFlowController := controller.NewDeviceFlowController(s.deviceFlowService, s.authService, s.config.PublicURL)
 
 	headscaleProxy, err := controller.NewHeadscaleProxyController("http://127.0.0.1:8080")
 	if err != nil {
@@ -43,10 +43,10 @@ func (s *Server) Run() error {
 	mux.HandleFunc("POST /coordinator/api/v1/join-token", workerController.HandleCreateJoinToken)
 	mux.HandleFunc("POST /coordinator/api/v1/worker/join", workerController.HandleWorkerJoin)
 	mux.HandleFunc("POST /coordinator/api/v1/deployer/join", deployerController.HandleDeployerJoin)
-	mux.HandleFunc("POST /coordinator/device/code", deviceController.HandleDeviceCode)
-	mux.HandleFunc("GET /coordinator/device/verify", deviceController.HandleDeviceVerifyPage)
-	mux.HandleFunc("POST /coordinator/device/verify", deviceController.HandleDeviceVerify)
-	mux.HandleFunc("POST /coordinator/device/token", deviceController.HandleDeviceToken)
+	mux.HandleFunc("POST /coordinator/device/code", deviceFlowController.HandleDeviceCode)
+	mux.HandleFunc("GET /coordinator/device/verify", deviceFlowController.HandleDeviceVerifyPage)
+	mux.HandleFunc("POST /coordinator/device/verify", deviceFlowController.HandleDeviceVerify)
+	mux.HandleFunc("POST /coordinator/device/token", deviceFlowController.HandleDeviceToken)
 	mux.HandleFunc("/coordinator/", func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	})

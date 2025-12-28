@@ -85,12 +85,25 @@ func (s *AuthService) AuthenticateAPIKey(ctx context.Context, apiKey string) (*r
 	return s.GetRealmByID(ctx, key.RealmID)
 }
 
-// Authenticate tries API key first, then falls back to session token.
-func (s *AuthService) Authenticate(ctx context.Context, sessionToken, apiKey string) (*repository.Realm, error) {
-	if apiKey != "" {
-		return s.AuthenticateAPIKey(ctx, apiKey)
+// Authenticate tries to authenticate using a bearer token.
+// Priority: Session tokens are tried first, then API keys.
+// Only falls back to API key auth if session auth fails due to invalid/missing session.
+// Database errors and other system failures are not masked.
+func (s *AuthService) Authenticate(ctx context.Context, token string) (*repository.Realm, error) {
+	if token == "" {
+		return nil, ErrNoCredentials
 	}
-	return s.AuthenticateSession(ctx, sessionToken)
+
+	realm, err := s.AuthenticateSession(ctx, token)
+	if err == nil {
+		return realm, nil
+	}
+
+	if err != ErrInvalidSession && err != ErrNoRealm && err != ErrNoCredentials {
+		return nil, err
+	}
+
+	return s.AuthenticateAPIKey(ctx, token)
 }
 
 // GetRealmByID retrieves a realm by its ID.
@@ -105,17 +118,47 @@ func (s *AuthService) GetRealmByID(ctx context.Context, realmID string) (*reposi
 	return realm, nil
 }
 
-// GetRealmFromRequest authenticates using session header or cookie.
+// GetRealmFromRequest authenticates using Bearer token or cookie.
+// Accepts both session tokens and API keys. Use SessionOnly or APIKeyOnly for restricted access.
 func (s *AuthService) GetRealmFromRequest(ctx context.Context, r *http.Request) (*repository.Realm, error) {
-	sessionID := r.Header.Get("X-Session-Token")
-	if sessionID == "" {
+	token := GetBearerToken(r)
+	if token == "" {
 		cookie, err := r.Cookie("wonder_session")
 		if err == nil && cookie.Value != "" {
-			sessionID = cookie.Value
+			token = cookie.Value
 		}
 	}
 
-	return s.AuthenticateSession(ctx, sessionID)
+	return s.Authenticate(ctx, token)
+}
+
+// SessionOnly authenticates using Bearer token or cookie, but only accepts session tokens.
+// Use this for privileged endpoints that should not be accessible via API keys.
+func (s *AuthService) SessionOnly(ctx context.Context, r *http.Request) (*repository.Realm, error) {
+	token := GetBearerToken(r)
+	if token == "" {
+		cookie, err := r.Cookie("wonder_session")
+		if err == nil && cookie.Value != "" {
+			token = cookie.Value
+		}
+	}
+
+	if token == "" {
+		return nil, ErrNoCredentials
+	}
+
+	return s.AuthenticateSession(ctx, token)
+}
+
+// APIKeyOnly authenticates using Bearer token, but only accepts API keys.
+// Use this for endpoints designed specifically for third-party integrations.
+func (s *AuthService) APIKeyOnly(ctx context.Context, r *http.Request) (*repository.Realm, error) {
+	token := GetBearerToken(r)
+	if token == "" {
+		return nil, ErrNoCredentials
+	}
+
+	return s.AuthenticateAPIKey(ctx, token)
 }
 
 // CreateSession creates a new session for a user.

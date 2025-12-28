@@ -152,6 +152,7 @@ func (c *OIDCController) HandleComplete(w http.ResponseWriter, r *http.Request) 
 }
 
 // HandleCreateAuthKey handles POST /api/v1/authkey requests.
+// Session-only: API keys cannot create auth keys (privilege escalation prevention).
 func (c *OIDCController) HandleCreateAuthKey(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -160,15 +161,9 @@ func (c *OIDCController) HandleCreateAuthKey(w http.ResponseWriter, r *http.Requ
 
 	ctx := r.Context()
 
-	sessionID := r.Header.Get("X-Session-Token")
-	if sessionID == "" {
-		http.Error(w, "session token required", http.StatusUnauthorized)
-		return
-	}
-
-	realm, err := c.authService.AuthenticateSession(ctx, sessionID)
+	realm, err := c.authService.SessionOnly(ctx, r)
 	if err != nil {
-		http.Error(w, "invalid session", http.StatusUnauthorized)
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 

@@ -29,11 +29,11 @@ func NewAPIKeyController(
 }
 
 // HandleCreateAPIKey handles POST /api/v1/api-keys requests.
+// Session-only: API keys cannot create other API keys (privilege escalation prevention).
 func (c *APIKeyController) HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	sessionID := r.Header.Get("X-Session-Token")
-	realm, err := c.authService.AuthenticateSession(ctx, sessionID)
+	realm, err := c.authService.SessionOnly(ctx, r)
 	if err != nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -82,11 +82,11 @@ func (c *APIKeyController) HandleCreateAPIKey(w http.ResponseWriter, r *http.Req
 }
 
 // HandleListAPIKeys handles GET /api/v1/api-keys requests.
+// Session-only: API keys cannot list other API keys (privilege escalation prevention).
 func (c *APIKeyController) HandleListAPIKeys(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	sessionID := r.Header.Get("X-Session-Token")
-	realm, err := c.authService.AuthenticateSession(ctx, sessionID)
+	realm, err := c.authService.SessionOnly(ctx, r)
 	if err != nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -116,11 +116,11 @@ func (c *APIKeyController) HandleListAPIKeys(w http.ResponseWriter, r *http.Requ
 }
 
 // HandleDeleteAPIKey handles DELETE /api/v1/api-keys/{id} requests.
+// Session-only: API keys cannot delete other API keys (privilege escalation prevention).
 func (c *APIKeyController) HandleDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	sessionID := r.Header.Get("X-Session-Token")
-	realm, err := c.authService.AuthenticateSession(ctx, sessionID)
+	realm, err := c.authService.SessionOnly(ctx, r)
 	if err != nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return

@@ -28,6 +28,7 @@ func NewWorkerController(
 }
 
 // HandleCreateJoinToken handles POST /api/v1/join-token requests.
+// Session-only: API keys cannot create join tokens (privilege escalation prevention).
 func (c *WorkerController) HandleCreateJoinToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -36,15 +37,9 @@ func (c *WorkerController) HandleCreateJoinToken(w http.ResponseWriter, r *http.
 
 	ctx := r.Context()
 
-	sessionID := r.Header.Get("X-Session-Token")
-	if sessionID == "" {
-		http.Error(w, "session token required", http.StatusUnauthorized)
-		return
-	}
-
-	realm, err := c.authService.AuthenticateSession(ctx, sessionID)
+	realm, err := c.authService.SessionOnly(ctx, r)
 	if err != nil {
-		http.Error(w, "invalid session", http.StatusUnauthorized)
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 

@@ -11,20 +11,20 @@ import (
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/service"
 )
 
-// DeviceController handles OAuth 2.0 Device Authorization Grant (RFC 8628).
-type DeviceController struct {
+// DeviceFlowController handles OAuth 2.0 Device Authorization Grant (RFC 8628).
+type DeviceFlowController struct {
 	deviceFlowService *service.DeviceFlowService
 	authService       *service.AuthService
 	publicURL         string
 }
 
-// NewDeviceController creates a new DeviceController.
-func NewDeviceController(
+// NewDeviceFlowController creates a new DeviceFlowController.
+func NewDeviceFlowController(
 	deviceFlowService *service.DeviceFlowService,
 	authService *service.AuthService,
 	publicURL string,
-) *DeviceController {
-	return &DeviceController{
+) *DeviceFlowController {
+	return &DeviceFlowController{
 		deviceFlowService: deviceFlowService,
 		authService:       authService,
 		publicURL:         publicURL,
@@ -32,7 +32,7 @@ func NewDeviceController(
 }
 
 // HandleDeviceCode handles POST /device/code requests.
-func (c *DeviceController) HandleDeviceCode(w http.ResponseWriter, r *http.Request) {
+func (c *DeviceFlowController) HandleDeviceCode(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -58,7 +58,7 @@ func (c *DeviceController) HandleDeviceCode(w http.ResponseWriter, r *http.Reque
 }
 
 // HandleDeviceVerifyPage handles GET /device/verify requests.
-func (c *DeviceController) HandleDeviceVerifyPage(w http.ResponseWriter, r *http.Request) {
+func (c *DeviceFlowController) HandleDeviceVerifyPage(w http.ResponseWriter, r *http.Request) {
 	userCode := html.EscapeString(r.URL.Query().Get("code"))
 
 	htmlContent := `<!DOCTYPE html>
@@ -211,7 +211,7 @@ func (c *DeviceController) HandleDeviceVerifyPage(w http.ResponseWriter, r *http
 }
 
 // HandleDeviceVerify handles POST /device/verify requests.
-func (c *DeviceController) HandleDeviceVerify(w http.ResponseWriter, r *http.Request) {
+func (c *DeviceFlowController) HandleDeviceVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -266,7 +266,7 @@ func (c *DeviceController) HandleDeviceVerify(w http.ResponseWriter, r *http.Req
 }
 
 // HandleDeviceToken handles POST /device/token requests.
-func (c *DeviceController) HandleDeviceToken(w http.ResponseWriter, r *http.Request) {
+func (c *DeviceFlowController) HandleDeviceToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
