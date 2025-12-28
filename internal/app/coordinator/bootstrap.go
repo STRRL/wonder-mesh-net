@@ -9,7 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/controller"
 )
 
@@ -30,28 +29,25 @@ func (s *Server) Run() error {
 		return err
 	}
 
-	coordinatorRouter := chi.NewRouter()
-	coordinatorRouter.Get("/health", healthController.ServeHTTP)
-	coordinatorRouter.Get("/auth/providers", authController.HandleProviders)
-	coordinatorRouter.Get("/auth/login", authController.HandleLogin)
-	coordinatorRouter.Get("/auth/callback", authController.HandleCallback)
-	coordinatorRouter.Get("/auth/complete", authController.HandleComplete)
-	coordinatorRouter.Post("/api/v1/authkey", authController.HandleCreateAuthKey)
-	coordinatorRouter.Get("/api/v1/nodes", nodesController.HandleListNodes)
-	coordinatorRouter.Get("/api/v1/api-keys", apiKeyController.HandleListAPIKeys)
-	coordinatorRouter.Post("/api/v1/api-keys", apiKeyController.HandleCreateAPIKey)
-	coordinatorRouter.Delete("/api/v1/api-keys/{id}", apiKeyController.HandleDeleteAPIKey)
-	coordinatorRouter.Post("/api/v1/join-token", workerController.HandleCreateJoinToken)
-	coordinatorRouter.Post("/api/v1/worker/join", workerController.HandleWorkerJoin)
-	coordinatorRouter.Post("/api/v1/deployer/join", deployerController.HandleDeployerJoin)
-	coordinatorRouter.Post("/device/code", deviceController.HandleDeviceCode)
-	coordinatorRouter.Get("/device/verify", deviceController.HandleDeviceVerifyPage)
-	coordinatorRouter.Post("/device/verify", deviceController.HandleDeviceVerify)
-	coordinatorRouter.Post("/device/token", deviceController.HandleDeviceToken)
-
-	rootRouter := chi.NewRouter()
-	rootRouter.Mount("/coordinator", coordinatorRouter)
-	rootRouter.NotFound(headscaleProxy.ServeHTTP)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /coordinator/health", healthController.ServeHTTP)
+	mux.HandleFunc("GET /coordinator/auth/providers", authController.HandleProviders)
+	mux.HandleFunc("GET /coordinator/auth/login", authController.HandleLogin)
+	mux.HandleFunc("GET /coordinator/auth/callback", authController.HandleCallback)
+	mux.HandleFunc("GET /coordinator/auth/complete", authController.HandleComplete)
+	mux.HandleFunc("POST /coordinator/api/v1/authkey", authController.HandleCreateAuthKey)
+	mux.HandleFunc("GET /coordinator/api/v1/nodes", nodesController.HandleListNodes)
+	mux.HandleFunc("GET /coordinator/api/v1/api-keys", apiKeyController.HandleListAPIKeys)
+	mux.HandleFunc("POST /coordinator/api/v1/api-keys", apiKeyController.HandleCreateAPIKey)
+	mux.HandleFunc("DELETE /coordinator/api/v1/api-keys/{id}", apiKeyController.HandleDeleteAPIKey)
+	mux.HandleFunc("POST /coordinator/api/v1/join-token", workerController.HandleCreateJoinToken)
+	mux.HandleFunc("POST /coordinator/api/v1/worker/join", workerController.HandleWorkerJoin)
+	mux.HandleFunc("POST /coordinator/api/v1/deployer/join", deployerController.HandleDeployerJoin)
+	mux.HandleFunc("POST /coordinator/device/code", deviceController.HandleDeviceCode)
+	mux.HandleFunc("GET /coordinator/device/verify", deviceController.HandleDeviceVerifyPage)
+	mux.HandleFunc("POST /coordinator/device/verify", deviceController.HandleDeviceVerify)
+	mux.HandleFunc("POST /coordinator/device/token", deviceController.HandleDeviceToken)
+	mux.Handle("/", headscaleProxy)
 
 	slog.Info("initializing ACL policy")
 	ctx := context.Background()
@@ -63,7 +59,7 @@ func (s *Server) Run() error {
 
 	httpServer := &http.Server{
 		Addr:    s.config.Listen,
-		Handler: rootRouter,
+		Handler: mux,
 	}
 
 	go func() {

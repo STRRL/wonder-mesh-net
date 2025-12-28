@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/repository"
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/service"
 )
@@ -127,7 +126,7 @@ func (c *APIKeyController) HandleDeleteAPIKey(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	keyID := chi.URLParam(r, "id")
+	keyID := r.PathValue("id")
 	if keyID == "" {
 		http.Error(w, "key ID required", http.StatusBadRequest)
 		return
