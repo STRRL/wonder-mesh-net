@@ -1,4 +1,4 @@
-package store
+package repository
 
 import (
 	"context"
@@ -47,18 +47,18 @@ type DeviceRequest struct {
 	CoordinatorURL string
 }
 
-// DeviceRequestStore provides database-backed storage for device authorization requests
-type DeviceRequestStore struct {
+// DeviceRequestRepository provides database-backed storage for device authorization requests
+type DeviceRequestRepository struct {
 	queries *sqlc.Queries
 }
 
-// NewDeviceRequestStore creates a new database-backed device request store
-func NewDeviceRequestStore(queries *sqlc.Queries) *DeviceRequestStore {
-	return &DeviceRequestStore{queries: queries}
+// NewDeviceRequestRepository creates a new database-backed device request repository
+func NewDeviceRequestRepository(queries *sqlc.Queries) *DeviceRequestRepository {
+	return &DeviceRequestRepository{queries: queries}
 }
 
 // Create creates a new device authorization request
-func (s *DeviceRequestStore) Create(ctx context.Context) (*DeviceRequest, error) {
+func (s *DeviceRequestRepository) Create(ctx context.Context) (*DeviceRequest, error) {
 	deviceCode, err := generateDeviceCode(DeviceCodeLength)
 	if err != nil {
 		return nil, fmt.Errorf("generate device code: %w", err)
@@ -106,7 +106,7 @@ func (s *DeviceRequestStore) Create(ctx context.Context) (*DeviceRequest, error)
 }
 
 // GetByDeviceCode retrieves a device request by device code
-func (s *DeviceRequestStore) GetByDeviceCode(ctx context.Context, deviceCode string) (*DeviceRequest, error) {
+func (s *DeviceRequestRepository) GetByDeviceCode(ctx context.Context, deviceCode string) (*DeviceRequest, error) {
 	dbReq, err := s.queries.GetDeviceRequestByDeviceCode(ctx, deviceCode)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -124,7 +124,7 @@ func (s *DeviceRequestStore) GetByDeviceCode(ctx context.Context, deviceCode str
 }
 
 // GetByUserCode retrieves a device request by user code
-func (s *DeviceRequestStore) GetByUserCode(ctx context.Context, userCode string) (*DeviceRequest, error) {
+func (s *DeviceRequestRepository) GetByUserCode(ctx context.Context, userCode string) (*DeviceRequest, error) {
 	dbReq, err := s.queries.GetDeviceRequestByUserCode(ctx, userCode)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -142,7 +142,7 @@ func (s *DeviceRequestStore) GetByUserCode(ctx context.Context, userCode string)
 }
 
 // Approve approves a device request and stores the approval details
-func (s *DeviceRequestStore) Approve(ctx context.Context, userCode, realmID, headscaleUser, authkey, headscaleURL, coordinatorURL string) error {
+func (s *DeviceRequestRepository) Approve(ctx context.Context, userCode, realmID, headscaleUser, authkey, headscaleURL, coordinatorURL string) error {
 	return s.queries.ApproveDeviceRequest(ctx, sqlc.ApproveDeviceRequestParams{
 		RealmID:        realmID,
 		HeadscaleUser:  headscaleUser,
@@ -154,12 +154,12 @@ func (s *DeviceRequestStore) Approve(ctx context.Context, userCode, realmID, hea
 }
 
 // Delete removes a device request by device code
-func (s *DeviceRequestStore) Delete(ctx context.Context, deviceCode string) {
+func (s *DeviceRequestRepository) Delete(ctx context.Context, deviceCode string) {
 	_ = s.queries.DeleteDeviceRequest(ctx, deviceCode)
 }
 
 // DeleteExpired removes all expired device requests
-func (s *DeviceRequestStore) DeleteExpired(ctx context.Context) error {
+func (s *DeviceRequestRepository) DeleteExpired(ctx context.Context) error {
 	return s.queries.DeleteExpiredDeviceRequests(ctx)
 }
 

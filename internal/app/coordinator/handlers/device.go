@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/store"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/repository"
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
 )
 
@@ -17,23 +17,23 @@ var userCodePattern = regexp.MustCompile(`^[A-Z0-9]{4}-[A-Z0-9]{4}$`)
 var deviceCodePattern = regexp.MustCompile(`^[a-f0-9]{32}$`)
 
 type DeviceHandler struct {
-	publicURL    string
-	store        *store.DeviceRequestStore
-	realmManager *headscale.RealmManager
-	authHelper   *AuthHelper
+	publicURL               string
+	deviceRequestRepository *repository.DeviceRequestRepository
+	realmManager            *headscale.RealmManager
+	authHelper              *AuthHelper
 }
 
 func NewDeviceHandler(
 	publicURL string,
-	deviceStore *store.DeviceRequestStore,
+	deviceRequestRepository *repository.DeviceRequestRepository,
 	realmManager *headscale.RealmManager,
 	authHelper *AuthHelper,
 ) *DeviceHandler {
 	return &DeviceHandler{
-		publicURL:    publicURL,
-		store:        deviceStore,
-		realmManager: realmManager,
-		authHelper:   authHelper,
+		publicURL:               publicURL,
+		deviceRequestRepository: deviceRequestRepository,
+		realmManager:            realmManager,
+		authHelper:              authHelper,
 	}
 }
 
@@ -52,7 +52,7 @@ func (h *DeviceHandler) HandleDeviceCode(w http.ResponseWriter, r *http.Request)
 	}
 
 	ctx := r.Context()
-	req, err := h.store.Create(ctx)
+	req, err := h.deviceRequestRepository.Create(ctx)
 	if err != nil {
 		slog.Error("create device request", "error", err)
 		http.Error(w, "create device request", http.StatusInternalServerError)
@@ -64,7 +64,7 @@ func (h *DeviceHandler) HandleDeviceCode(w http.ResponseWriter, r *http.Request)
 		UserCode:        req.UserCode,
 		VerificationURL: h.publicURL + "/coordinator/device/verify",
 		ExpiresIn:       int(time.Until(req.ExpiresAt).Seconds()),
-		Interval:        int(store.PollInterval.Seconds()),
+		Interval:        int(repository.PollInterval.Seconds()),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -258,10 +258,10 @@ func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	deviceReq, err := h.store.GetByUserCode(ctx, req.UserCode)
+	deviceReq, err := h.deviceRequestRepository.GetByUserCode(ctx, req.UserCode)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		if errors.Is(err, store.ErrDeviceRequestNotFound) {
+		if errors.Is(err, repository.ErrDeviceRequestNotFound) {
 			w.WriteHeader(http.StatusNotFound)
 			_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid or expired code"})
 		} else {
@@ -272,7 +272,7 @@ func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if deviceReq.Status != store.DeviceStatusPending {
+	if deviceReq.Status != repository.DeviceStatusPending {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "code already used"})
@@ -292,7 +292,7 @@ func (h *DeviceHandler) HandleDeviceVerify(w http.ResponseWriter, r *http.Reques
 	// reverse-proxies all Tailscale control plane traffic to the embedded Headscale
 	// instance (see handlers/proxy.go). Workers use this single URL for both
 	// coordinator API calls and tailscale --login-server.
-	if err := h.store.Approve(ctx, req.UserCode, realm.ID, realm.HeadscaleUser, key.GetKey(), h.publicURL, h.publicURL); err != nil {
+	if err := h.deviceRequestRepository.Approve(ctx, req.UserCode, realm.ID, realm.HeadscaleUser, key.GetKey(), h.publicURL, h.publicURL); err != nil {
 		slog.Error("approve device", "error", err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -336,10 +336,10 @@ func (h *DeviceHandler) HandleDeviceToken(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	deviceReq, err := h.store.GetByDeviceCode(ctx, req.DeviceCode)
+	deviceReq, err := h.deviceRequestRepository.GetByDeviceCode(ctx, req.DeviceCode)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		if errors.Is(err, store.ErrDeviceRequestNotFound) {
+		if errors.Is(err, repository.ErrDeviceRequestNotFound) {
 			w.WriteHeader(http.StatusNotFound)
 			_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "invalid_device_code"})
 		} else {
@@ -353,12 +353,12 @@ func (h *DeviceHandler) HandleDeviceToken(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Type", "application/json")
 
 	switch deviceReq.Status {
-	case store.DeviceStatusPending:
+	case repository.DeviceStatusPending:
 		w.WriteHeader(http.StatusAccepted)
 		_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "authorization_pending"})
 
-	case store.DeviceStatusApproved:
-		h.store.Delete(ctx, req.DeviceCode)
+	case repository.DeviceStatusApproved:
+		h.deviceRequestRepository.Delete(ctx, req.DeviceCode)
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(DeviceTokenResponse{
 			Authkey:      deviceReq.Authkey,
@@ -366,13 +366,13 @@ func (h *DeviceHandler) HandleDeviceToken(w http.ResponseWriter, r *http.Request
 			User:         deviceReq.HeadscaleUser,
 		})
 
-	case store.DeviceStatusExpired:
-		h.store.Delete(ctx, req.DeviceCode)
+	case repository.DeviceStatusExpired:
+		h.deviceRequestRepository.Delete(ctx, req.DeviceCode)
 		w.WriteHeader(http.StatusGone)
 		_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "expired_token"})
 
-	case store.DeviceStatusDenied:
-		h.store.Delete(ctx, req.DeviceCode)
+	case repository.DeviceStatusDenied:
+		h.deviceRequestRepository.Delete(ctx, req.DeviceCode)
 		w.WriteHeader(http.StatusForbidden)
 		_ = json.NewEncoder(w).Encode(DeviceTokenResponse{Error: "access_denied"})
 	}

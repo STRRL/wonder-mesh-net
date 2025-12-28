@@ -1,4 +1,4 @@
-package store
+package repository
 
 import (
 	"context"
@@ -10,22 +10,22 @@ import (
 	"github.com/strrl/wonder-mesh-net/pkg/oidc"
 )
 
-// DBAuthStateStore is a database implementation of AuthStateStore.
-type DBAuthStateStore struct {
+// DBAuthStateRepository is a database implementation of AuthStateRepository.
+type DBAuthStateRepository struct {
 	queries  *sqlc.Queries
 	stateTTL time.Duration
 }
 
-// NewDBAuthStateStore creates a new database-backed auth state store.
-func NewDBAuthStateStore(queries *sqlc.Queries, ttl time.Duration) *DBAuthStateStore {
-	return &DBAuthStateStore{
+// NewDBAuthStateRepository creates a new database-backed auth state repository.
+func NewDBAuthStateRepository(queries *sqlc.Queries, ttl time.Duration) *DBAuthStateRepository {
+	return &DBAuthStateRepository{
 		queries:  queries,
 		stateTTL: ttl,
 	}
 }
 
 // Create creates a new auth state.
-func (s *DBAuthStateStore) Create(ctx context.Context, state *oidc.AuthState) error {
+func (s *DBAuthStateRepository) Create(ctx context.Context, state *oidc.AuthState) error {
 	return s.queries.CreateAuthState(ctx, sqlc.CreateAuthStateParams{
 		State:       state.State,
 		Provider:    state.ProviderName,
@@ -35,7 +35,7 @@ func (s *DBAuthStateStore) Create(ctx context.Context, state *oidc.AuthState) er
 }
 
 // Get retrieves an auth state by state string.
-func (s *DBAuthStateStore) Get(ctx context.Context, state string) (*oidc.AuthState, error) {
+func (s *DBAuthStateRepository) Get(ctx context.Context, state string) (*oidc.AuthState, error) {
 	dbState, err := s.queries.GetAuthState(ctx, state)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -58,11 +58,11 @@ func (s *DBAuthStateStore) Get(ctx context.Context, state string) (*oidc.AuthSta
 }
 
 // Delete deletes an auth state.
-func (s *DBAuthStateStore) Delete(ctx context.Context, state string) error {
+func (s *DBAuthStateRepository) Delete(ctx context.Context, state string) error {
 	return s.queries.DeleteAuthState(ctx, state)
 }
 
 // DeleteExpired deletes all expired auth states.
-func (s *DBAuthStateStore) DeleteExpired(ctx context.Context) error {
+func (s *DBAuthStateRepository) DeleteExpired(ctx context.Context) error {
 	return s.queries.DeleteExpiredAuthStates(ctx)
 }

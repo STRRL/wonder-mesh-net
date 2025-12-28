@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/store"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/repository"
 )
 
 // Authentication errors
@@ -20,21 +20,21 @@ var (
 
 // AuthHelper provides common authentication methods for handlers.
 type AuthHelper struct {
-	sessionStore store.SessionStore
-	realmStore   store.RealmStore
+	sessionRepository repository.SessionRepository
+	realmRepository   repository.RealmRepository
 }
 
 // NewAuthHelper creates a new AuthHelper.
-func NewAuthHelper(sessionStore store.SessionStore, realmStore store.RealmStore) *AuthHelper {
+func NewAuthHelper(sessionRepository repository.SessionRepository, realmRepository repository.RealmRepository) *AuthHelper {
 	return &AuthHelper{
-		sessionStore: sessionStore,
-		realmStore:   realmStore,
+		sessionRepository: sessionRepository,
+		realmRepository:   realmRepository,
 	}
 }
 
 // AuthenticateSession authenticates a request using X-Session-Token header.
 // Returns the user's first realm.
-func (h *AuthHelper) AuthenticateSession(r *http.Request) (*store.Realm, error) {
+func (h *AuthHelper) AuthenticateSession(r *http.Request) (*repository.Realm, error) {
 	sessionID := r.Header.Get("X-Session-Token")
 	if sessionID == "" {
 		return nil, ErrNoCredentials
@@ -42,7 +42,7 @@ func (h *AuthHelper) AuthenticateSession(r *http.Request) (*store.Realm, error) 
 
 	ctx := r.Context()
 
-	session, err := h.sessionStore.Get(ctx, sessionID)
+	session, err := h.sessionRepository.Get(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +50,7 @@ func (h *AuthHelper) AuthenticateSession(r *http.Request) (*store.Realm, error) 
 		return nil, ErrInvalidSession
 	}
 
-	realms, err := h.realmStore.ListByOwner(ctx, session.UserID)
+	realms, err := h.realmRepository.ListByOwner(ctx, session.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -74,8 +74,8 @@ func GetBearerToken(r *http.Request) string {
 }
 
 // GetRealmByID retrieves a realm by ID.
-func (h *AuthHelper) GetRealmByID(ctx context.Context, realmID string) (*store.Realm, error) {
-	realm, err := h.realmStore.Get(ctx, realmID)
+func (h *AuthHelper) GetRealmByID(ctx context.Context, realmID string) (*repository.Realm, error) {
+	realm, err := h.realmRepository.Get(ctx, realmID)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func (h *AuthHelper) GetRealmByID(ctx context.Context, realmID string) (*store.R
 }
 
 // GetRealmFromRequest authenticates and gets user's first realm from header or cookie.
-func (h *AuthHelper) GetRealmFromRequest(ctx context.Context, r *http.Request) (*store.Realm, error) {
+func (h *AuthHelper) GetRealmFromRequest(ctx context.Context, r *http.Request) (*repository.Realm, error) {
 	sessionID := r.Header.Get("X-Session-Token")
 	if sessionID == "" {
 		cookie, err := r.Cookie("wonder_session")
@@ -99,7 +99,7 @@ func (h *AuthHelper) GetRealmFromRequest(ctx context.Context, r *http.Request) (
 		return nil, ErrNoCredentials
 	}
 
-	session, err := h.sessionStore.Get(ctx, sessionID)
+	session, err := h.sessionRepository.Get(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func (h *AuthHelper) GetRealmFromRequest(ctx context.Context, r *http.Request) (
 		return nil, ErrInvalidSession
 	}
 
-	realms, err := h.realmStore.ListByOwner(ctx, session.UserID)
+	realms, err := h.realmRepository.ListByOwner(ctx, session.UserID)
 	if err != nil {
 		return nil, err
 	}

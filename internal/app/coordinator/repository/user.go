@@ -1,4 +1,4 @@
-package store
+package repository
 
 import (
 	"context"
@@ -16,8 +16,8 @@ type User struct {
 	UpdatedAt   time.Time
 }
 
-// UserStore defines the interface for user storage operations.
-type UserStore interface {
+// UserRepository defines the interface for user storage operations.
+type UserRepository interface {
 	Create(ctx context.Context, displayName string) (*User, error)
 	Get(ctx context.Context, id string) (*User, error)
 	Update(ctx context.Context, user *User) error
@@ -25,18 +25,18 @@ type UserStore interface {
 	List(ctx context.Context) ([]*User, error)
 }
 
-// DBUserStore implements UserStore using the database.
-type DBUserStore struct {
+// DBUserRepository implements UserRepository using the database.
+type DBUserRepository struct {
 	queries *sqlc.Queries
 }
 
-// NewDBUserStore creates a new DBUserStore.
-func NewDBUserStore(queries *sqlc.Queries) *DBUserStore {
-	return &DBUserStore{queries: queries}
+// NewDBUserRepository creates a new DBUserRepository.
+func NewDBUserRepository(queries *sqlc.Queries) *DBUserRepository {
+	return &DBUserRepository{queries: queries}
 }
 
 // Create creates a new user.
-func (s *DBUserStore) Create(ctx context.Context, displayName string) (*User, error) {
+func (s *DBUserRepository) Create(ctx context.Context, displayName string) (*User, error) {
 	id := uuid.New().String()
 
 	err := s.queries.CreateUser(ctx, sqlc.CreateUserParams{
@@ -51,7 +51,7 @@ func (s *DBUserStore) Create(ctx context.Context, displayName string) (*User, er
 }
 
 // Get retrieves a user by ID.
-func (s *DBUserStore) Get(ctx context.Context, id string) (*User, error) {
+func (s *DBUserRepository) Get(ctx context.Context, id string) (*User, error) {
 	row, err := s.queries.GetUser(ctx, id)
 	if err != nil {
 		return nil, err
@@ -66,7 +66,7 @@ func (s *DBUserStore) Get(ctx context.Context, id string) (*User, error) {
 }
 
 // Update updates a user.
-func (s *DBUserStore) Update(ctx context.Context, user *User) error {
+func (s *DBUserRepository) Update(ctx context.Context, user *User) error {
 	return s.queries.UpdateUser(ctx, sqlc.UpdateUserParams{
 		DisplayName: user.DisplayName,
 		ID:          user.ID,
@@ -74,12 +74,12 @@ func (s *DBUserStore) Update(ctx context.Context, user *User) error {
 }
 
 // Delete deletes a user.
-func (s *DBUserStore) Delete(ctx context.Context, id string) error {
+func (s *DBUserRepository) Delete(ctx context.Context, id string) error {
 	return s.queries.DeleteUser(ctx, id)
 }
 
 // List lists all users.
-func (s *DBUserStore) List(ctx context.Context) ([]*User, error) {
+func (s *DBUserRepository) List(ctx context.Context) ([]*User, error) {
 	rows, err := s.queries.ListUsers(ctx)
 	if err != nil {
 		return nil, err

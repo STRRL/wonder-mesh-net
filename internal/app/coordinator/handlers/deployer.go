@@ -6,30 +6,30 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/store"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/repository"
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
 )
 
 // DeployerHandler handles deployer integration requests.
 type DeployerHandler struct {
-	publicURL    string
-	realmManager *headscale.RealmManager
-	apiKeyStore  store.APIKeyStore
-	auth         *AuthHelper
+	publicURL        string
+	realmManager     *headscale.RealmManager
+	apiKeyRepository repository.APIKeyRepository
+	auth             *AuthHelper
 }
 
 // NewDeployerHandler creates a new DeployerHandler.
 func NewDeployerHandler(
 	publicURL string,
 	realmManager *headscale.RealmManager,
-	apiKeyStore store.APIKeyStore,
+	apiKeyRepository repository.APIKeyRepository,
 	auth *AuthHelper,
 ) *DeployerHandler {
 	return &DeployerHandler{
-		publicURL:    publicURL,
-		realmManager: realmManager,
-		apiKeyStore:  apiKeyStore,
-		auth:         auth,
+		publicURL:        publicURL,
+		realmManager:     realmManager,
+		apiKeyRepository: apiKeyRepository,
+		auth:             auth,
 	}
 }
 
@@ -44,7 +44,7 @@ func (h *DeployerHandler) HandleDeployerJoin(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	apiKey, err := h.apiKeyStore.GetByKey(ctx, key)
+	apiKey, err := h.apiKeyRepository.GetByKey(ctx, key)
 	if err != nil {
 		slog.Error("get API key", "error", err)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -55,7 +55,7 @@ func (h *DeployerHandler) HandleDeployerJoin(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := h.apiKeyStore.UpdateLastUsed(ctx, apiKey.ID); err != nil {
+	if err := h.apiKeyRepository.UpdateLastUsed(ctx, apiKey.ID); err != nil {
 		slog.Warn("update API key last used", "error", err)
 	}
 

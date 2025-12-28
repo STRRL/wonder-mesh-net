@@ -8,20 +8,20 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/store"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/repository"
 )
 
 // APIKeyHandler handles API key management requests.
 type APIKeyHandler struct {
-	apiKeyStore store.APIKeyStore
-	auth        *AuthHelper
+	apiKeyRepository repository.APIKeyRepository
+	auth             *AuthHelper
 }
 
 // NewAPIKeyHandler creates a new APIKeyHandler.
-func NewAPIKeyHandler(apiKeyStore store.APIKeyStore, auth *AuthHelper) *APIKeyHandler {
+func NewAPIKeyHandler(apiKeyRepository repository.APIKeyRepository, auth *AuthHelper) *APIKeyHandler {
 	return &APIKeyHandler{
-		apiKeyStore: apiKeyStore,
-		auth:        auth,
+		apiKeyRepository: apiKeyRepository,
+		auth:             auth,
 	}
 }
 
@@ -61,7 +61,7 @@ func (h *APIKeyHandler) HandleCreateAPIKey(w http.ResponseWriter, r *http.Reques
 		expiresAt = &t
 	}
 
-	apiKeyWithSecret, err := h.apiKeyStore.Create(ctx, realm.ID, req.Name, expiresAt)
+	apiKeyWithSecret, err := h.apiKeyRepository.Create(ctx, realm.ID, req.Name, expiresAt)
 	if err != nil {
 		slog.Error("create API key", "error", err)
 		http.Error(w, "create API key", http.StatusInternalServerError)
@@ -88,7 +88,7 @@ func (h *APIKeyHandler) HandleListAPIKeys(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	keys, err := h.apiKeyStore.List(ctx, realm.ID)
+	keys, err := h.apiKeyRepository.List(ctx, realm.ID)
 	if err != nil {
 		slog.Error("list API keys", "error", err)
 		http.Error(w, "list API keys", http.StatusInternalServerError)
@@ -127,8 +127,8 @@ func (h *APIKeyHandler) HandleDeleteAPIKey(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err := h.apiKeyStore.Delete(ctx, keyID, realm.ID); err != nil {
-		if errors.Is(err, store.ErrAPIKeyNotFound) {
+	if err := h.apiKeyRepository.Delete(ctx, keyID, realm.ID); err != nil {
+		if errors.Is(err, repository.ErrAPIKeyNotFound) {
 			http.Error(w, "api key not found", http.StatusNotFound)
 			return
 		}

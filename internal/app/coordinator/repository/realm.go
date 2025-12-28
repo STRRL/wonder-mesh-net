@@ -1,4 +1,4 @@
-package store
+package repository
 
 import (
 	"context"
@@ -19,8 +19,8 @@ type Realm struct {
 	UpdatedAt     time.Time
 }
 
-// RealmStore is the interface for storing realms.
-type RealmStore interface {
+// RealmRepository is the interface for storing realms.
+type RealmRepository interface {
 	Create(ctx context.Context, realm *Realm) error
 	Get(ctx context.Context, id string) (*Realm, error)
 	GetByHeadscaleUser(ctx context.Context, headscaleUser string) (*Realm, error)
@@ -30,18 +30,18 @@ type RealmStore interface {
 	List(ctx context.Context) ([]*Realm, error)
 }
 
-// DBRealmStore is a database implementation of RealmStore.
-type DBRealmStore struct {
+// DBRealmRepository is a database implementation of RealmRepository.
+type DBRealmRepository struct {
 	queries *sqlc.Queries
 }
 
-// NewDBRealmStore creates a new database-backed realm store.
-func NewDBRealmStore(queries *sqlc.Queries) *DBRealmStore {
-	return &DBRealmStore{queries: queries}
+// NewDBRealmRepository creates a new database-backed realm repository.
+func NewDBRealmRepository(queries *sqlc.Queries) *DBRealmRepository {
+	return &DBRealmRepository{queries: queries}
 }
 
 // Create creates a new realm.
-func (s *DBRealmStore) Create(ctx context.Context, realm *Realm) error {
+func (s *DBRealmRepository) Create(ctx context.Context, realm *Realm) error {
 	return s.queries.CreateRealm(ctx, sqlc.CreateRealmParams{
 		ID:            realm.ID,
 		OwnerID:       realm.OwnerID,
@@ -51,7 +51,7 @@ func (s *DBRealmStore) Create(ctx context.Context, realm *Realm) error {
 }
 
 // Get retrieves a realm by ID.
-func (s *DBRealmStore) Get(ctx context.Context, id string) (*Realm, error) {
+func (s *DBRealmRepository) Get(ctx context.Context, id string) (*Realm, error) {
 	row, err := s.queries.GetRealm(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -63,7 +63,7 @@ func (s *DBRealmStore) Get(ctx context.Context, id string) (*Realm, error) {
 }
 
 // GetByHeadscaleUser retrieves a realm by Headscale user.
-func (s *DBRealmStore) GetByHeadscaleUser(ctx context.Context, headscaleUser string) (*Realm, error) {
+func (s *DBRealmRepository) GetByHeadscaleUser(ctx context.Context, headscaleUser string) (*Realm, error) {
 	row, err := s.queries.GetRealmByHeadscaleUser(ctx, headscaleUser)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -75,7 +75,7 @@ func (s *DBRealmStore) GetByHeadscaleUser(ctx context.Context, headscaleUser str
 }
 
 // ListByOwner lists all realms owned by a user.
-func (s *DBRealmStore) ListByOwner(ctx context.Context, ownerID string) ([]*Realm, error) {
+func (s *DBRealmRepository) ListByOwner(ctx context.Context, ownerID string) ([]*Realm, error) {
 	rows, err := s.queries.ListRealmsByOwner(ctx, ownerID)
 	if err != nil {
 		return nil, err
@@ -88,7 +88,7 @@ func (s *DBRealmStore) ListByOwner(ctx context.Context, ownerID string) ([]*Real
 }
 
 // Update updates a realm.
-func (s *DBRealmStore) Update(ctx context.Context, realm *Realm) error {
+func (s *DBRealmRepository) Update(ctx context.Context, realm *Realm) error {
 	return s.queries.UpdateRealm(ctx, sqlc.UpdateRealmParams{
 		DisplayName: realm.DisplayName,
 		ID:          realm.ID,
@@ -96,12 +96,12 @@ func (s *DBRealmStore) Update(ctx context.Context, realm *Realm) error {
 }
 
 // Delete deletes a realm.
-func (s *DBRealmStore) Delete(ctx context.Context, id string) error {
+func (s *DBRealmRepository) Delete(ctx context.Context, id string) error {
 	return s.queries.DeleteRealm(ctx, id)
 }
 
 // List lists all realms.
-func (s *DBRealmStore) List(ctx context.Context) ([]*Realm, error) {
+func (s *DBRealmRepository) List(ctx context.Context) ([]*Realm, error) {
 	rows, err := s.queries.ListRealms(ctx)
 	if err != nil {
 		return nil, err

@@ -5,27 +5,27 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/store"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/repository"
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
 )
 
 // NodesHandler handles node-related requests.
 type NodesHandler struct {
-	realmManager *headscale.RealmManager
-	apiKeyStore  store.APIKeyStore
-	auth         *AuthHelper
+	realmManager     *headscale.RealmManager
+	apiKeyRepository repository.APIKeyRepository
+	auth             *AuthHelper
 }
 
 // NewNodesHandler creates a new NodesHandler.
 func NewNodesHandler(
 	realmManager *headscale.RealmManager,
-	apiKeyStore store.APIKeyStore,
+	apiKeyRepository repository.APIKeyRepository,
 	auth *AuthHelper,
 ) *NodesHandler {
 	return &NodesHandler{
-		realmManager: realmManager,
-		apiKeyStore:  apiKeyStore,
-		auth:         auth,
+		realmManager:     realmManager,
+		apiKeyRepository: apiKeyRepository,
+		auth:             auth,
 	}
 }
 
@@ -69,11 +69,11 @@ func (h *NodesHandler) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *NodesHandler) authenticate(r *http.Request) (*store.Realm, error) {
+func (h *NodesHandler) authenticate(r *http.Request) (*repository.Realm, error) {
 	ctx := r.Context()
 
 	if key := GetBearerToken(r); key != "" {
-		apiKey, err := h.apiKeyStore.GetByKey(ctx, key)
+		apiKey, err := h.apiKeyRepository.GetByKey(ctx, key)
 		if err != nil {
 			return nil, err
 		}
@@ -81,7 +81,7 @@ func (h *NodesHandler) authenticate(r *http.Request) (*store.Realm, error) {
 			return nil, ErrInvalidAPIKey
 		}
 
-		if err := h.apiKeyStore.UpdateLastUsed(ctx, apiKey.ID); err != nil {
+		if err := h.apiKeyRepository.UpdateLastUsed(ctx, apiKey.ID); err != nil {
 			slog.Warn("update API key last used", "error", err)
 		}
 

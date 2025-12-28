@@ -10,7 +10,7 @@ import (
 
 	v1 "github.com/juanfont/headscale/gen/go/headscale/v1"
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/database"
-	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/store"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/repository"
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
 	"github.com/strrl/wonder-mesh-net/pkg/jointoken"
 	"github.com/strrl/wonder-mesh-net/pkg/oidc"
@@ -31,12 +31,12 @@ type Server struct {
 	aclManager              *headscale.ACLManager
 	oidcRegistry            *oidc.Registry
 	tokenGenerator          *jointoken.Generator
-	userStore               *store.DBUserStore
-	sessionStore            *store.DBSessionStore
-	realmStore              *store.DBRealmStore
-	identityStore           *store.DBOIDCIdentityStore
-	apiKeyStore             *store.DBAPIKeyStore
-	deviceFlowStore         *store.DeviceRequestStore
+	userRepository          *repository.DBUserRepository
+	sessionRepository       *repository.DBSessionRepository
+	realmRepository         *repository.DBRealmRepository
+	identityRepository      *repository.DBOIDCIdentityRepository
+	apiKeyRepository        *repository.DBAPIKeyRepository
+	deviceFlowRepository    *repository.DeviceRequestRepository
 }
 
 // BootstrapNewServer creates a new coordinator server.
@@ -106,8 +106,8 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 	}
 	headscaleClient := v1.NewHeadscaleServiceClient(headscaleConn)
 
-	stateStore := store.NewDBAuthStateStore(db.Queries(), 10*time.Minute)
-	oidcRegistry := oidc.NewRegistryWithStore(stateStore)
+	authStateRepository := repository.NewDBAuthStateRepository(db.Queries(), 10*time.Minute)
+	oidcRegistry := oidc.NewRegistryWithStore(authStateRepository)
 
 	for _, providerConfig := range config.OIDCProviders() {
 		if err := oidcRegistry.RegisterProvider(ctx, providerConfig); err != nil {
@@ -135,12 +135,12 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 		aclManager:              headscale.NewACLManager(headscaleClient),
 		oidcRegistry:            oidcRegistry,
 		tokenGenerator:          tokenGenerator,
-		userStore:               store.NewDBUserStore(db.Queries()),
-		sessionStore:            store.NewDBSessionStore(db.Queries()),
-		realmStore:              store.NewDBRealmStore(db.Queries()),
-		identityStore:           store.NewDBOIDCIdentityStore(db.Queries()),
-		apiKeyStore:             store.NewDBAPIKeyStore(db.Queries()),
-		deviceFlowStore:         store.NewDeviceRequestStore(db.Queries()),
+		userRepository:          repository.NewDBUserRepository(db.Queries()),
+		sessionRepository:       repository.NewDBSessionRepository(db.Queries()),
+		realmRepository:         repository.NewDBRealmRepository(db.Queries()),
+		identityRepository:      repository.NewDBOIDCIdentityRepository(db.Queries()),
+		apiKeyRepository:        repository.NewDBAPIKeyRepository(db.Queries()),
+		deviceFlowRepository:    repository.NewDeviceRequestRepository(db.Queries()),
 	}, nil
 }
 

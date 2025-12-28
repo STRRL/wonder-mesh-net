@@ -18,31 +18,31 @@ import (
 // and handles graceful shutdown on SIGINT or SIGTERM with a 10-second timeout.
 func (s *Server) Run() error {
 	healthHandler := handlers.NewHealthHandler(s.headscaleClient)
-	authHelper := handlers.NewAuthHelper(s.sessionStore, s.realmStore)
+	authHelper := handlers.NewAuthHelper(s.sessionRepository, s.realmRepository)
 	authHandler := handlers.NewAuthHandler(
 		s.config.PublicURL,
 		s.oidcRegistry,
 		s.realmManager,
 		s.aclManager,
-		s.sessionStore,
-		s.userStore,
-		s.identityStore,
-		s.realmStore,
+		s.sessionRepository,
+		s.userRepository,
+		s.identityRepository,
+		s.realmRepository,
 	)
-	nodesHandler := handlers.NewNodesHandler(s.realmManager, s.apiKeyStore, authHelper)
-	apiKeyHandler := handlers.NewAPIKeyHandler(s.apiKeyStore, authHelper)
-	deployerHandler := handlers.NewDeployerHandler(s.config.PublicURL, s.realmManager, s.apiKeyStore, authHelper)
+	nodesHandler := handlers.NewNodesHandler(s.realmManager, s.apiKeyRepository, authHelper)
+	apiKeyHandler := handlers.NewAPIKeyHandler(s.apiKeyRepository, authHelper)
+	deployerHandler := handlers.NewDeployerHandler(s.config.PublicURL, s.realmManager, s.apiKeyRepository, authHelper)
 	workerHandler := handlers.NewWorkerHandler(
 		s.config.PublicURL,
 		s.config.JWTSecret,
 		s.realmManager,
 		s.tokenGenerator,
-		s.sessionStore,
-		s.realmStore,
+		s.sessionRepository,
+		s.realmRepository,
 	)
 	deviceHandler := handlers.NewDeviceHandler(
 		s.config.PublicURL,
-		s.deviceFlowStore,
+		s.deviceFlowRepository,
 		s.realmManager,
 		authHelper,
 	)
@@ -104,7 +104,7 @@ func (s *Server) Run() error {
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
-			if err := s.deviceFlowStore.DeleteExpired(context.Background()); err != nil {
+			if err := s.deviceFlowRepository.DeleteExpired(context.Background()); err != nil {
 				slog.Warn("cleanup expired device requests", "error", err)
 			}
 		}

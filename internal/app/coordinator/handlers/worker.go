@@ -7,19 +7,19 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/store"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/repository"
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
 	"github.com/strrl/wonder-mesh-net/pkg/jointoken"
 )
 
 // WorkerHandler handles worker-related requests.
 type WorkerHandler struct {
-	publicURL      string
-	jwtSecret      string
-	realmManager   *headscale.RealmManager
-	tokenGenerator *jointoken.Generator
-	sessionStore   store.SessionStore
-	realmStore     store.RealmStore
+	publicURL         string
+	jwtSecret         string
+	realmManager      *headscale.RealmManager
+	tokenGenerator    *jointoken.Generator
+	sessionRepository repository.SessionRepository
+	realmRepository   repository.RealmRepository
 }
 
 // NewWorkerHandler creates a new WorkerHandler.
@@ -28,16 +28,16 @@ func NewWorkerHandler(
 	jwtSecret string,
 	realmManager *headscale.RealmManager,
 	tokenGenerator *jointoken.Generator,
-	sessionStore store.SessionStore,
-	realmStore store.RealmStore,
+	sessionRepository repository.SessionRepository,
+	realmRepository repository.RealmRepository,
 ) *WorkerHandler {
 	return &WorkerHandler{
-		publicURL:      publicURL,
-		jwtSecret:      jwtSecret,
-		realmManager:   realmManager,
-		tokenGenerator: tokenGenerator,
-		sessionStore:   sessionStore,
-		realmStore:     realmStore,
+		publicURL:         publicURL,
+		jwtSecret:         jwtSecret,
+		realmManager:      realmManager,
+		tokenGenerator:    tokenGenerator,
+		sessionRepository: sessionRepository,
+		realmRepository:   realmRepository,
 	}
 }
 
@@ -56,7 +56,7 @@ func (h *WorkerHandler) HandleCreateJoinToken(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	session, err := h.sessionStore.Get(ctx, sessionID)
+	session, err := h.sessionRepository.Get(ctx, sessionID)
 	if err != nil {
 		slog.Error("get session", "error", err)
 		http.Error(w, "invalid session", http.StatusUnauthorized)
@@ -67,11 +67,11 @@ func (h *WorkerHandler) HandleCreateJoinToken(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := h.sessionStore.UpdateLastUsed(ctx, sessionID); err != nil {
+	if err := h.sessionRepository.UpdateLastUsed(ctx, sessionID); err != nil {
 		slog.Warn("update session last used", "error", err, "session_id", sessionID)
 	}
 
-	realms, err := h.realmStore.ListByOwner(ctx, session.UserID)
+	realms, err := h.realmRepository.ListByOwner(ctx, session.UserID)
 	if err != nil {
 		slog.Error("list user realms", "error", err)
 		http.Error(w, "list realms", http.StatusInternalServerError)
@@ -140,7 +140,7 @@ func (h *WorkerHandler) HandleWorkerJoin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	realm, err := h.realmStore.Get(ctx, claims.RealmID)
+	realm, err := h.realmRepository.Get(ctx, claims.RealmID)
 	if err != nil || realm == nil {
 		http.Error(w, "invalid realm in token", http.StatusUnauthorized)
 		return
