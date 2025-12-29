@@ -19,7 +19,6 @@ type contextKey string
 // Context keys for request context values.
 const (
 	ContextKeyWonderNet contextKey = "wonder_net"
-	ContextKeyUserID    contextKey = "user_id"
 )
 
 // DeviceCodeResponse represents the response from device code initiation.

@@ -190,8 +190,8 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 }
 
 // requireAuth wraps a handler with JWT authentication.
-// It validates the JWT token and adds the user's wonder net to the request context.
-// Supports both regular users and service accounts.
+// It validates the JWT token and adds the claims to the request context.
+// This middleware only handles authentication, not WonderNet resolution.
 func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := extractBearerToken(r)
@@ -207,10 +207,24 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		var wonderNet *repository.WonderNet
-		var isServiceAccount bool
+		ctx := context.WithValue(r.Context(), jwtauth.ContextKeyClaims, claims)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	}
+}
 
-		wonderNet, isServiceAccount, err = s.wonderNetService.ResolveWonderNetFromClaims(r.Context(), claims)
+// requireWonderNet wraps a handler to resolve the WonderNet from JWT claims.
+// For regular users, it auto-creates a WonderNet if none exists.
+// For service accounts, it looks up the associated WonderNet.
+// Must be used after requireAuth.
+func (s *Server) requireWonderNet(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		claims := jwtauth.ClaimsFromContext(r.Context())
+		if claims == nil {
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
+
+		wonderNet, isServiceAccount, err := s.wonderNetService.ResolveWonderNetFromClaims(r.Context(), claims)
 		if err != nil {
 			if isServiceAccount {
 				slog.Error("get service account wonder net", "error", err)
@@ -218,12 +232,11 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 			slog.Error("get or create wonder net", "error", err)
-			http.Error(w, "authentication failed", http.StatusInternalServerError)
+			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 
 		ctx := context.WithValue(r.Context(), controller.ContextKeyWonderNet, wonderNet)
-		ctx = context.WithValue(ctx, jwtauth.ContextKeyClaims, claims)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	}
 }
@@ -267,17 +280,17 @@ func (s *Server) Run() error {
 	// Device flow endpoints (used by CLI for device authorization)
 	mux.HandleFunc("POST /coordinator/device/code", deviceFlowController.HandleDeviceCode)
 	mux.HandleFunc("GET /coordinator/device/verify", deviceFlowController.HandleDeviceVerifyPage)
-	mux.HandleFunc("POST /coordinator/device/verify", s.requireAuth(deviceFlowController.HandleDeviceVerify))
+	mux.HandleFunc("POST /coordinator/device/verify", s.requireAuth(s.requireWonderNet(deviceFlowController.HandleDeviceVerify)))
 	mux.HandleFunc("POST /coordinator/device/token", deviceFlowController.HandleDeviceToken)
 
-	// Protected endpoints - require JWT authentication
-	mux.HandleFunc("POST /coordinator/api/v1/authkey", s.requireAuth(authKeyController.HandleCreateAuthKey))
-	mux.HandleFunc("POST /coordinator/api/v1/join-token", s.requireAuth(joinTokenController.HandleCreateJoinToken))
-	mux.HandleFunc("GET /coordinator/api/v1/nodes", s.requireAuth(nodesController.HandleListNodes))
-	mux.HandleFunc("POST /coordinator/api/v1/service-accounts", s.requireAuth(serviceAccountController.HandleCreate))
-	mux.HandleFunc("GET /coordinator/api/v1/service-accounts", s.requireAuth(serviceAccountController.HandleList))
-	mux.HandleFunc("DELETE /coordinator/api/v1/service-accounts/{id}", s.requireAuth(serviceAccountController.HandleDelete))
-	mux.HandleFunc("POST /coordinator/api/v1/deployer/join", s.requireAuth(deployerController.HandleDeployerJoin))
+	// Protected endpoints - require JWT authentication and WonderNet
+	mux.HandleFunc("POST /coordinator/api/v1/authkey", s.requireAuth(s.requireWonderNet(authKeyController.HandleCreateAuthKey)))
+	mux.HandleFunc("POST /coordinator/api/v1/join-token", s.requireAuth(s.requireWonderNet(joinTokenController.HandleCreateJoinToken)))
+	mux.HandleFunc("GET /coordinator/api/v1/nodes", s.requireAuth(s.requireWonderNet(nodesController.HandleListNodes)))
+	mux.HandleFunc("POST /coordinator/api/v1/service-accounts", s.requireAuth(s.requireWonderNet(serviceAccountController.HandleCreate)))
+	mux.HandleFunc("GET /coordinator/api/v1/service-accounts", s.requireAuth(s.requireWonderNet(serviceAccountController.HandleList)))
+	mux.HandleFunc("DELETE /coordinator/api/v1/service-accounts/{id}", s.requireAuth(s.requireWonderNet(serviceAccountController.HandleDelete)))
+	mux.HandleFunc("POST /coordinator/api/v1/deployer/join", s.requireAuth(s.requireWonderNet(deployerController.HandleDeployerJoin)))
 
 	mux.HandleFunc("/coordinator/", func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
