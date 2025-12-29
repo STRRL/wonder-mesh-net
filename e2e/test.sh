@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+COOKIE_JAR="cookies.txt"
+
 # Color output functions
 log_info() {
     echo -e "\033[0;32m[INFO]\033[0m $1"
@@ -18,7 +20,7 @@ log_error() {
 cleanup() {
     log_info "Cleaning up..."
     docker compose -f docker-compose.yaml down -v --remove-orphans 2>/dev/null || true
-    rm -f cookies.txt
+    rm -f "$COOKIE_JAR"
 }
 
 # Set trap for cleanup on exit
@@ -78,7 +80,6 @@ fi
 # OIDC login flow
 log_info "Testing OIDC login flow..."
 
-COOKIE_JAR="cookies.txt"
 rm -f "$COOKIE_JAR"
 
 log_info "Starting login flow..."
