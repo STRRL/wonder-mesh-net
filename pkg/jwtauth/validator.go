@@ -13,12 +13,12 @@ import (
 )
 
 var (
-	ErrInvalidToken     = errors.New("invalid token")
-	ErrExpiredToken     = errors.New("token expired")
-	ErrMissingClaim     = errors.New("missing required claim")
-	ErrInvalidAudience  = errors.New("invalid audience")
-	ErrInvalidIssuer    = errors.New("invalid issuer")
-	ErrJWKSFetchFailed  = errors.New("JWKS fetch failed")
+	ErrInvalidToken    = errors.New("invalid token")
+	ErrExpiredToken    = errors.New("token expired")
+	ErrMissingClaim    = errors.New("missing required claim")
+	ErrInvalidAudience = errors.New("invalid audience")
+	ErrInvalidIssuer   = errors.New("invalid issuer")
+	ErrJWKSFetchFailed = errors.New("JWKS fetch failed")
 )
 
 // Claims represents the expected JWT claims from Keycloak.
@@ -52,10 +52,10 @@ type Claims struct {
 
 // ValidatorConfig holds configuration for the JWT validator.
 type ValidatorConfig struct {
-	JWKSURL          string
-	Issuer           string
-	Audience         string
-	RefreshInterval  time.Duration
+	JWKSURL         string
+	Issuer          string
+	Audience        string
+	RefreshInterval time.Duration
 }
 
 // Validator validates JWTs using JWKS from Keycloak.

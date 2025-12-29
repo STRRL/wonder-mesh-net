@@ -24,9 +24,9 @@ type AdminClientConfig struct {
 
 // AdminClient provides Keycloak Admin API operations.
 type AdminClient struct {
-	client       *gocloak.GoCloak
-	config       AdminClientConfig
-	accessToken  string
+	client      *gocloak.GoCloak
+	config      AdminClientConfig
+	accessToken string
 }
 
 // NewAdminClient creates a new Keycloak admin client.

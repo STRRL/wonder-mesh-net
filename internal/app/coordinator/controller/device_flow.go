@@ -13,6 +13,32 @@ import (
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/service"
 )
 
+// contextKey is a type for context keys used by controllers.
+type contextKey string
+
+// Context keys for request context values.
+const (
+	ContextKeyWonderNet contextKey = "wonder_net"
+	ContextKeyUserID    contextKey = "user_id"
+)
+
+// DeviceCodeResponse represents the response from device code initiation.
+type DeviceCodeResponse struct {
+	DeviceCode      string `json:"device_code"`
+	UserCode        string `json:"user_code"`
+	VerificationURL string `json:"verification_url"`
+	ExpiresIn       int    `json:"expires_in"`
+	Interval        int    `json:"interval"`
+}
+
+// DeviceTokenResponse represents the response from device token polling.
+type DeviceTokenResponse struct {
+	Authkey      string `json:"authkey,omitempty"`
+	HeadscaleURL string `json:"headscale_url,omitempty"`
+	User         string `json:"user,omitempty"`
+	Error        string `json:"error,omitempty"`
+}
+
 // WonderNetFromContext retrieves the WonderNet from the request context.
 // This expects the JWT middleware to have set the wonder net in the context.
 func WonderNetFromContext(r *http.Request) *repository.WonderNet {

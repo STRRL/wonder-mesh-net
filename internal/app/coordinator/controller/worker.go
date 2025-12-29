@@ -8,6 +8,13 @@ import (
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/service"
 )
 
+// JoinCredentialsResponse contains credentials for joining the mesh.
+type JoinCredentialsResponse struct {
+	AuthKey      string `json:"authkey"`
+	HeadscaleURL string `json:"headscale_url"`
+	User         string `json:"user"`
+}
+
 // WorkerController handles worker node registration.
 type WorkerController struct {
 	workerService *service.WorkerService

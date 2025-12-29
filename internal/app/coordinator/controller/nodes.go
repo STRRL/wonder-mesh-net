@@ -8,6 +8,21 @@ import (
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/service"
 )
 
+// NodeResponse represents a mesh network node in JSON responses.
+type NodeResponse struct {
+	ID       uint64   `json:"id"`
+	Name     string   `json:"name"`
+	IPAddrs  []string `json:"ip_addresses"`
+	Online   bool     `json:"online"`
+	LastSeen string   `json:"last_seen,omitempty"`
+}
+
+// NodeListResponse represents the response for listing nodes.
+type NodeListResponse struct {
+	Nodes []NodeResponse `json:"nodes"`
+	Count int            `json:"count"`
+}
+
 // NodesController handles node listing.
 type NodesController struct {
 	nodesService *service.NodesService
