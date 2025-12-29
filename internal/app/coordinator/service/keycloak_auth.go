@@ -13,9 +13,10 @@ import (
 )
 
 var (
-	ErrUserNotFound     = errors.New("user not found")
-	ErrWonderNetExists  = errors.New("wonder net already exists")
-	ErrNoWonderNet      = errors.New("no wonder net associated with user")
+	ErrUserNotFound    = errors.New("user not found")
+	ErrUserExists      = errors.New("user already exists")
+	ErrWonderNetExists = errors.New("wonder net already exists")
+	ErrNoWonderNet     = errors.New("no wonder net associated with user")
 )
 
 // KeycloakAuthService handles Keycloak-based authentication.
@@ -44,10 +45,9 @@ func NewKeycloakAuthService(
 	}
 }
 
-// EnsureUserAndWonderNet ensures a user and their wonder net exist for the given JWT claims.
-// If the user doesn't exist, they are created along with their wonder net.
-// Returns the user and wonder net.
-func (s *KeycloakAuthService) EnsureUserAndWonderNet(ctx context.Context, claims *jwtauth.Claims) (*repository.User, *repository.WonderNet, error) {
+// GetUserAndWonderNet gets an existing user and their wonder net from JWT claims.
+// Returns ErrUserNotFound if the user doesn't exist, or ErrNoWonderNet if no wonder net exists.
+func (s *KeycloakAuthService) GetUserAndWonderNet(ctx context.Context, claims *jwtauth.Claims) (*repository.User, *repository.WonderNet, error) {
 	keycloakSub := claims.Subject
 	if keycloakSub == "" {
 		return nil, nil, fmt.Errorf("missing subject claim")
@@ -57,46 +57,74 @@ func (s *KeycloakAuthService) EnsureUserAndWonderNet(ctx context.Context, claims
 	if err != nil {
 		return nil, nil, fmt.Errorf("get user by keycloak sub: %w", err)
 	}
-
 	if user == nil {
-		displayName := claims.PreferredUsername
-		if displayName == "" {
-			displayName = claims.Name
-		}
-		if displayName == "" {
-			displayName = claims.Email
-		}
-
-		user, err = s.userRepository.Create(ctx, keycloakSub, displayName)
-		if err != nil {
-			return nil, nil, fmt.Errorf("create user: %w", err)
-		}
-		slog.Info("created user from Keycloak", "user_id", user.ID, "display_name", displayName)
-
-		wonderNet, err := s.wonderNetService.ProvisionWonderNet(ctx, user.ID, displayName+"'s Wonder Net")
-		if err != nil {
-			return nil, nil, fmt.Errorf("provision wonder net for new user: %w", err)
-		}
-		slog.Info("created wonder net for user", "user_id", user.ID, "wonder_net_id", wonderNet.ID)
-
-		return user, wonderNet, nil
+		return nil, nil, ErrUserNotFound
 	}
 
 	wonderNets, err := s.wonderNetRepository.ListByOwner(ctx, user.ID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("list wonder nets by owner: %w", err)
 	}
-
 	if len(wonderNets) == 0 {
-		wonderNet, err := s.wonderNetService.ProvisionWonderNet(ctx, user.ID, user.DisplayName+"'s Wonder Net")
-		if err != nil {
-			return nil, nil, fmt.Errorf("provision wonder net for existing user: %w", err)
-		}
-		slog.Info("created wonder net for existing user", "user_id", user.ID, "wonder_net_id", wonderNet.ID)
-		return user, wonderNet, nil
+		return nil, nil, ErrNoWonderNet
 	}
 
 	return user, wonderNets[0], nil
+}
+
+// CreateUserAndWonderNet creates a new user and wonder net from JWT claims.
+// This should be called during user registration (e.g., first device flow completion).
+// Returns ErrUserExists if the user already exists.
+func (s *KeycloakAuthService) CreateUserAndWonderNet(ctx context.Context, claims *jwtauth.Claims) (*repository.User, *repository.WonderNet, error) {
+	keycloakSub := claims.Subject
+	if keycloakSub == "" {
+		return nil, nil, fmt.Errorf("missing subject claim")
+	}
+
+	existing, err := s.userRepository.GetByKeycloakSub(ctx, keycloakSub)
+	if err != nil {
+		return nil, nil, fmt.Errorf("check existing user: %w", err)
+	}
+	if existing != nil {
+		return nil, nil, ErrUserExists
+	}
+
+	displayName := claims.PreferredUsername
+	if displayName == "" {
+		displayName = claims.Name
+	}
+	if displayName == "" {
+		displayName = claims.Email
+	}
+
+	user, err := s.userRepository.Create(ctx, keycloakSub, displayName)
+	if err != nil {
+		return nil, nil, fmt.Errorf("create user: %w", err)
+	}
+	slog.Info("created user from Keycloak", "user_id", user.ID, "display_name", displayName)
+
+	wonderNet, err := s.wonderNetService.ProvisionWonderNet(ctx, user.ID, displayName+"'s Wonder Net")
+	if err != nil {
+		return nil, nil, fmt.Errorf("provision wonder net: %w", err)
+	}
+	slog.Info("created wonder net for user", "user_id", user.ID, "wonder_net_id", wonderNet.ID)
+
+	return user, wonderNet, nil
+}
+
+// GetOrCreateUserAndWonderNet gets existing user and wonder net, or creates them if not found.
+// This is a convenience method for flows where user registration is implicit (e.g., first login).
+func (s *KeycloakAuthService) GetOrCreateUserAndWonderNet(ctx context.Context, claims *jwtauth.Claims) (*repository.User, *repository.WonderNet, error) {
+	user, wonderNet, err := s.GetUserAndWonderNet(ctx, claims)
+	if err == nil {
+		return user, wonderNet, nil
+	}
+
+	if !errors.Is(err, ErrUserNotFound) && !errors.Is(err, ErrNoWonderNet) {
+		return nil, nil, err
+	}
+
+	return s.CreateUserAndWonderNet(ctx, claims)
 }
 
 // GetUserWonderNet gets the wonder net for a user identified by JWT claims.

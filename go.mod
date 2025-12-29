@@ -1,6 +1,6 @@
 module github.com/strrl/wonder-mesh-net
 
-go 1.25
+go 1.25.5
 
 require (
 	github.com/Nerzal/gocloak/v13 v13.9.0

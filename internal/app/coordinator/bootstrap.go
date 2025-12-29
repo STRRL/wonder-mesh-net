@@ -44,9 +44,9 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		} else {
-			_, wonderNet, err = s.keycloakAuthService.EnsureUserAndWonderNet(r.Context(), claims)
+			_, wonderNet, err = s.keycloakAuthService.GetOrCreateUserAndWonderNet(r.Context(), claims)
 			if err != nil {
-				slog.Error("ensure user and wonder net", "error", err)
+				slog.Error("get or create user and wonder net", "error", err)
 				http.Error(w, "authentication failed", http.StatusInternalServerError)
 				return
 			}
