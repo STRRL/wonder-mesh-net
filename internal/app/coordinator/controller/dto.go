@@ -1,22 +1,14 @@
 // Package controller provides HTTP handlers for the coordinator API.
 package controller
 
-import "time"
+// contextKey is a type for context keys used by controllers.
+type contextKey string
 
-// APIKeyResponse represents an API key in JSON responses.
-type APIKeyResponse struct {
-	ID         string     `json:"id"`
-	Key        string     `json:"key,omitempty"`
-	Name       string     `json:"name"`
-	CreatedAt  time.Time  `json:"created_at"`
-	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
-	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
-}
-
-// APIKeyListResponse represents the response for listing API keys.
-type APIKeyListResponse struct {
-	APIKeys []APIKeyResponse `json:"api_keys"`
-}
+// Context keys for request context values.
+const (
+	ContextKeyWonderNet contextKey = "wonder_net"
+	ContextKeyUserID    contextKey = "user_id"
+)
 
 // NodeResponse represents a mesh network node in JSON responses.
 type NodeResponse struct {

@@ -3,31 +3,44 @@ package controller
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"html"
 	"log/slog"
 	"net/http"
+	"net/url"
 
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/repository"
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/service"
 )
 
+// WonderNetFromContext retrieves the WonderNet from the request context.
+// This expects the JWT middleware to have set the wonder net in the context.
+func WonderNetFromContext(r *http.Request) *repository.WonderNet {
+	if wn, ok := r.Context().Value(ContextKeyWonderNet).(*repository.WonderNet); ok {
+		return wn
+	}
+	return nil
+}
+
 // DeviceFlowController handles OAuth 2.0 Device Authorization Grant (RFC 8628).
 type DeviceFlowController struct {
 	deviceFlowService *service.DeviceFlowService
-	authService       *service.AuthService
 	publicURL         string
+	keycloakLoginURL  string
 }
 
 // NewDeviceFlowController creates a new DeviceFlowController.
 func NewDeviceFlowController(
 	deviceFlowService *service.DeviceFlowService,
-	authService *service.AuthService,
 	publicURL string,
+	keycloakURL string,
+	keycloakRealm string,
 ) *DeviceFlowController {
+	keycloakLoginURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/auth", keycloakURL, keycloakRealm)
 	return &DeviceFlowController{
 		deviceFlowService: deviceFlowService,
-		authService:       authService,
 		publicURL:         publicURL,
+		keycloakLoginURL:  keycloakLoginURL,
 	}
 }
 
@@ -60,6 +73,13 @@ func (c *DeviceFlowController) HandleDeviceCode(w http.ResponseWriter, r *http.R
 // HandleDeviceVerifyPage handles GET /device/verify requests.
 func (c *DeviceFlowController) HandleDeviceVerifyPage(w http.ResponseWriter, r *http.Request) {
 	userCode := html.EscapeString(r.URL.Query().Get("code"))
+
+	keycloakLoginURL := c.keycloakLoginURL + "?" + url.Values{
+		"response_type": {"code"},
+		"client_id":     {"wonder-mesh-net"},
+		"redirect_uri":  {c.publicURL + "/coordinator/device/verify"},
+		"scope":         {"openid profile email"},
+	}.Encode()
 
 	htmlContent := `<!DOCTYPE html>
 <html>
@@ -141,7 +161,7 @@ func (c *DeviceFlowController) HandleDeviceVerifyPage(w http.ResponseWriter, r *
             </form>
             <div id="error" class="error"></div>
             <div class="login-prompt" id="login-prompt" style="display:none;">
-                <a href="#" id="login-link">Login first to authorize this device</a>
+                <a href="` + html.EscapeString(keycloakLoginURL) + `" id="login-link">Login first to authorize this device</a>
             </div>
         </div>
         <div id="success-view" class="success" style="display:none;">
@@ -151,6 +171,7 @@ func (c *DeviceFlowController) HandleDeviceVerifyPage(w http.ResponseWriter, r *
         </div>
     </div>
     <script>
+        const KEYCLOAK_LOGIN_URL = '` + html.EscapeString(keycloakLoginURL) + `';
         const form = document.getElementById('verify-form');
         const errorDiv = document.getElementById('error');
         const loginPrompt = document.getElementById('login-prompt');
@@ -186,9 +207,6 @@ func (c *DeviceFlowController) HandleDeviceVerifyPage(w http.ResponseWriter, r *
                     successView.style.display = 'block';
                 } else if (resp.status === 401) {
                     loginPrompt.style.display = 'block';
-                    document.getElementById('login-link').href =
-                        '/coordinator/oidc/login?provider=github&redirect=' +
-                        encodeURIComponent(window.location.href);
                     errorDiv.textContent = data.error || 'Please login first';
                 } else {
                     errorDiv.textContent = data.error || 'Verification failed';
@@ -211,16 +229,16 @@ func (c *DeviceFlowController) HandleDeviceVerifyPage(w http.ResponseWriter, r *
 }
 
 // HandleDeviceVerify handles POST /device/verify requests.
+// This endpoint requires JWT authentication - the wonder net is expected to be
+// set in the request context by the JWT middleware.
 func (c *DeviceFlowController) HandleDeviceVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	ctx := r.Context()
-
-	realm, err := c.authService.GetRealmFromRequest(ctx, r)
-	if err != nil || realm == nil {
+	wonderNet := WonderNetFromContext(r)
+	if wonderNet == nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "login required"})
@@ -244,7 +262,7 @@ func (c *DeviceFlowController) HandleDeviceVerify(w http.ResponseWriter, r *http
 		return
 	}
 
-	err = c.deviceFlowService.ApproveDevice(ctx, req.UserCode, realm)
+	err := c.deviceFlowService.ApproveDevice(r.Context(), req.UserCode, wonderNet)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		if errors.Is(err, repository.ErrDeviceRequestNotFound) {

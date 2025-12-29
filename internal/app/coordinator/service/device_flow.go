@@ -33,19 +33,19 @@ type DeviceFlowResult struct {
 // DeviceFlowService handles RFC 8628 device authorization flow.
 type DeviceFlowService struct {
 	deviceRequestRepository *repository.DeviceRequestRepository
-	realmService            *RealmService
+	wonderNetService        *WonderNetService
 	publicURL               string
 }
 
 // NewDeviceFlowService creates a new DeviceFlowService.
 func NewDeviceFlowService(
 	deviceRequestRepository *repository.DeviceRequestRepository,
-	realmService *RealmService,
+	wonderNetService *WonderNetService,
 	publicURL string,
 ) *DeviceFlowService {
 	return &DeviceFlowService{
 		deviceRequestRepository: deviceRequestRepository,
-		realmService:            realmService,
+		wonderNetService:        wonderNetService,
 		publicURL:               publicURL,
 	}
 }
@@ -77,7 +77,7 @@ func (s *DeviceFlowService) ValidateDeviceCode(deviceCode string) bool {
 }
 
 // ApproveDevice approves a device request with the given user code.
-func (s *DeviceFlowService) ApproveDevice(ctx context.Context, userCode string, realm *repository.Realm) error {
+func (s *DeviceFlowService) ApproveDevice(ctx context.Context, userCode string, wonderNet *repository.WonderNet) error {
 	deviceReq, err := s.deviceRequestRepository.GetByUserCode(ctx, userCode)
 	if err != nil {
 		return err
@@ -87,7 +87,7 @@ func (s *DeviceFlowService) ApproveDevice(ctx context.Context, userCode string, 
 		return ErrCodeAlreadyUsed
 	}
 
-	authKey, err := s.realmService.CreateAuthKey(ctx, realm, 24*time.Hour, false)
+	authKey, err := s.wonderNetService.CreateAuthKey(ctx, wonderNet, 24*time.Hour, false)
 	if err != nil {
 		return err
 	}
@@ -95,8 +95,8 @@ func (s *DeviceFlowService) ApproveDevice(ctx context.Context, userCode string, 
 	return s.deviceRequestRepository.Approve(
 		ctx,
 		userCode,
-		realm.ID,
-		realm.HeadscaleUser,
+		wonderNet.ID,
+		wonderNet.HeadscaleUser,
 		authKey,
 		s.publicURL,
 		s.publicURL,

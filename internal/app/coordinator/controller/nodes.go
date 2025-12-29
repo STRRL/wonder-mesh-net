@@ -11,32 +11,26 @@ import (
 // NodesController handles node listing.
 type NodesController struct {
 	nodesService *service.NodesService
-	authService  *service.AuthService
 }
 
 // NewNodesController creates a new NodesController.
-func NewNodesController(
-	nodesService *service.NodesService,
-	authService *service.AuthService,
-) *NodesController {
+func NewNodesController(nodesService *service.NodesService) *NodesController {
 	return &NodesController{
 		nodesService: nodesService,
-		authService:  authService,
 	}
 }
 
 // HandleListNodes handles GET /api/v1/nodes requests.
-// Accepts both session tokens and API keys (read-only, safe for third-party integrations).
+// This endpoint requires JWT authentication - the wonder net is expected to be
+// set in the request context by the JWT middleware.
 func (c *NodesController) HandleListNodes(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	realm, err := c.authService.GetRealmFromRequest(ctx, r)
-	if err != nil {
+	wonderNet := WonderNetFromContext(r)
+	if wonderNet == nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	nodes, err := c.nodesService.ListNodes(ctx, realm)
+	nodes, err := c.nodesService.ListNodes(r.Context(), wonderNet)
 	if err != nil {
 		slog.Error("list nodes", "error", err)
 		http.Error(w, "list nodes", http.StatusInternalServerError)

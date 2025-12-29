@@ -1,7 +1,5 @@
 package coordinator
 
-import "github.com/strrl/wonder-mesh-net/pkg/oidc"
-
 // Config holds configuration for the coordinator server.
 type Config struct {
 	// Listen is the address the coordinator HTTP server binds to (e.g., ":9080").
@@ -10,61 +8,17 @@ type Config struct {
 	PublicURL string `mapstructure:"public_url"`
 	// JWTSecret is the signing key for join tokens. If empty, a random one is generated.
 	JWTSecret string `mapstructure:"jwt_secret"`
-	// GithubClientID is the OAuth client ID for GitHub authentication.
-	GithubClientID string `mapstructure:"github_client_id"`
-	// GithubClientSecret is the OAuth client secret for GitHub authentication.
-	GithubClientSecret string `mapstructure:"github_client_secret"`
-	// GoogleClientID is the OAuth client ID for Google authentication.
-	GoogleClientID string `mapstructure:"google_client_id"`
-	// GoogleClientSecret is the OAuth client secret for Google authentication.
-	GoogleClientSecret string `mapstructure:"google_client_secret"`
-	// OIDCIssuer is the issuer URL for generic OIDC provider.
-	OIDCIssuer string `mapstructure:"oidc_issuer"`
-	// OIDCClientID is the client ID for generic OIDC provider.
-	OIDCClientID string `mapstructure:"oidc_client_id"`
-	// OIDCClientSecret is the client secret for generic OIDC provider.
-	OIDCClientSecret string `mapstructure:"oidc_client_secret"`
-}
 
-// OIDCProviders returns the configured OIDC providers based on the config fields.
-// RedirectURL is set to {PublicURL}/coordinator/oidc/callback for all providers.
-func (c *Config) OIDCProviders() []oidc.ProviderConfig {
-	var providers []oidc.ProviderConfig
-
-	redirectURL := c.PublicURL + "/coordinator/oidc/callback"
-
-	if c.GithubClientID != "" {
-		providers = append(providers, oidc.ProviderConfig{
-			Type:         "github",
-			Name:         "github",
-			ClientID:     c.GithubClientID,
-			ClientSecret: c.GithubClientSecret,
-			RedirectURL:  redirectURL,
-		})
-	}
-
-	if c.GoogleClientID != "" {
-		providers = append(providers, oidc.ProviderConfig{
-			Type:         "google",
-			Name:         "google",
-			ClientID:     c.GoogleClientID,
-			ClientSecret: c.GoogleClientSecret,
-			RedirectURL:  redirectURL,
-		})
-	}
-
-	if c.OIDCIssuer != "" {
-		providers = append(providers, oidc.ProviderConfig{
-			Type:         "oidc",
-			Name:         "oidc",
-			Issuer:       c.OIDCIssuer,
-			ClientID:     c.OIDCClientID,
-			ClientSecret: c.OIDCClientSecret,
-			RedirectURL:  redirectURL,
-		})
-	}
-
-	return providers
+	// KeycloakURL is the base URL of the Keycloak server (e.g., "https://auth.example.com").
+	KeycloakURL string `mapstructure:"keycloak_url"`
+	// KeycloakRealm is the Keycloak realm for user authentication (e.g., "wonder-mesh").
+	KeycloakRealm string `mapstructure:"keycloak_realm"`
+	// KeycloakClientID is the OIDC client ID for the coordinator (used for audience validation).
+	KeycloakClientID string `mapstructure:"keycloak_client_id"`
+	// KeycloakAdminClient is the client ID for Keycloak Admin API access.
+	KeycloakAdminClient string `mapstructure:"keycloak_admin_client"`
+	// KeycloakAdminSecret is the client secret for Keycloak Admin API access.
+	KeycloakAdminSecret string `mapstructure:"keycloak_admin_secret"`
 }
 
 const (

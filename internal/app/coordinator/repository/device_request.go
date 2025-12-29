@@ -39,7 +39,7 @@ type DeviceRequest struct {
 	UserCode       string
 	Status         DeviceStatus
 	HeadscaleUser  string
-	RealmID        string
+	WonderNetID    string
 	ExpiresAt      time.Time
 	CreatedAt      time.Time
 	Authkey        string
@@ -142,9 +142,9 @@ func (s *DeviceRequestRepository) GetByUserCode(ctx context.Context, userCode st
 }
 
 // Approve approves a device request and stores the approval details
-func (s *DeviceRequestRepository) Approve(ctx context.Context, userCode, realmID, headscaleUser, authkey, headscaleURL, coordinatorURL string) error {
+func (s *DeviceRequestRepository) Approve(ctx context.Context, userCode, wonderNetID, headscaleUser, authkey, headscaleURL, coordinatorURL string) error {
 	return s.queries.ApproveDeviceRequest(ctx, sqlc.ApproveDeviceRequestParams{
-		RealmID:        realmID,
+		WonderNetID:    wonderNetID,
 		HeadscaleUser:  headscaleUser,
 		Authkey:        authkey,
 		HeadscaleUrl:   headscaleURL,
@@ -169,7 +169,7 @@ func dbDeviceRequestToDeviceRequest(dbReq sqlc.DeviceRequest) *DeviceRequest {
 		UserCode:       dbReq.UserCode,
 		Status:         DeviceStatus(dbReq.Status),
 		HeadscaleUser:  dbReq.HeadscaleUser,
-		RealmID:        dbReq.RealmID,
+		WonderNetID:    dbReq.WonderNetID,
 		Authkey:        dbReq.Authkey,
 		HeadscaleURL:   dbReq.HeadscaleUrl,
 		CoordinatorURL: dbReq.CoordinatorUrl,

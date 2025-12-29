@@ -11,39 +11,27 @@ import (
 
 // DeployerController handles third-party PaaS deployer integration.
 type DeployerController struct {
-	realmService *service.RealmService
-	authService  *service.AuthService
+	wonderNetService *service.WonderNetService
 }
 
 // NewDeployerController creates a new DeployerController.
-func NewDeployerController(
-	realmService *service.RealmService,
-	authService *service.AuthService,
-) *DeployerController {
+func NewDeployerController(wonderNetService *service.WonderNetService) *DeployerController {
 	return &DeployerController{
-		realmService: realmService,
-		authService:  authService,
+		wonderNetService: wonderNetService,
 	}
 }
 
 // HandleDeployerJoin handles POST /api/v1/deployer/join requests.
+// This endpoint requires service account authentication via JWT.
+// The wonder net is expected to be set in the request context by the JWT middleware.
 func (c *DeployerController) HandleDeployerJoin(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	apiKey := service.GetBearerToken(r)
-	if apiKey == "" {
+	wonderNet := WonderNetFromContext(r)
+	if wonderNet == nil {
 		http.Error(w, "authorization required", http.StatusUnauthorized)
 		return
 	}
 
-	realm, err := c.authService.AuthenticateAPIKey(ctx, apiKey)
-	if err != nil {
-		slog.Error("authenticate API key", "error", err)
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	authKey, err := c.realmService.CreateAuthKey(ctx, realm, 24*time.Hour, false)
+	authKey, err := c.wonderNetService.CreateAuthKey(r.Context(), wonderNet, 24*time.Hour, false)
 	if err != nil {
 		slog.Error("create auth key", "error", err)
 		http.Error(w, "create auth key", http.StatusInternalServerError)
@@ -53,7 +41,7 @@ func (c *DeployerController) HandleDeployerJoin(w http.ResponseWriter, r *http.R
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(JoinCredentialsResponse{
 		AuthKey:      authKey,
-		HeadscaleURL: c.realmService.GetPublicURL(),
-		User:         realm.HeadscaleUser,
+		HeadscaleURL: c.wonderNetService.GetPublicURL(),
+		User:         wonderNet.HeadscaleUser,
 	})
 }

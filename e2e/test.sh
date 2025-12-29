@@ -1,8 +1,6 @@
 #!/bin/bash
 set -e
 
-COOKIE_JAR="cookies.txt"
-
 # Color output functions
 log_info() {
     echo -e "\033[0;32m[INFO]\033[0m $1"
@@ -18,9 +16,12 @@ log_error() {
 
 # Cleanup function
 cleanup() {
+    if [ "${NO_CLEANUP:-0}" = "1" ]; then
+        log_info "NO_CLEANUP=1, skipping cleanup. Containers are still running."
+        return
+    fi
     log_info "Cleaning up..."
     docker compose -f docker-compose.yaml down -v --remove-orphans 2>/dev/null || true
-    rm -f "$COOKIE_JAR"
 }
 
 # Set trap for cleanup on exit
@@ -48,7 +49,7 @@ for i in {1..60}; do
 done
 log_info "Keycloak is ready"
 
-# Restart coordinator to ensure OIDC registration
+# Restart coordinator to ensure Keycloak connection
 docker restart coordinator
 sleep 5
 
@@ -60,6 +61,7 @@ for i in {1..30}; do
     fi
     if [ $i -eq 30 ]; then
         log_error "Coordinator did not start in time"
+        docker logs coordinator 2>&1 | tail -50
         exit 1
     fi
     echo "  Waiting for Coordinator... ($i/30)"
@@ -77,177 +79,71 @@ else
     exit 1
 fi
 
-# OIDC login flow
-log_info "Testing OIDC login flow..."
+# ============================================
+# Get access token from Keycloak using ROPC
+# ============================================
+log_info "Getting access token from Keycloak..."
 
-rm -f "$COOKIE_JAR"
-
-log_info "Starting login flow..."
-LOGIN_REDIRECT=$(curl -s -D - -o /dev/null -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
-    "http://localhost:9080/coordinator/oidc/login?provider=oidc" \
-    | grep -i "^location:" | sed 's/location: //i' | tr -d '\r')
-
-if [ -z "$LOGIN_REDIRECT" ]; then
-    log_error "No redirect from login endpoint"
-    exit 1
-fi
-log_info "Redirected to: ${LOGIN_REDIRECT:0:80}..."
-
-# Rewrite keycloak:8080 to localhost:9090 for host access
-KEYCLOAK_URL=$(echo "$LOGIN_REDIRECT" | sed 's|keycloak:8080|localhost:9090|g')
-log_info "Fetching Keycloak login page (rewritten URL)..."
-
-LOGIN_PAGE=$(curl -s -c "$COOKIE_JAR" -b "$COOKIE_JAR" -L "$KEYCLOAK_URL")
-
-FORM_ACTION=$(echo "$LOGIN_PAGE" | sed -n 's/.*action="\([^"]*\)".*/\1/p' | head -1 | sed 's/&amp;/\&/g')
-if [ -z "$FORM_ACTION" ]; then
-    log_error "Could not find login form"
-    exit 1
-fi
-log_info "Form action: ${FORM_ACTION:0:80}..."
-
-log_info "Submitting login credentials..."
-CALLBACK_RESPONSE=$(curl -s -c "$COOKIE_JAR" -b "$COOKIE_JAR" -L \
+TOKEN_RESPONSE=$(curl -s -X POST \
+    "http://localhost:9090/realms/wonder/protocol/openid-connect/token" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "grant_type=password" \
+    -d "client_id=wonder-mesh-net" \
+    -d "client_secret=wonder-secret" \
     -d "username=testuser" \
-    -d "password=testpass" \
-    -w "\nHTTP_CODE:%{http_code}\nURL:%{url_effective}" \
-    "$FORM_ACTION")
+    -d "password=testpass")
 
-FINAL_URL=$(echo "$CALLBACK_RESPONSE" | grep "^URL:" | cut -d: -f2-)
-HTTP_CODE=$(echo "$CALLBACK_RESPONSE" | grep "^HTTP_CODE:" | cut -d: -f2)
-RESPONSE_BODY=$(echo "$CALLBACK_RESPONSE" | sed '/^HTTP_CODE:/d; /^URL:/d')
-
-log_info "HTTP Status: $HTTP_CODE"
-log_info "Final URL: $FINAL_URL"
-
-if [ -n "$RESPONSE_BODY" ]; then
-    log_info "Response body (first 200 chars): ${RESPONSE_BODY:0:200}"
-fi
-
-SESSION=$(echo "$RESPONSE_BODY" | sed -n 's/.*"session":"\([^"]*\)".*/\1/p')
-if [ -z "$SESSION" ]; then
-    SESSION=$(grep -i "wonder_session" "$COOKIE_JAR" | awk '{print $NF}' | tail -1)
-fi
-if [ -z "$SESSION" ]; then
-    log_error "Failed to get session token"
-    if echo "$RESPONSE_BODY" | grep -q "failed to exchange code"; then
-        log_error "OIDC code exchange failed - check coordinator logs for details"
-    fi
+ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+if [ -z "$ACCESS_TOKEN" ]; then
+    log_error "Failed to get access token from Keycloak"
+    echo "$TOKEN_RESPONSE"
     exit 1
 fi
-log_info "Session token obtained: ${SESSION:0:20}..."
+log_info "Access token obtained: ${ACCESS_TOKEN:0:50}..."
 
+# ============================================
+# Test protected endpoints with JWT
+# ============================================
 log_info "Creating join token..."
 JOIN_TOKEN_RESPONSE=$(curl -s -X POST \
-    -H "Authorization: Bearer $SESSION" \
+    -H "Authorization: Bearer $ACCESS_TOKEN" \
     -H "Content-Type: application/json" \
-    -d '{"ttl": "1h"}' \
     "http://localhost:9080/coordinator/api/v1/join-token")
 
 JOIN_TOKEN=$(echo "$JOIN_TOKEN_RESPONSE" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
 if [ -z "$JOIN_TOKEN" ]; then
     log_error "Failed to create join token"
+    echo "$JOIN_TOKEN_RESPONSE"
     exit 1
 fi
 log_info "Join token created: ${JOIN_TOKEN:0:80}..."
 
-# ============================================
-# API Key Tests (for third-party integrations)
-# ============================================
-log_info "=== Testing API Key functionality ==="
-
-log_info "Creating API key..."
-API_KEY_RESPONSE=$(curl -s -X POST \
-    -H "Authorization: Bearer $SESSION" \
-    -H "Content-Type: application/json" \
-    -d '{"name": "test-api-key", "scopes": "nodes:read"}' \
-    "http://localhost:9080/coordinator/api/v1/api-keys")
-
-API_KEY=$(echo "$API_KEY_RESPONSE" | sed -n 's/.*"key":"\([^"]*\)".*/\1/p')
-API_KEY_ID=$(echo "$API_KEY_RESPONSE" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
-if [ -z "$API_KEY" ]; then
-    log_error "Failed to create API key"
-    echo "$API_KEY_RESPONSE"
-    exit 1
-fi
-log_info "API key created: ${API_KEY:0:20}..."
-log_info "API key ID: $API_KEY_ID"
-
-log_info "Listing API keys..."
-API_KEYS_LIST=$(curl -s \
-    -H "Authorization: Bearer $SESSION" \
-    "http://localhost:9080/coordinator/api/v1/api-keys")
-
-if ! echo "$API_KEYS_LIST" | grep -q "$API_KEY_ID"; then
-    log_error "Created API key not found in list"
-    echo "$API_KEYS_LIST"
-    exit 1
-fi
-log_info "API key found in list"
-
-log_info "Testing nodes endpoint with session token..."
-NODES_BY_SESSION=$(curl -s \
-    -H "Authorization: Bearer $SESSION" \
+log_info "Testing nodes endpoint..."
+NODES_BY_TOKEN=$(curl -s \
+    -H "Authorization: Bearer $ACCESS_TOKEN" \
     "http://localhost:9080/coordinator/api/v1/nodes")
 
-if ! echo "$NODES_BY_SESSION" | grep -q '"nodes"'; then
-    log_error "Failed to get nodes with session token"
-    echo "$NODES_BY_SESSION"
+if ! echo "$NODES_BY_TOKEN" | grep -q '"nodes"'; then
+    log_error "Failed to get nodes with access token"
+    echo "$NODES_BY_TOKEN"
     exit 1
 fi
-log_info "Nodes endpoint works with session token"
+log_info "Nodes endpoint works with access token"
 
-log_info "Testing nodes endpoint with API key (Bearer token)..."
-NODES_BY_API_KEY=$(curl -s \
-    -H "Authorization: Bearer $API_KEY" \
-    "http://localhost:9080/coordinator/api/v1/nodes")
-
-if ! echo "$NODES_BY_API_KEY" | grep -q '"nodes"'; then
-    log_error "Failed to get nodes with API key"
-    echo "$NODES_BY_API_KEY"
-    exit 1
-fi
-log_info "Nodes endpoint works with API key (third-party integration ready)"
-
-log_info "Creating second API key for deletion test..."
-API_KEY2_RESPONSE=$(curl -s -X POST \
-    -H "Authorization: Bearer $SESSION" \
+log_info "Creating auth key..."
+AUTHKEY_RESPONSE=$(curl -s -X POST \
+    -H "Authorization: Bearer $ACCESS_TOKEN" \
     -H "Content-Type: application/json" \
-    -d '{"name": "test-api-key-2", "scopes": "nodes:read", "expires_in": "24h"}' \
-    "http://localhost:9080/coordinator/api/v1/api-keys")
+    -d '{"ttl_hours": 24}' \
+    "http://localhost:9080/coordinator/api/v1/authkey")
 
-API_KEY2_ID=$(echo "$API_KEY2_RESPONSE" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
-if [ -z "$API_KEY2_ID" ]; then
-    log_error "Failed to create second API key"
+AUTHKEY=$(echo "$AUTHKEY_RESPONSE" | sed -n 's/.*"authkey":"\([^"]*\)".*/\1/p')
+if [ -z "$AUTHKEY" ]; then
+    log_error "Failed to create auth key"
+    echo "$AUTHKEY_RESPONSE"
     exit 1
 fi
-log_info "Second API key created: $API_KEY2_ID"
-
-log_info "Deleting second API key..."
-DELETE_RESPONSE=$(curl -s -X DELETE \
-    -H "Authorization: Bearer $SESSION" \
-    -w "\nHTTP_CODE:%{http_code}" \
-    "http://localhost:9080/coordinator/api/v1/api-keys/$API_KEY2_ID")
-
-DELETE_HTTP_CODE=$(echo "$DELETE_RESPONSE" | grep "^HTTP_CODE:" | cut -d: -f2)
-if [ "$DELETE_HTTP_CODE" != "204" ]; then
-    log_error "Failed to delete API key (HTTP $DELETE_HTTP_CODE)"
-    exit 1
-fi
-log_info "API key deleted successfully"
-
-log_info "Verifying deleted API key is gone..."
-API_KEYS_LIST_AFTER=$(curl -s \
-    -H "Authorization: Bearer $SESSION" \
-    "http://localhost:9080/coordinator/api/v1/api-keys")
-
-if echo "$API_KEYS_LIST_AFTER" | grep -q "$API_KEY2_ID"; then
-    log_error "Deleted API key still in list"
-    exit 1
-fi
-log_info "Deleted API key confirmed removed"
-
-log_info "=== API Key tests passed ==="
+log_info "Auth key created: ${AUTHKEY:0:30}..."
 
 # Get host IP that containers can reach (coordinator uses host network)
 HOST_IP="host.docker.internal"
@@ -426,22 +322,22 @@ else
 fi
 
 # ============================================
-# Verify API key can see nodes after workers joined
+# Verify nodes endpoint after workers joined
 # ============================================
-log_info "=== Verifying API key can see joined nodes ==="
+log_info "=== Verifying nodes visible after workers joined ==="
 
 NODES_FINAL=$(curl -s \
-    -H "Authorization: Bearer $API_KEY" \
+    -H "Authorization: Bearer $ACCESS_TOKEN" \
     "http://localhost:9080/coordinator/api/v1/nodes")
 
 NODE_COUNT=$(echo "$NODES_FINAL" | sed -n 's/.*"count":\([0-9]*\).*/\1/p')
-log_info "Nodes visible via API key: $NODE_COUNT"
+log_info "Nodes visible: $NODE_COUNT"
 
 if [ "$NODE_COUNT" -lt 3 ]; then
     log_warn "Expected 3 nodes, got $NODE_COUNT"
     echo "$NODES_FINAL"
 else
-    log_info "All 3 workers visible via API key"
+    log_info "All 3 workers visible"
 fi
 
 if echo "$NODES_FINAL" | grep -q "$WORKER1_IP"; then
@@ -463,30 +359,14 @@ else
 fi
 
 # ============================================
-# Deployer Test
+# Deployer Test (using access token for auth)
 # ============================================
 log_info "=== Testing Deployer ==="
 
-# Create API key with deployer:connect scope
-log_info "Creating API key with deployer:connect scope..."
-DEPLOYER_KEY_RESPONSE=$(curl -s -X POST \
-    -H "Authorization: Bearer $SESSION" \
-    -H "Content-Type: application/json" \
-    -d '{"name": "deployer-key", "scopes": "nodes:read,deployer:connect"}' \
-    "http://localhost:9080/coordinator/api/v1/api-keys")
-
-DEPLOYER_KEY=$(echo "$DEPLOYER_KEY_RESPONSE" | sed -n 's/.*"key":"\([^"]*\)".*/\1/p')
-if [ -z "$DEPLOYER_KEY" ]; then
-    log_error "Failed to create deployer API key"
-    echo "$DEPLOYER_KEY_RESPONSE"
-    exit 1
-fi
-log_info "Deployer API key created: ${DEPLOYER_KEY:0:20}..."
-
-# Deployer join
+# Deployer join using access token
 log_info "Deployer joining mesh..."
 DEPLOYER_JOIN_RESPONSE=$(docker exec deployer curl -s -X POST \
-    -H "Authorization: Bearer $DEPLOYER_KEY" \
+    -H "Authorization: Bearer $ACCESS_TOKEN" \
     -H "Content-Type: application/json" \
     "http://$HOST_IP:9080/coordinator/api/v1/deployer/join")
 
@@ -566,5 +446,5 @@ log_info "=== Deployer Test Complete ==="
 
 log_info "=== E2E Test Complete ==="
 log_info "3 workers connected to mesh successfully!"
-log_info "API key integration verified - third-party deployers can query node info!"
+log_info "Keycloak JWT authentication verified!"
 log_info "Deployer test passed - apps can be deployed and accessed via mesh!"

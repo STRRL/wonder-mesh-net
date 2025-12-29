@@ -17,30 +17,30 @@ type JoinCredentials struct {
 
 // WorkerService handles worker join token operations.
 type WorkerService struct {
-	tokenGenerator  *jointoken.Generator
-	jwtSecret       string
-	realmRepository *repository.RealmRepository
-	realmService    *RealmService
+	tokenGenerator      *jointoken.Generator
+	jwtSecret           string
+	wonderNetRepository *repository.WonderNetRepository
+	wonderNetService    *WonderNetService
 }
 
 // NewWorkerService creates a new WorkerService.
 func NewWorkerService(
 	tokenGenerator *jointoken.Generator,
 	jwtSecret string,
-	realmRepository *repository.RealmRepository,
-	realmService *RealmService,
+	wonderNetRepository *repository.WonderNetRepository,
+	wonderNetService *WonderNetService,
 ) *WorkerService {
 	return &WorkerService{
-		tokenGenerator:  tokenGenerator,
-		jwtSecret:       jwtSecret,
-		realmRepository: realmRepository,
-		realmService:    realmService,
+		tokenGenerator:      tokenGenerator,
+		jwtSecret:           jwtSecret,
+		wonderNetRepository: wonderNetRepository,
+		wonderNetService:    wonderNetService,
 	}
 }
 
 // GenerateJoinToken creates a JWT for a worker to join the mesh.
-func (s *WorkerService) GenerateJoinToken(ctx context.Context, realm *repository.Realm, ttl time.Duration) (string, error) {
-	return s.tokenGenerator.Generate(realm.ID, realm.HeadscaleUser, ttl)
+func (s *WorkerService) GenerateJoinToken(ctx context.Context, wonderNet *repository.WonderNet, ttl time.Duration) (string, error) {
+	return s.tokenGenerator.Generate(wonderNet.ID, wonderNet.HeadscaleUser, ttl)
 }
 
 // ExchangeJoinToken validates a JWT and returns credentials for joining the mesh.
@@ -51,19 +51,19 @@ func (s *WorkerService) ExchangeJoinToken(ctx context.Context, token string) (*J
 		return nil, ErrInvalidToken
 	}
 
-	realm, err := s.realmRepository.Get(ctx, claims.RealmID)
-	if err != nil || realm == nil {
+	wonderNet, err := s.wonderNetRepository.Get(ctx, claims.WonderNetID)
+	if err != nil || wonderNet == nil {
 		return nil, ErrInvalidToken
 	}
 
-	authKey, err := s.realmService.CreateAuthKey(ctx, realm, 24*time.Hour, false)
+	authKey, err := s.wonderNetService.CreateAuthKey(ctx, wonderNet, 24*time.Hour, false)
 	if err != nil {
 		return nil, err
 	}
 
 	return &JoinCredentials{
 		AuthKey:      authKey,
-		HeadscaleURL: s.realmService.GetPublicURL(),
+		HeadscaleURL: s.wonderNetService.GetPublicURL(),
 		User:         claims.HeadscaleUser,
 	}, nil
 }

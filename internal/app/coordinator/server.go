@@ -14,14 +14,15 @@ import (
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/service"
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
 	"github.com/strrl/wonder-mesh-net/pkg/jointoken"
-	"github.com/strrl/wonder-mesh-net/pkg/oidc"
+	"github.com/strrl/wonder-mesh-net/pkg/jwtauth"
+	"github.com/strrl/wonder-mesh-net/pkg/keycloak"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 const minJWTSecretLength = 32
 
-// Server is the coordinator server that manages multi-realm Headscale access.
+// Server is the coordinator server that manages multi-tenant wonder net access.
 type Server struct {
 	config                  *Config
 	db                      *database.Manager
@@ -29,17 +30,21 @@ type Server struct {
 	headscaleClient         v1.HeadscaleServiceClient
 	headscaleProcessManager *headscale.ProcessManager
 
+	// Auth components
+	jwtValidator    *jwtauth.Validator
+	keycloakClient  *keycloak.AdminClient
+
 	// Repositories
-	apiKeyRepository     *repository.APIKeyRepository
+	userRepository       *repository.UserRepository
+	wonderNetRepository  *repository.WonderNetRepository
 	deviceFlowRepository *repository.DeviceRequestRepository
 
 	// Services
-	authService       *service.AuthService
-	realmService      *service.RealmService
-	oidcService       *service.OIDCService
-	workerService     *service.WorkerService
-	deviceFlowService *service.DeviceFlowService
-	nodesService      *service.NodesService
+	wonderNetService    *service.WonderNetService
+	workerService       *service.WorkerService
+	deviceFlowService   *service.DeviceFlowService
+	nodesService        *service.NodesService
+	keycloakAuthService *service.KeycloakAuthService
 }
 
 // BootstrapNewServer creates a new coordinator server.
@@ -109,17 +114,6 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 	}
 	headscaleClient := v1.NewHeadscaleServiceClient(headscaleConn)
 
-	authStateRepository := repository.NewAuthStateRepository(db.Queries(), 10*time.Minute)
-	oidcRegistry := oidc.NewRegistryWithStore(authStateRepository)
-
-	for _, providerConfig := range config.OIDCProviders() {
-		if err := oidcRegistry.RegisterProvider(ctx, providerConfig); err != nil {
-			slog.Warn("register OIDC provider", "provider", providerConfig.Name, "error", err)
-		} else {
-			slog.Info("registered OIDC provider", "provider", providerConfig.Name)
-		}
-	}
-
 	// Both coordinatorURL and headscaleURL use PublicURL because the coordinator
 	// reverse-proxies Tailscale control plane traffic to embedded Headscale.
 	tokenGenerator := jointoken.NewGenerator(
@@ -130,22 +124,55 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 
 	// Create repositories
 	userRepository := repository.NewUserRepository(db.Queries())
-	sessionRepository := repository.NewSessionRepository(db.Queries())
-	realmRepository := repository.NewRealmRepository(db.Queries())
-	identityRepository := repository.NewOIDCIdentityRepository(db.Queries())
-	apiKeyRepository := repository.NewAPIKeyRepository(db.Queries())
+	wonderNetRepository := repository.NewWonderNetRepository(db.Queries())
 	deviceFlowRepository := repository.NewDeviceRequestRepository(db.Queries())
 
-	// Create services
-	realmManager := headscale.NewRealmManager(headscaleClient)
+	// Create Headscale managers
+	wonderNetManager := headscale.NewWonderNetManager(headscaleClient)
 	aclManager := headscale.NewACLManager(headscaleClient)
 
-	authService := service.NewAuthService(sessionRepository, realmRepository, apiKeyRepository)
-	realmService := service.NewRealmService(realmRepository, realmManager, aclManager, config.PublicURL)
-	oidcService := service.NewOIDCService(oidcRegistry, userRepository, identityRepository, realmRepository, realmService)
-	workerService := service.NewWorkerService(tokenGenerator, config.JWTSecret, realmRepository, realmService)
-	deviceFlowService := service.NewDeviceFlowService(deviceFlowRepository, realmService, config.PublicURL)
-	nodesService := service.NewNodesService(realmManager)
+	// Create services
+	wonderNetService := service.NewWonderNetService(wonderNetRepository, wonderNetManager, aclManager, config.PublicURL)
+	workerService := service.NewWorkerService(tokenGenerator, config.JWTSecret, wonderNetRepository, wonderNetService)
+	deviceFlowService := service.NewDeviceFlowService(deviceFlowRepository, wonderNetService, config.PublicURL)
+	nodesService := service.NewNodesService(wonderNetManager)
+
+	// Create Keycloak admin client
+	keycloakClient := keycloak.NewAdminClient(keycloak.AdminClientConfig{
+		URL:          config.KeycloakURL,
+		Realm:        config.KeycloakRealm,
+		ClientID:     config.KeycloakAdminClient,
+		ClientSecret: config.KeycloakAdminSecret,
+	})
+
+	// Authenticate Keycloak admin client
+	if err := keycloakClient.Authenticate(ctx); err != nil {
+		_ = headscaleProcessManager.Stop()
+		_ = db.Close()
+		return nil, fmt.Errorf("authenticate keycloak admin client: %w", err)
+	}
+	slog.Info("authenticated with Keycloak admin API")
+
+	// Create Keycloak auth service
+	keycloakAuthService := service.NewKeycloakAuthService(keycloakClient, userRepository, wonderNetRepository, wonderNetService)
+
+	// Create JWT validator for Keycloak tokens
+	jwksURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/certs", config.KeycloakURL, config.KeycloakRealm)
+	issuer := fmt.Sprintf("%s/realms/%s", config.KeycloakURL, config.KeycloakRealm)
+	jwtValidator := jwtauth.NewValidator(jwtauth.ValidatorConfig{
+		JWKSURL:         jwksURL,
+		Issuer:          issuer,
+		Audience:        config.KeycloakClientID,
+		RefreshInterval: 5 * time.Minute,
+	})
+
+	// Start JWT validator background refresh
+	if err := jwtValidator.Start(ctx); err != nil {
+		_ = headscaleProcessManager.Stop()
+		_ = db.Close()
+		return nil, fmt.Errorf("start JWT validator: %w", err)
+	}
+	slog.Info("JWT validator started", "jwks_url", jwksURL)
 
 	return &Server{
 		config:                  config,
@@ -153,14 +180,16 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 		headscaleConn:           headscaleConn,
 		headscaleClient:         headscaleClient,
 		headscaleProcessManager: headscaleProcessManager,
-		apiKeyRepository:        apiKeyRepository,
+		jwtValidator:            jwtValidator,
+		keycloakClient:          keycloakClient,
+		userRepository:          userRepository,
+		wonderNetRepository:     wonderNetRepository,
 		deviceFlowRepository:    deviceFlowRepository,
-		authService:             authService,
-		realmService:            realmService,
-		oidcService:             oidcService,
+		wonderNetService:        wonderNetService,
 		workerService:           workerService,
 		deviceFlowService:       deviceFlowService,
 		nodesService:            nodesService,
+		keycloakAuthService:     keycloakAuthService,
 	}, nil
 }
 

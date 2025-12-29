@@ -1,12 +1,12 @@
 // Package jointoken provides JWT-based join tokens for worker nodes to securely
-// join a Wonder Mesh Net realm.
+// join a Wonder Mesh Net wonder net.
 //
 // Join tokens are short-lived JWTs that encode the necessary information for a
 // worker node to authenticate with the coordinator and obtain a Headscale PreAuthKey.
 // The token flow is:
 //
-//  1. User authenticates via OIDC and requests a join token from the coordinator
-//  2. Coordinator generates a signed JWT containing realm and connection info
+//  1. User authenticates via Keycloak and requests a join token from the coordinator
+//  2. Coordinator generates a signed JWT containing wonder net and connection info
 //  3. User transfers the token to the worker node (via CLI copy-paste or file)
 //  4. Worker exchanges the JWT for a Headscale PreAuthKey
 //  5. Worker runs "tailscale up" with the PreAuthKey to join the mesh
@@ -41,12 +41,12 @@ type Claims struct {
 	// The worker uses this to configure the Tailscale client.
 	HeadscaleURL string `json:"headscale_url"`
 
-	// RealmID is the unique identifier for the realm (tenant namespace)
+	// WonderNetID is the unique identifier for the wonder net (tenant namespace)
 	// that this worker will join. Used for multi-tenant isolation.
-	RealmID string `json:"realm_id"`
+	WonderNetID string `json:"wonder_net_id"`
 
 	// HeadscaleUser is the Headscale user (namespace) name that the worker
-	// will be registered under. Format is typically "realm-{id[:12]}".
+	// will be registered under. Format is typically "wonder-net-{id[:12]}".
 	HeadscaleUser string `json:"headscale_user"`
 }
 
@@ -79,19 +79,19 @@ func NewGenerator(signingKey, coordinatorURL, headscaleURL string) *Generator {
 	}
 }
 
-// Generate creates a new signed join token for the specified realm.
+// Generate creates a new signed join token for the specified wonder net.
 //
 // Parameters:
-//   - realmID: The unique identifier for the realm (UUID format).
-//   - headscaleUser: The Headscale user/namespace name for this realm.
+//   - wonderNetID: The unique identifier for the wonder net (UUID format).
+//   - headscaleUser: The Headscale user/namespace name for this wonder net.
 //   - ttl: How long the token should be valid. Typical values are 1-24 hours.
 //
 // Returns the signed JWT string, or an error if signing fails.
 //
 // The generated token includes:
 //   - Standard JWT claims: iat (issued at), exp (expiration), iss (issuer)
-//   - Custom claims: coordinator URL, Headscale URL, realm ID, Headscale user
-func (g *Generator) Generate(realmID, headscaleUser string, ttl time.Duration) (string, error) {
+//   - Custom claims: coordinator URL, Headscale URL, wonder net ID, Headscale user
+func (g *Generator) Generate(wonderNetID, headscaleUser string, ttl time.Duration) (string, error) {
 	now := time.Now()
 	claims := &Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -101,7 +101,7 @@ func (g *Generator) Generate(realmID, headscaleUser string, ttl time.Duration) (
 		},
 		CoordinatorURL: g.coordinatorURL,
 		HeadscaleURL:   g.headscaleURL,
-		RealmID:        realmID,
+		WonderNetID:    wonderNetID,
 		HeadscaleUser:  headscaleUser,
 	}
 

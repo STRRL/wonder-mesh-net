@@ -24,8 +24,8 @@ type ACLRule struct {
 	Destinations []string `json:"dst"`
 }
 
-// GenerateRealmIsolationPolicy generates an ACL policy that isolates realms
-func GenerateRealmIsolationPolicy(usernames []string) *ACLPolicy {
+// GenerateWonderNetIsolationPolicy generates an ACL policy that isolates wonder nets
+func GenerateWonderNetIsolationPolicy(usernames []string) *ACLPolicy {
 	rules := make([]ACLRule, 0, len(usernames))
 
 	for _, username := range usernames {
@@ -65,8 +65,8 @@ func NewACLManager(client v1.HeadscaleServiceClient) *ACLManager {
 	return &ACLManager{client: client}
 }
 
-// SetRealmIsolationPolicy sets the realm isolation ACL policy
-func (am *ACLManager) SetRealmIsolationPolicy(ctx context.Context) error {
+// SetWonderNetIsolationPolicy sets the wonder net isolation ACL policy
+func (am *ACLManager) SetWonderNetIsolationPolicy(ctx context.Context) error {
 	am.mu.Lock()
 	defer am.mu.Unlock()
 
@@ -81,7 +81,7 @@ func (am *ACLManager) SetRealmIsolationPolicy(ctx context.Context) error {
 		usernames[i] = u.GetName()
 	}
 
-	policy := GenerateRealmIsolationPolicy(usernames)
+	policy := GenerateWonderNetIsolationPolicy(usernames)
 	policyJSON, err := json.Marshal(policy)
 	if err != nil {
 		return fmt.Errorf("marshal policy: %w", err)
@@ -106,8 +106,8 @@ func (am *ACLManager) SetAutogroupSelfPolicy(ctx context.Context) error {
 	return err
 }
 
-// AddRealmToPolicy adds a realm to the isolation policy
-func (am *ACLManager) AddRealmToPolicy(ctx context.Context, username string) error {
+// AddWonderNetToPolicy adds a wonder net to the isolation policy
+func (am *ACLManager) AddWonderNetToPolicy(ctx context.Context, username string) error {
 	am.mu.Lock()
 	defer am.mu.Unlock()
 

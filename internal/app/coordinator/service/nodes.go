@@ -19,19 +19,19 @@ type Node struct {
 
 // NodesService handles node listing operations.
 type NodesService struct {
-	realmManager *headscale.RealmManager
+	wonderNetManager *headscale.WonderNetManager
 }
 
 // NewNodesService creates a new NodesService.
-func NewNodesService(realmManager *headscale.RealmManager) *NodesService {
+func NewNodesService(wonderNetManager *headscale.WonderNetManager) *NodesService {
 	return &NodesService{
-		realmManager: realmManager,
+		wonderNetManager: wonderNetManager,
 	}
 }
 
-// ListNodes returns all nodes in the given realm.
-func (s *NodesService) ListNodes(ctx context.Context, realm *repository.Realm) ([]*Node, error) {
-	nodes, err := s.realmManager.GetRealmNodes(ctx, realm.HeadscaleUser)
+// ListNodes returns all nodes in the given wonder net.
+func (s *NodesService) ListNodes(ctx context.Context, wonderNet *repository.WonderNet) ([]*Node, error) {
+	nodes, err := s.wonderNetManager.GetWonderNetNodes(ctx, wonderNet.HeadscaleUser)
 	if err != nil {
 		return nil, err
 	}

@@ -10,7 +10,8 @@
   "bruteForceProtected": false,
   "clients": [
     {
-      "clientId": "wonder",
+      "clientId": "wonder-mesh-net",
+      "name": "Wonder Mesh Net",
       "enabled": true,
       "publicClient": false,
       "secret": "wonder-secret",
@@ -22,6 +23,17 @@
       "attributes": {
         "post.logout.redirect.uris": "http://localhost:9080/*"
       }
+    },
+    {
+      "clientId": "coordinator-admin",
+      "name": "Coordinator Admin Client",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "coordinator-admin-secret",
+      "serviceAccountsEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "standardFlowEnabled": false,
+      "protocol": "openid-connect"
     }
   ],
   "users": [

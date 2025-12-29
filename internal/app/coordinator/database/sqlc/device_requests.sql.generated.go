@@ -13,7 +13,7 @@ import (
 const approveDeviceRequest = `-- name: ApproveDeviceRequest :exec
 UPDATE device_requests
 SET status = 'approved',
-    realm_id = ?,
+    wonder_net_id = ?,
     headscale_user = ?,
     authkey = ?,
     headscale_url = ?,
@@ -22,7 +22,7 @@ WHERE user_code = ? AND status = 'pending' AND expires_at > CURRENT_TIMESTAMP
 `
 
 type ApproveDeviceRequestParams struct {
-	RealmID        string `json:"realm_id"`
+	WonderNetID    string `json:"wonder_net_id"`
 	HeadscaleUser  string `json:"headscale_user"`
 	Authkey        string `json:"authkey"`
 	HeadscaleUrl   string `json:"headscale_url"`
@@ -32,7 +32,7 @@ type ApproveDeviceRequestParams struct {
 
 func (q *Queries) ApproveDeviceRequest(ctx context.Context, arg ApproveDeviceRequestParams) error {
 	_, err := q.db.ExecContext(ctx, approveDeviceRequest,
-		arg.RealmID,
+		arg.WonderNetID,
 		arg.HeadscaleUser,
 		arg.Authkey,
 		arg.HeadscaleUrl,
@@ -83,7 +83,7 @@ func (q *Queries) DeleteExpiredDeviceRequests(ctx context.Context) error {
 }
 
 const getDeviceRequestByDeviceCode = `-- name: GetDeviceRequestByDeviceCode :one
-SELECT device_code, user_code, status, realm_id, headscale_user, authkey, headscale_url, coordinator_url, created_at, expires_at FROM device_requests WHERE device_code = ?
+SELECT device_code, user_code, status, wonder_net_id, headscale_user, authkey, headscale_url, coordinator_url, created_at, expires_at FROM device_requests WHERE device_code = ?
 `
 
 func (q *Queries) GetDeviceRequestByDeviceCode(ctx context.Context, deviceCode string) (DeviceRequest, error) {
@@ -93,7 +93,7 @@ func (q *Queries) GetDeviceRequestByDeviceCode(ctx context.Context, deviceCode s
 		&i.DeviceCode,
 		&i.UserCode,
 		&i.Status,
-		&i.RealmID,
+		&i.WonderNetID,
 		&i.HeadscaleUser,
 		&i.Authkey,
 		&i.HeadscaleUrl,
@@ -105,7 +105,7 @@ func (q *Queries) GetDeviceRequestByDeviceCode(ctx context.Context, deviceCode s
 }
 
 const getDeviceRequestByUserCode = `-- name: GetDeviceRequestByUserCode :one
-SELECT device_code, user_code, status, realm_id, headscale_user, authkey, headscale_url, coordinator_url, created_at, expires_at FROM device_requests WHERE user_code = ?
+SELECT device_code, user_code, status, wonder_net_id, headscale_user, authkey, headscale_url, coordinator_url, created_at, expires_at FROM device_requests WHERE user_code = ?
 `
 
 func (q *Queries) GetDeviceRequestByUserCode(ctx context.Context, userCode string) (DeviceRequest, error) {
@@ -115,7 +115,7 @@ func (q *Queries) GetDeviceRequestByUserCode(ctx context.Context, userCode strin
 		&i.DeviceCode,
 		&i.UserCode,
 		&i.Status,
-		&i.RealmID,
+		&i.WonderNetID,
 		&i.HeadscaleUser,
 		&i.Authkey,
 		&i.HeadscaleUrl,

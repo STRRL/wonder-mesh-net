@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -11,6 +13,7 @@ import (
 // User represents a system user.
 type User struct {
 	ID          string
+	KeycloakSub string
 	DisplayName string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
@@ -27,29 +30,53 @@ func NewUserRepository(queries *sqlc.Queries) *UserRepository {
 }
 
 // Create creates a new user.
-func (s *UserRepository) Create(ctx context.Context, displayName string) (*User, error) {
+func (r *UserRepository) Create(ctx context.Context, keycloakSub, displayName string) (*User, error) {
 	id := uuid.New().String()
 
-	err := s.queries.CreateUser(ctx, sqlc.CreateUserParams{
+	err := r.queries.CreateUser(ctx, sqlc.CreateUserParams{
 		ID:          id,
+		KeycloakSub: keycloakSub,
 		DisplayName: displayName,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return s.Get(ctx, id)
+	return r.Get(ctx, id)
 }
 
 // Get retrieves a user by ID.
-func (s *UserRepository) Get(ctx context.Context, id string) (*User, error) {
-	row, err := s.queries.GetUser(ctx, id)
+func (r *UserRepository) Get(ctx context.Context, id string) (*User, error) {
+	row, err := r.queries.GetUser(ctx, id)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
 		return nil, err
 	}
 
 	return &User{
 		ID:          row.ID,
+		KeycloakSub: row.KeycloakSub,
+		DisplayName: row.DisplayName,
+		CreatedAt:   row.CreatedAt,
+		UpdatedAt:   row.UpdatedAt,
+	}, nil
+}
+
+// GetByKeycloakSub retrieves a user by Keycloak subject claim.
+func (r *UserRepository) GetByKeycloakSub(ctx context.Context, keycloakSub string) (*User, error) {
+	row, err := r.queries.GetUserByKeycloakSub(ctx, keycloakSub)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &User{
+		ID:          row.ID,
+		KeycloakSub: row.KeycloakSub,
 		DisplayName: row.DisplayName,
 		CreatedAt:   row.CreatedAt,
 		UpdatedAt:   row.UpdatedAt,
@@ -57,21 +84,21 @@ func (s *UserRepository) Get(ctx context.Context, id string) (*User, error) {
 }
 
 // Update updates a user.
-func (s *UserRepository) Update(ctx context.Context, user *User) error {
-	return s.queries.UpdateUser(ctx, sqlc.UpdateUserParams{
+func (r *UserRepository) Update(ctx context.Context, user *User) error {
+	return r.queries.UpdateUser(ctx, sqlc.UpdateUserParams{
 		DisplayName: user.DisplayName,
 		ID:          user.ID,
 	})
 }
 
 // Delete deletes a user.
-func (s *UserRepository) Delete(ctx context.Context, id string) error {
-	return s.queries.DeleteUser(ctx, id)
+func (r *UserRepository) Delete(ctx context.Context, id string) error {
+	return r.queries.DeleteUser(ctx, id)
 }
 
 // List lists all users.
-func (s *UserRepository) List(ctx context.Context) ([]*User, error) {
-	rows, err := s.queries.ListUsers(ctx)
+func (r *UserRepository) List(ctx context.Context) ([]*User, error) {
+	rows, err := r.queries.ListUsers(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -80,6 +107,7 @@ func (s *UserRepository) List(ctx context.Context) ([]*User, error) {
 	for i, row := range rows {
 		users[i] = &User{
 			ID:          row.ID,
+			KeycloakSub: row.KeycloakSub,
 			DisplayName: row.DisplayName,
 			CreatedAt:   row.CreatedAt,
 			UpdatedAt:   row.UpdatedAt,

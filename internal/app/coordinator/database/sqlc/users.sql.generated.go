@@ -10,17 +10,18 @@ import (
 )
 
 const createUser = `-- name: CreateUser :exec
-INSERT INTO users (id, display_name, created_at, updated_at)
-VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+INSERT INTO users (id, keycloak_sub, display_name, created_at, updated_at)
+VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 `
 
 type CreateUserParams struct {
 	ID          string `json:"id"`
+	KeycloakSub string `json:"keycloak_sub"`
 	DisplayName string `json:"display_name"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
-	_, err := q.db.ExecContext(ctx, createUser, arg.ID, arg.DisplayName)
+	_, err := q.db.ExecContext(ctx, createUser, arg.ID, arg.KeycloakSub, arg.DisplayName)
 	return err
 }
 
@@ -34,7 +35,7 @@ func (q *Queries) DeleteUser(ctx context.Context, id string) error {
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, display_name, created_at, updated_at FROM users WHERE id = ?
+SELECT id, keycloak_sub, display_name, created_at, updated_at FROM users WHERE id = ?
 `
 
 func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
@@ -42,6 +43,24 @@ func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
 	var i User
 	err := row.Scan(
 		&i.ID,
+		&i.KeycloakSub,
+		&i.DisplayName,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getUserByKeycloakSub = `-- name: GetUserByKeycloakSub :one
+SELECT id, keycloak_sub, display_name, created_at, updated_at FROM users WHERE keycloak_sub = ?
+`
+
+func (q *Queries) GetUserByKeycloakSub(ctx context.Context, keycloakSub string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByKeycloakSub, keycloakSub)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.KeycloakSub,
 		&i.DisplayName,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -50,7 +69,7 @@ func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, display_name, created_at, updated_at FROM users ORDER BY created_at DESC
+SELECT id, keycloak_sub, display_name, created_at, updated_at FROM users ORDER BY created_at DESC
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -64,6 +83,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 		var i User
 		if err := rows.Scan(
 			&i.ID,
+			&i.KeycloakSub,
 			&i.DisplayName,
 			&i.CreatedAt,
 			&i.UpdatedAt,

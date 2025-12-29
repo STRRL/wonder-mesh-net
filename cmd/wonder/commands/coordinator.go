@@ -22,20 +22,17 @@ func NewCoordinatorCmd() *cobra.Command {
 	cmd.Flags().String("listen", ":9080", "Coordinator listen address")
 	cmd.Flags().String("public-url", "http://localhost:9080", "Public URL for callbacks")
 
-	// TODO: should map all env to flags, not only subset
 	_ = viper.BindPFlag("coordinator.listen", cmd.Flags().Lookup("listen"))
 	_ = viper.BindPFlag("coordinator.public_url", cmd.Flags().Lookup("public-url"))
 
 	_ = viper.BindEnv("coordinator.listen", "LISTEN")
 	_ = viper.BindEnv("coordinator.public_url", "PUBLIC_URL")
 	_ = viper.BindEnv("coordinator.jwt_secret", "JWT_SECRET")
-	_ = viper.BindEnv("coordinator.github_client_id", "GITHUB_CLIENT_ID")
-	_ = viper.BindEnv("coordinator.github_client_secret", "GITHUB_CLIENT_SECRET")
-	_ = viper.BindEnv("coordinator.google_client_id", "GOOGLE_CLIENT_ID")
-	_ = viper.BindEnv("coordinator.google_client_secret", "GOOGLE_CLIENT_SECRET")
-	_ = viper.BindEnv("coordinator.oidc_issuer", "OIDC_ISSUER")
-	_ = viper.BindEnv("coordinator.oidc_client_id", "OIDC_CLIENT_ID")
-	_ = viper.BindEnv("coordinator.oidc_client_secret", "OIDC_CLIENT_SECRET")
+	_ = viper.BindEnv("coordinator.keycloak_url", "KEYCLOAK_URL")
+	_ = viper.BindEnv("coordinator.keycloak_realm", "KEYCLOAK_REALM")
+	_ = viper.BindEnv("coordinator.keycloak_client_id", "KEYCLOAK_CLIENT_ID")
+	_ = viper.BindEnv("coordinator.keycloak_admin_client", "KEYCLOAK_ADMIN_CLIENT")
+	_ = viper.BindEnv("coordinator.keycloak_admin_secret", "KEYCLOAK_ADMIN_SECRET")
 
 	return cmd
 }
@@ -47,17 +44,20 @@ func runCoordinator(cmd *cobra.Command, args []string) {
 	cfg.Listen = viper.GetString("coordinator.listen")
 	cfg.PublicURL = viper.GetString("coordinator.public_url")
 	cfg.JWTSecret = viper.GetString("coordinator.jwt_secret")
-	cfg.GithubClientID = viper.GetString("coordinator.github_client_id")
-	cfg.GithubClientSecret = viper.GetString("coordinator.github_client_secret")
-	cfg.GoogleClientID = viper.GetString("coordinator.google_client_id")
-	cfg.GoogleClientSecret = viper.GetString("coordinator.google_client_secret")
-	cfg.OIDCIssuer = viper.GetString("coordinator.oidc_issuer")
-	cfg.OIDCClientID = viper.GetString("coordinator.oidc_client_id")
-	cfg.OIDCClientSecret = viper.GetString("coordinator.oidc_client_secret")
+	cfg.KeycloakURL = viper.GetString("coordinator.keycloak_url")
+	cfg.KeycloakRealm = viper.GetString("coordinator.keycloak_realm")
+	cfg.KeycloakClientID = viper.GetString("coordinator.keycloak_client_id")
+	cfg.KeycloakAdminClient = viper.GetString("coordinator.keycloak_admin_client")
+	cfg.KeycloakAdminSecret = viper.GetString("coordinator.keycloak_admin_secret")
 
 	if cfg.JWTSecret == "" {
 		slog.Error("JWT_SECRET environment variable is required")
 		slog.Info("generate one with: openssl rand -hex 32")
+		os.Exit(1)
+	}
+
+	if cfg.KeycloakURL == "" {
+		slog.Error("KEYCLOAK_URL environment variable is required")
 		os.Exit(1)
 	}
 

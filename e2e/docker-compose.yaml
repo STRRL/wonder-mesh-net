@@ -23,10 +23,11 @@ services:
     network_mode: "host"
     environment:
       JWT_SECRET: e2e-test-jwt-secret-at-least-32-chars
-      OIDC_ISSUER: http://localhost:9090/realms/wonder
-      OIDC_CLIENT_ID: wonder
-      OIDC_CLIENT_SECRET: wonder-secret
-      OIDC_REDIRECT_URI: http://localhost:9080/coordinator/oidc/callback
+      KEYCLOAK_URL: http://localhost:9090
+      KEYCLOAK_REALM: wonder
+      KEYCLOAK_CLIENT_ID: wonder-mesh-net
+      KEYCLOAK_ADMIN_CLIENT: coordinator-admin
+      KEYCLOAK_ADMIN_SECRET: coordinator-admin-secret
     volumes:
       - ./headscale-config.yaml:/etc/headscale/config.yaml
       - coordinator-data:/data
