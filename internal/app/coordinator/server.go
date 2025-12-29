@@ -31,20 +31,17 @@ type Server struct {
 	headscaleProcessManager *headscale.ProcessManager
 
 	// Auth components
-	jwtValidator    *jwtauth.Validator
-	keycloakClient  *keycloak.AdminClient
+	jwtValidator *jwtauth.Validator
 
 	// Repositories
-	userRepository       *repository.UserRepository
 	wonderNetRepository  *repository.WonderNetRepository
 	deviceFlowRepository *repository.DeviceRequestRepository
 
 	// Services
-	wonderNetService    *service.WonderNetService
-	workerService       *service.WorkerService
-	deviceFlowService   *service.DeviceFlowService
-	nodesService        *service.NodesService
-	keycloakAuthService *service.KeycloakAuthService
+	wonderNetService  *service.WonderNetService
+	workerService     *service.WorkerService
+	deviceFlowService *service.DeviceFlowService
+	nodesService      *service.NodesService
 }
 
 // BootstrapNewServer creates a new coordinator server.
@@ -123,7 +120,6 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 	)
 
 	// Create repositories
-	userRepository := repository.NewUserRepository(db.Queries())
 	wonderNetRepository := repository.NewWonderNetRepository(db.Queries())
 	serviceAccountRepository := repository.NewServiceAccountRepository(db.Queries())
 	deviceFlowRepository := repository.NewDeviceRequestRepository(db.Queries())
@@ -131,12 +127,6 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 	// Create Headscale managers
 	wonderNetManager := headscale.NewWonderNetManager(headscaleClient)
 	aclManager := headscale.NewACLManager(headscaleClient)
-
-	// Create services
-	wonderNetService := service.NewWonderNetService(wonderNetRepository, wonderNetManager, aclManager, config.PublicURL)
-	workerService := service.NewWorkerService(tokenGenerator, config.JWTSecret, wonderNetRepository, wonderNetService)
-	deviceFlowService := service.NewDeviceFlowService(deviceFlowRepository, wonderNetService, config.PublicURL)
-	nodesService := service.NewNodesService(wonderNetManager)
 
 	// Create Keycloak admin client
 	keycloakClient := keycloak.NewAdminClient(keycloak.AdminClientConfig{
@@ -154,8 +144,11 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 	}
 	slog.Info("authenticated with Keycloak admin API")
 
-	// Create Keycloak auth service
-	keycloakAuthService := service.NewKeycloakAuthService(keycloakClient, userRepository, wonderNetRepository, serviceAccountRepository, wonderNetService)
+	// Create services
+	wonderNetService := service.NewWonderNetService(wonderNetRepository, serviceAccountRepository, wonderNetManager, aclManager, keycloakClient, config.PublicURL)
+	workerService := service.NewWorkerService(tokenGenerator, config.JWTSecret, wonderNetRepository, wonderNetService)
+	deviceFlowService := service.NewDeviceFlowService(deviceFlowRepository, wonderNetService, config.PublicURL)
+	nodesService := service.NewNodesService(wonderNetManager)
 
 	// Create JWT validator for Keycloak tokens
 	jwksURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/certs", config.KeycloakURL, config.KeycloakRealm)
@@ -182,15 +175,12 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 		headscaleClient:         headscaleClient,
 		headscaleProcessManager: headscaleProcessManager,
 		jwtValidator:            jwtValidator,
-		keycloakClient:          keycloakClient,
-		userRepository:          userRepository,
 		wonderNetRepository:     wonderNetRepository,
 		deviceFlowRepository:    deviceFlowRepository,
 		wonderNetService:        wonderNetService,
 		workerService:           workerService,
 		deviceFlowService:       deviceFlowService,
 		nodesService:            nodesService,
-		keycloakAuthService:     keycloakAuthService,
 	}, nil
 }
 

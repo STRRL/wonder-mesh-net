@@ -11,13 +11,13 @@ import (
 
 // ServiceAccountController handles Keycloak service account management.
 type ServiceAccountController struct {
-	keycloakAuthService *service.KeycloakAuthService
+	wonderNetService *service.WonderNetService
 }
 
 // NewServiceAccountController creates a new ServiceAccountController.
-func NewServiceAccountController(keycloakAuthService *service.KeycloakAuthService) *ServiceAccountController {
+func NewServiceAccountController(wonderNetService *service.WonderNetService) *ServiceAccountController {
 	return &ServiceAccountController{
-		keycloakAuthService: keycloakAuthService,
+		wonderNetService: wonderNetService,
 	}
 }
 
@@ -60,7 +60,7 @@ func (c *ServiceAccountController) HandleCreate(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	details, err := c.keycloakAuthService.CreateServiceAccount(r.Context(), wonderNet, req.Name)
+	details, err := c.wonderNetService.CreateServiceAccount(r.Context(), wonderNet, req.Name)
 	if err != nil {
 		slog.Error("create service account", "error", err)
 		http.Error(w, "create service account", http.StatusInternalServerError)
@@ -89,7 +89,7 @@ func (c *ServiceAccountController) HandleList(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	accounts, err := c.keycloakAuthService.ListServiceAccounts(r.Context(), wonderNet)
+	accounts, err := c.wonderNetService.ListServiceAccounts(r.Context(), wonderNet)
 	if err != nil {
 		slog.Error("list service accounts", "error", err)
 		http.Error(w, "list service accounts", http.StatusInternalServerError)
@@ -130,7 +130,7 @@ func (c *ServiceAccountController) HandleDelete(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if err := c.keycloakAuthService.DeleteServiceAccount(r.Context(), clientID, wonderNet); err != nil {
+	if err := c.wonderNetService.DeleteServiceAccount(r.Context(), clientID, wonderNet); err != nil {
 		if errors.Is(err, service.ErrServiceAccountNotFound) {
 			http.Error(w, "service account not found", http.StatusNotFound)
 			return

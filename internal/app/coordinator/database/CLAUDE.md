@@ -35,11 +35,11 @@ sqlc generate
 
 ### Adding Queries
 
-1. Create or edit a `.sql` file in `sqlc/` (e.g., `users.sql`)
+1. Create or edit a `.sql` file in `sqlc/` (e.g., `wonder_nets.sql`)
 2. Write queries using sqlc annotations:
    ```sql
-   -- name: GetUserByID :one
-   SELECT * FROM users WHERE id = ?;
+   -- name: GetWonderNetByID :one
+   SELECT * FROM wonder_nets WHERE id = ?;
    ```
 3. Regenerate: `sqlc generate`
 
@@ -51,4 +51,3 @@ The sqlc configuration is in the project root `sqlc.yaml`. Generated files use t
 
 - `sqlite3` - SQLite (default, uses single connection to avoid locking)
 - `pgx` - PostgreSQL (connection pooling enabled)
-

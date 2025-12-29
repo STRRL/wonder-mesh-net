@@ -34,22 +34,18 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		var wonderNet *repository.WonderNet
+		var isServiceAccount bool
 
-		// Service accounts have preferred_username starting with "service-account-"
-		if strings.HasPrefix(claims.PreferredUsername, "service-account-") {
-			wonderNet, err = s.keycloakAuthService.GetServiceAccountWonderNet(r.Context(), claims)
-			if err != nil {
+		wonderNet, isServiceAccount, err = s.wonderNetService.ResolveWonderNetFromClaims(r.Context(), claims)
+		if err != nil {
+			if isServiceAccount {
 				slog.Error("get service account wonder net", "error", err)
 				http.Error(w, "service account not associated with wonder net", http.StatusUnauthorized)
 				return
 			}
-		} else {
-			_, wonderNet, err = s.keycloakAuthService.GetOrCreateUserAndWonderNet(r.Context(), claims)
-			if err != nil {
-				slog.Error("get or create user and wonder net", "error", err)
-				http.Error(w, "authentication failed", http.StatusInternalServerError)
-				return
-			}
+			slog.Error("get or create wonder net", "error", err)
+			http.Error(w, "authentication failed", http.StatusInternalServerError)
+			return
 		}
 
 		ctx := context.WithValue(r.Context(), controller.ContextKeyWonderNet, wonderNet)
@@ -80,7 +76,7 @@ func (s *Server) Run() error {
 	authKeyController := controller.NewAuthKeyController(s.wonderNetService)
 	joinTokenController := controller.NewJoinTokenController(s.workerService)
 	nodesController := controller.NewNodesController(s.nodesService)
-	serviceAccountController := controller.NewServiceAccountController(s.keycloakAuthService)
+	serviceAccountController := controller.NewServiceAccountController(s.wonderNetService)
 	deployerController := controller.NewDeployerController(s.wonderNetService)
 
 	headscaleProxy, err := controller.NewHeadscaleProxyController("http://127.0.0.1:8080")
