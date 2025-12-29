@@ -125,6 +125,7 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 	// Create repositories
 	userRepository := repository.NewUserRepository(db.Queries())
 	wonderNetRepository := repository.NewWonderNetRepository(db.Queries())
+	serviceAccountRepository := repository.NewServiceAccountRepository(db.Queries())
 	deviceFlowRepository := repository.NewDeviceRequestRepository(db.Queries())
 
 	// Create Headscale managers
@@ -154,7 +155,7 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 	slog.Info("authenticated with Keycloak admin API")
 
 	// Create Keycloak auth service
-	keycloakAuthService := service.NewKeycloakAuthService(keycloakClient, userRepository, wonderNetRepository, wonderNetService)
+	keycloakAuthService := service.NewKeycloakAuthService(keycloakClient, userRepository, wonderNetRepository, serviceAccountRepository, wonderNetService)
 
 	// Create JWT validator for Keycloak tokens
 	jwksURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/certs", config.KeycloakURL, config.KeycloakRealm)

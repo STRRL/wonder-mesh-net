@@ -2,9 +2,9 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/service"
 )
@@ -124,19 +124,17 @@ func (c *ServiceAccountController) HandleDelete(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	clientID := strings.TrimPrefix(r.URL.Path, "/coordinator/api/v1/service-accounts/")
+	clientID := r.PathValue("id")
 	if clientID == "" {
 		http.Error(w, "client_id is required", http.StatusBadRequest)
 		return
 	}
 
-	expectedPrefix := "wonder-net-" + wonderNet.ID[:12] + "-"
-	if !strings.HasPrefix(clientID, expectedPrefix) {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	if err := c.keycloakAuthService.DeleteServiceAccount(r.Context(), clientID); err != nil {
+	if err := c.keycloakAuthService.DeleteServiceAccount(r.Context(), clientID, wonderNet); err != nil {
+		if errors.Is(err, service.ErrServiceAccountNotFound) {
+			http.Error(w, "service account not found", http.StatusNotFound)
+			return
+		}
 		slog.Error("delete service account", "error", err, "client_id", clientID)
 		http.Error(w, "delete service account", http.StatusInternalServerError)
 		return

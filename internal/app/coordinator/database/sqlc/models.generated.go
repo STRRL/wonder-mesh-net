@@ -21,6 +21,14 @@ type DeviceRequest struct {
 	ExpiresAt      time.Time `json:"expires_at"`
 }
 
+type ServiceAccount struct {
+	ID               string    `json:"id"`
+	WonderNetID      string    `json:"wonder_net_id"`
+	KeycloakClientID string    `json:"keycloak_client_id"`
+	Name             string    `json:"name"`
+	CreatedAt        time.Time `json:"created_at"`
+}
+
 type User struct {
 	ID          string    `json:"id"`
 	KeycloakSub string    `json:"keycloak_sub"`

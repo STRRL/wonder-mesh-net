@@ -219,6 +219,7 @@ func (c *Claims) HasClientRole(clientID, role string) bool {
 }
 
 // IsServiceAccount returns true if this token was issued for a service account.
+// Keycloak service accounts have preferred_username starting with "service-account-".
 func (c *Claims) IsServiceAccount() bool {
-	return c.HasRole("service_account") || c.Azp != "" && c.Subject != ""
+	return strings.HasPrefix(c.PreferredUsername, "service-account-")
 }

@@ -19,10 +19,11 @@ var (
 
 // KeycloakAuthService handles Keycloak-based authentication.
 type KeycloakAuthService struct {
-	keycloakClient      *keycloak.AdminClient
-	userRepository      *repository.UserRepository
-	wonderNetRepository *repository.WonderNetRepository
-	wonderNetService    *WonderNetService
+	keycloakClient           *keycloak.AdminClient
+	userRepository           *repository.UserRepository
+	wonderNetRepository      *repository.WonderNetRepository
+	serviceAccountRepository *repository.ServiceAccountRepository
+	wonderNetService         *WonderNetService
 }
 
 // NewKeycloakAuthService creates a new KeycloakAuthService.
@@ -30,13 +31,15 @@ func NewKeycloakAuthService(
 	keycloakClient *keycloak.AdminClient,
 	userRepository *repository.UserRepository,
 	wonderNetRepository *repository.WonderNetRepository,
+	serviceAccountRepository *repository.ServiceAccountRepository,
 	wonderNetService *WonderNetService,
 ) *KeycloakAuthService {
 	return &KeycloakAuthService{
-		keycloakClient:      keycloakClient,
-		userRepository:      userRepository,
-		wonderNetRepository: wonderNetRepository,
-		wonderNetService:    wonderNetService,
+		keycloakClient:           keycloakClient,
+		userRepository:           userRepository,
+		wonderNetRepository:      wonderNetRepository,
+		serviceAccountRepository: serviceAccountRepository,
+		wonderNetService:         wonderNetService,
 	}
 }
 
@@ -166,8 +169,21 @@ func (s *KeycloakAuthService) CreateServiceAccount(ctx context.Context, wonderNe
 	}
 
 	if err := s.keycloakClient.SetUserAttribute(ctx, serviceAccount.UserID, "wonder_net_id", wonderNet.ID); err != nil {
-		s.keycloakClient.DeleteServiceAccount(ctx, clientID)
+		if deleteErr := s.keycloakClient.DeleteServiceAccount(ctx, clientID); deleteErr != nil {
+			slog.Error("cleanup service account after attribute set failure",
+				"error", deleteErr,
+				"client_id", clientID)
+		}
 		return nil, fmt.Errorf("set wonder net ID attribute: %w", err)
+	}
+
+	if _, err := s.serviceAccountRepository.Create(ctx, wonderNet.ID, clientID, name); err != nil {
+		if deleteErr := s.keycloakClient.DeleteServiceAccount(ctx, clientID); deleteErr != nil {
+			slog.Error("cleanup service account after database insert failure",
+				"error", deleteErr,
+				"client_id", clientID)
+		}
+		return nil, fmt.Errorf("store service account mapping: %w", err)
 	}
 
 	return &ServiceAccountDetails{
@@ -176,26 +192,55 @@ func (s *KeycloakAuthService) CreateServiceAccount(ctx context.Context, wonderNe
 	}, nil
 }
 
+var ErrServiceAccountNotFound = errors.New("service account not found")
+
 // DeleteServiceAccount deletes a Keycloak service account.
-func (s *KeycloakAuthService) DeleteServiceAccount(ctx context.Context, clientID string) error {
-	return s.keycloakClient.DeleteServiceAccount(ctx, clientID)
+// It verifies ownership via the database mapping before deleting.
+func (s *KeycloakAuthService) DeleteServiceAccount(ctx context.Context, clientID string, wonderNet *repository.WonderNet) error {
+	sa, err := s.serviceAccountRepository.GetByClientID(ctx, clientID)
+	if err != nil {
+		return fmt.Errorf("get service account: %w", err)
+	}
+	if sa == nil {
+		return ErrServiceAccountNotFound
+	}
+	if sa.WonderNetID != wonderNet.ID {
+		return ErrServiceAccountNotFound
+	}
+
+	if err := s.keycloakClient.DeleteServiceAccount(ctx, clientID); err != nil {
+		return fmt.Errorf("delete keycloak service account: %w", err)
+	}
+
+	if err := s.serviceAccountRepository.Delete(ctx, clientID); err != nil {
+		slog.Error("delete service account from database after keycloak deletion",
+			"error", err,
+			"client_id", clientID)
+	}
+
+	return nil
+}
+
+// ServiceAccountInfo represents a service account returned from list.
+type ServiceAccountInfo struct {
+	ClientID    string
+	Name        string
+	Description string
 }
 
 // ListServiceAccounts lists all service accounts for a wonder net.
-func (s *KeycloakAuthService) ListServiceAccounts(ctx context.Context, wonderNet *repository.WonderNet) ([]*keycloak.ServiceAccountInfo, error) {
-	allAccounts, err := s.keycloakClient.ListServiceAccounts(ctx)
+func (s *KeycloakAuthService) ListServiceAccounts(ctx context.Context, wonderNet *repository.WonderNet) ([]*ServiceAccountInfo, error) {
+	accounts, err := s.serviceAccountRepository.ListByWonderNet(ctx, wonderNet.ID)
 	if err != nil {
 		return nil, fmt.Errorf("list service accounts: %w", err)
 	}
 
-	var result []*keycloak.ServiceAccountInfo
-	for _, account := range allAccounts {
-		wonderNetID, err := s.keycloakClient.GetUserAttribute(ctx, account.UserID, "wonder_net_id")
-		if err != nil {
-			continue
-		}
-		if wonderNetID == wonderNet.ID {
-			result = append(result, account)
+	result := make([]*ServiceAccountInfo, len(accounts))
+	for i, account := range accounts {
+		result[i] = &ServiceAccountInfo{
+			ClientID:    account.KeycloakClientID,
+			Name:        account.Name,
+			Description: fmt.Sprintf("Service account for %s", account.Name),
 		}
 	}
 
