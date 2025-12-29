@@ -359,14 +359,49 @@ else
 fi
 
 # ============================================
-# Deployer Test (using access token for auth)
+# Deployer Test (using service account)
 # ============================================
-log_info "=== Testing Deployer ==="
+log_info "=== Testing Deployer with Service Account ==="
 
-# Deployer join using access token
-log_info "Deployer joining mesh..."
-DEPLOYER_JOIN_RESPONSE=$(docker exec deployer curl -s -X POST \
+# Step 1: Create a service account for the deployer
+log_info "Creating service account for deployer..."
+SA_CREATE_RESPONSE=$(curl -s -X POST \
     -H "Authorization: Bearer $ACCESS_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"name": "deployer"}' \
+    "http://localhost:9080/coordinator/api/v1/service-accounts")
+
+SA_CLIENT_ID=$(echo "$SA_CREATE_RESPONSE" | sed -n 's/.*"client_id":"\([^"]*\)".*/\1/p')
+SA_CLIENT_SECRET=$(echo "$SA_CREATE_RESPONSE" | sed -n 's/.*"client_secret":"\([^"]*\)".*/\1/p')
+
+if [ -z "$SA_CLIENT_ID" ] || [ -z "$SA_CLIENT_SECRET" ]; then
+    log_error "Failed to create service account"
+    echo "$SA_CREATE_RESPONSE"
+    exit 1
+fi
+log_info "Service account created: $SA_CLIENT_ID"
+
+# Step 2: Get access token using the service account (client credentials flow)
+log_info "Getting access token for service account..."
+SA_TOKEN_RESPONSE=$(curl -s -X POST \
+    "http://localhost:9090/realms/wonder/protocol/openid-connect/token" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "grant_type=client_credentials" \
+    -d "client_id=$SA_CLIENT_ID" \
+    -d "client_secret=$SA_CLIENT_SECRET")
+
+SA_ACCESS_TOKEN=$(echo "$SA_TOKEN_RESPONSE" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+if [ -z "$SA_ACCESS_TOKEN" ]; then
+    log_error "Failed to get access token for service account"
+    echo "$SA_TOKEN_RESPONSE"
+    exit 1
+fi
+log_info "Service account access token obtained: ${SA_ACCESS_TOKEN:0:50}..."
+
+# Step 3: Deployer joins mesh using service account token
+log_info "Deployer joining mesh with service account..."
+DEPLOYER_JOIN_RESPONSE=$(docker exec deployer curl -s -X POST \
+    -H "Authorization: Bearer $SA_ACCESS_TOKEN" \
     -H "Content-Type: application/json" \
     "http://$HOST_IP:9080/coordinator/api/v1/deployer/join")
 
@@ -447,4 +482,5 @@ log_info "=== Deployer Test Complete ==="
 log_info "=== E2E Test Complete ==="
 log_info "3 workers connected to mesh successfully!"
 log_info "Keycloak JWT authentication verified!"
+log_info "Service account created and used for deployer authentication!"
 log_info "Deployer test passed - apps can be deployed and accessed via mesh!"

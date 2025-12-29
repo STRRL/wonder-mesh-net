@@ -51,6 +51,20 @@
           "temporary": false
         }
       ]
+    },
+    {
+      "username": "service-account-coordinator-admin",
+      "enabled": true,
+      "serviceAccountClientId": "coordinator-admin",
+      "realmRoles": ["default-roles-wonder"],
+      "clientRoles": {
+        "realm-management": [
+          "manage-clients",
+          "view-users",
+          "manage-users",
+          "query-users"
+        ]
+      }
     }
   ]
 }

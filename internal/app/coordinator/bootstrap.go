@@ -11,11 +11,13 @@ import (
 	"time"
 
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/controller"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/repository"
 	"github.com/strrl/wonder-mesh-net/pkg/jwtauth"
 )
 
 // requireAuth wraps a handler with JWT authentication.
 // It validates the JWT token and adds the user's wonder net to the request context.
+// Supports both regular users and service accounts.
 func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := extractBearerToken(r)
@@ -31,11 +33,23 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		_, wonderNet, err := s.keycloakAuthService.EnsureUserAndWonderNet(r.Context(), claims)
-		if err != nil {
-			slog.Error("ensure user and wonder net", "error", err)
-			http.Error(w, "authentication failed", http.StatusInternalServerError)
-			return
+		var wonderNet *repository.WonderNet
+
+		// Service accounts have preferred_username starting with "service-account-"
+		if strings.HasPrefix(claims.PreferredUsername, "service-account-") {
+			wonderNet, err = s.keycloakAuthService.GetServiceAccountWonderNet(r.Context(), claims)
+			if err != nil {
+				slog.Error("get service account wonder net", "error", err)
+				http.Error(w, "service account not associated with wonder net", http.StatusUnauthorized)
+				return
+			}
+		} else {
+			_, wonderNet, err = s.keycloakAuthService.EnsureUserAndWonderNet(r.Context(), claims)
+			if err != nil {
+				slog.Error("ensure user and wonder net", "error", err)
+				http.Error(w, "authentication failed", http.StatusInternalServerError)
+				return
+			}
 		}
 
 		ctx := context.WithValue(r.Context(), controller.ContextKeyWonderNet, wonderNet)
