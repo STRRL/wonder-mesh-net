@@ -39,14 +39,12 @@ type Server struct {
 	jwtValidator *jwtauth.Validator
 
 	// Repositories
-	wonderNetRepository  *repository.WonderNetRepository
-	deviceFlowRepository *repository.DeviceRequestRepository
+	wonderNetRepository *repository.WonderNetRepository
 
 	// Services
-	wonderNetService  *service.WonderNetService
-	workerService     *service.WorkerService
-	deviceFlowService *service.DeviceFlowService
-	nodesService      *service.NodesService
+	wonderNetService *service.WonderNetService
+	workerService    *service.WorkerService
+	nodesService     *service.NodesService
 }
 
 // BootstrapNewServer creates a new coordinator server.
@@ -127,7 +125,6 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 	// Create repositories
 	wonderNetRepository := repository.NewWonderNetRepository(db.Queries())
 	serviceAccountRepository := repository.NewServiceAccountRepository(db.Queries())
-	deviceFlowRepository := repository.NewDeviceRequestRepository(db.Queries())
 
 	// Create Headscale managers
 	wonderNetManager := headscale.NewWonderNetManager(headscaleClient)
@@ -152,7 +149,6 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 	// Create services
 	wonderNetService := service.NewWonderNetService(wonderNetRepository, serviceAccountRepository, wonderNetManager, aclManager, keycloakClient, config.PublicURL)
 	workerService := service.NewWorkerService(tokenGenerator, config.JWTSecret, wonderNetRepository, wonderNetService)
-	deviceFlowService := service.NewDeviceFlowService(deviceFlowRepository, wonderNetService, config.PublicURL)
 	nodesService := service.NewNodesService(wonderNetManager)
 
 	// Create JWT validator for Keycloak tokens
@@ -181,10 +177,8 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 		headscaleProcessManager: headscaleProcessManager,
 		jwtValidator:            jwtValidator,
 		wonderNetRepository:     wonderNetRepository,
-		deviceFlowRepository:    deviceFlowRepository,
 		wonderNetService:        wonderNetService,
 		workerService:           workerService,
-		deviceFlowService:       deviceFlowService,
 		nodesService:            nodesService,
 	}, nil
 }
@@ -259,8 +253,6 @@ func extractBearerToken(r *http.Request) string {
 func (s *Server) Run() error {
 	healthController := controller.NewHealthController(s.headscaleClient)
 	workerController := controller.NewWorkerController(s.workerService)
-	deviceFlowController := controller.NewDeviceFlowController(s.deviceFlowService, s.config.PublicURL, s.config.KeycloakURL, s.config.KeycloakRealm)
-	authKeyController := controller.NewAuthKeyController(s.wonderNetService)
 	joinTokenController := controller.NewJoinTokenController(s.workerService)
 	nodesController := controller.NewNodesController(s.nodesService)
 	serviceAccountController := controller.NewServiceAccountController(s.wonderNetService)
@@ -277,14 +269,7 @@ func (s *Server) Run() error {
 	// Worker endpoints (join token exchange doesn't require auth)
 	mux.HandleFunc("POST /coordinator/api/v1/worker/join", workerController.HandleWorkerJoin)
 
-	// Device flow endpoints (used by CLI for device authorization)
-	mux.HandleFunc("POST /coordinator/device/code", deviceFlowController.HandleDeviceCode)
-	mux.HandleFunc("GET /coordinator/device/verify", deviceFlowController.HandleDeviceVerifyPage)
-	mux.HandleFunc("POST /coordinator/device/verify", s.requireAuth(s.requireWonderNet(deviceFlowController.HandleDeviceVerify)))
-	mux.HandleFunc("POST /coordinator/device/token", deviceFlowController.HandleDeviceToken)
-
 	// Protected endpoints - require JWT authentication and WonderNet
-	mux.HandleFunc("POST /coordinator/api/v1/authkey", s.requireAuth(s.requireWonderNet(authKeyController.HandleCreateAuthKey)))
 	mux.HandleFunc("POST /coordinator/api/v1/join-token", s.requireAuth(s.requireWonderNet(joinTokenController.HandleCreateJoinToken)))
 	mux.HandleFunc("GET /coordinator/api/v1/nodes", s.requireAuth(s.requireWonderNet(nodesController.HandleListNodes)))
 	mux.HandleFunc("POST /coordinator/api/v1/service-accounts", s.requireAuth(s.requireWonderNet(serviceAccountController.HandleCreate)))
@@ -319,16 +304,6 @@ func (s *Server) Run() error {
 		if err := httpServer.ListenAndServe(); err != http.ErrServerClosed {
 			slog.Error("server error", "error", err)
 			os.Exit(1)
-		}
-	}()
-
-	go func() {
-		ticker := time.NewTicker(time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			if err := s.deviceFlowRepository.DeleteExpired(context.Background()); err != nil {
-				slog.Warn("cleanup expired device requests", "error", err)
-			}
 		}
 	}()
 

@@ -8,19 +8,6 @@ import (
 	"time"
 )
 
-type DeviceRequest struct {
-	DeviceCode     string    `json:"device_code"`
-	UserCode       string    `json:"user_code"`
-	Status         string    `json:"status"`
-	WonderNetID    string    `json:"wonder_net_id"`
-	HeadscaleUser  string    `json:"headscale_user"`
-	Authkey        string    `json:"authkey"`
-	HeadscaleUrl   string    `json:"headscale_url"`
-	CoordinatorUrl string    `json:"coordinator_url"`
-	CreatedAt      time.Time `json:"created_at"`
-	ExpiresAt      time.Time `json:"expires_at"`
-}
-
 type ServiceAccount struct {
 	ID               string    `json:"id"`
 	WonderNetID      string    `json:"wonder_net_id"`

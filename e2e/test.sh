@@ -130,21 +130,6 @@ if ! echo "$NODES_BY_TOKEN" | grep -q '"nodes"'; then
 fi
 log_info "Nodes endpoint works with access token"
 
-log_info "Creating auth key..."
-AUTHKEY_RESPONSE=$(curl -s -X POST \
-    -H "Authorization: Bearer $ACCESS_TOKEN" \
-    -H "Content-Type: application/json" \
-    -d '{"ttl_hours": 24}' \
-    "http://localhost:9080/coordinator/api/v1/authkey")
-
-AUTHKEY=$(echo "$AUTHKEY_RESPONSE" | sed -n 's/.*"authkey":"\([^"]*\)".*/\1/p')
-if [ -z "$AUTHKEY" ]; then
-    log_error "Failed to create auth key"
-    echo "$AUTHKEY_RESPONSE"
-    exit 1
-fi
-log_info "Auth key created: ${AUTHKEY:0:30}..."
-
 # Get host IP that containers can reach (coordinator uses host network)
 HOST_IP="host.docker.internal"
 # On Linux, host.docker.internal may not work, use docker bridge gateway

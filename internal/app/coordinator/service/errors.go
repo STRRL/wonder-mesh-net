@@ -13,10 +13,3 @@ var (
 var (
 	ErrInvalidToken = errors.New("invalid or expired token")
 )
-
-// Device flow errors.
-var (
-	ErrInvalidUserCode   = errors.New("invalid code format, expected XXXX-XXXX")
-	ErrInvalidDeviceCode = errors.New("invalid device code format")
-	ErrCodeAlreadyUsed   = errors.New("code already used")
-)
