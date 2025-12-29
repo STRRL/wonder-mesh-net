@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/google/uuid"
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/repository"
 	"github.com/strrl/wonder-mesh-net/pkg/jwtauth"
 	"github.com/strrl/wonder-mesh-net/pkg/keycloak"
@@ -160,8 +161,9 @@ type ServiceAccountDetails struct {
 }
 
 // CreateServiceAccount creates a Keycloak service account for a wonder net.
+// The client ID is a randomly generated UUID to avoid any derivation from other IDs.
 func (s *KeycloakAuthService) CreateServiceAccount(ctx context.Context, wonderNet *repository.WonderNet, name string) (*ServiceAccountDetails, error) {
-	clientID := fmt.Sprintf("wonder-net-%s-%s", wonderNet.ID[:12], name)
+	clientID := uuid.New().String()
 
 	serviceAccount, err := s.keycloakClient.CreateServiceAccount(ctx, clientID, fmt.Sprintf("Service account for %s", name))
 	if err != nil {

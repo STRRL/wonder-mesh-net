@@ -53,7 +53,7 @@ pkg/
 
 ### Key Concepts
 
-**Multi-tenancy**: Each OIDC user gets an isolated Headscale "user" (namespace). Realm ID is a random UUID stored in DB, username is `realm-{id[:12]}`.
+**Multi-tenancy**: Each user gets an isolated Headscale "user" (namespace). The wonder net ID is a random UUID, and the Headscale username is the same UUID (no derivation or truncation).
 
 **TODO: User / Org / Realm hierarchy**
 - Current: 1 OIDC identity = 1 realm (1:1 mapping via `users` table)

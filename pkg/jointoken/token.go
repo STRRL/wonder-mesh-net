@@ -46,7 +46,7 @@ type Claims struct {
 	WonderNetID string `json:"wonder_net_id"`
 
 	// HeadscaleUser is the Headscale user (namespace) name that the worker
-	// will be registered under. Format is typically "wonder-net-{id[:12]}".
+	// will be registered under. This is the same UUID as the wonder net ID.
 	HeadscaleUser string `json:"headscale_user"`
 }
 

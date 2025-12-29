@@ -22,10 +22,11 @@ func NewWonderNetManager(client v1.HeadscaleServiceClient) *WonderNetManager {
 
 // NewWonderNetIdentifiers generates a new wonder net ID and Headscale username.
 // This should be called once when creating a new wonder net.
-// The headscale_user follows the pattern "wonder-net-{first12CharsOfUUID}".
+// Both use the same UUID - the wonder net ID is the full UUID, and the headscale
+// user is also the same UUID (used as namespace name in Headscale).
 func NewWonderNetIdentifiers() (wonderNetID string, headscaleUser string) {
 	id := uuid.New().String()
-	return id, "wonder-net-" + id[:12]
+	return id, id
 }
 
 // GetOrCreateWonderNet gets an existing wonder net or creates a new one by name
