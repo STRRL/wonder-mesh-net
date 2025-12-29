@@ -18,6 +18,7 @@ log_error() {
 cleanup() {
     log_info "Cleaning up..."
     docker compose -f docker-compose.yaml down -v --remove-orphans 2>/dev/null || true
+    rm -f cookies.txt
 }
 
 # Set trap for cleanup on exit
