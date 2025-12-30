@@ -100,21 +100,9 @@ func (s *APIKeyService) ListAPIKeys(ctx context.Context, wonderNetID string) ([]
 
 // DeleteAPIKey deletes an API key.
 func (s *APIKeyService) DeleteAPIKey(ctx context.Context, wonderNetID, keyID string) error {
-	key, err := s.apiKeyRepository.GetByHash(ctx, keyID)
+	key, err := s.apiKeyRepository.GetByID(ctx, keyID)
 	if err != nil {
 		return err
-	}
-	if key == nil {
-		keys, err := s.apiKeyRepository.ListByWonderNet(ctx, wonderNetID)
-		if err != nil {
-			return err
-		}
-		for _, k := range keys {
-			if k.ID == keyID {
-				key = k
-				break
-			}
-		}
 	}
 	if key == nil {
 		return ErrAPIKeyNotFound

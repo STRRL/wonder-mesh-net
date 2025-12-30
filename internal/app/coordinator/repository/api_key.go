@@ -65,6 +65,18 @@ func (r *APIKeyRepository) GetByHash(ctx context.Context, keyHash string) (*APIK
 	return apiKeyFromRow(row), nil
 }
 
+// GetByID retrieves an API key by its ID.
+func (r *APIKeyRepository) GetByID(ctx context.Context, id string) (*APIKey, error) {
+	row, err := r.queries.GetAPIKeyByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return apiKeyFromRow(row), nil
+}
+
 // ListByWonderNet lists all API keys for a wonder net.
 func (r *APIKeyRepository) ListByWonderNet(ctx context.Context, wonderNetID string) ([]*APIKey, error) {
 	rows, err := r.queries.ListAPIKeysByWonderNet(ctx, wonderNetID)

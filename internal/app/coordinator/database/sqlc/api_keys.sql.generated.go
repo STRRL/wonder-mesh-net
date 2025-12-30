@@ -77,6 +77,26 @@ func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, 
 	return i, err
 }
 
+const getAPIKeyByID = `-- name: GetAPIKeyByID :one
+SELECT id, wonder_net_id, name, key_hash, key_prefix, created_at, last_used_at, expires_at FROM api_keys WHERE id = ?
+`
+
+func (q *Queries) GetAPIKeyByID(ctx context.Context, id string) (ApiKey, error) {
+	row := q.db.QueryRowContext(ctx, getAPIKeyByID, id)
+	var i ApiKey
+	err := row.Scan(
+		&i.ID,
+		&i.WonderNetID,
+		&i.Name,
+		&i.KeyHash,
+		&i.KeyPrefix,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+		&i.ExpiresAt,
+	)
+	return i, err
+}
+
 const listAPIKeysByWonderNet = `-- name: ListAPIKeysByWonderNet :many
 SELECT id, wonder_net_id, name, key_hash, key_prefix, created_at, last_used_at, expires_at FROM api_keys WHERE wonder_net_id = ? ORDER BY created_at DESC
 `

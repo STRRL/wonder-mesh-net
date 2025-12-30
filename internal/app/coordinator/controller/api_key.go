@@ -50,11 +50,20 @@ func (c *APIKeyController) HandleCreate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if req.Name == "" {
+		http.Error(w, "name is required", http.StatusBadRequest)
+		return
+	}
+
 	var expiresAt *time.Time
 	if req.ExpiresIn != "" {
 		duration, err := time.ParseDuration(req.ExpiresIn)
 		if err != nil {
 			http.Error(w, "invalid expires_in format", http.StatusBadRequest)
+			return
+		}
+		if duration <= 0 {
+			http.Error(w, "expires_in must be a positive duration", http.StatusBadRequest)
 			return
 		}
 		t := time.Now().Add(duration)

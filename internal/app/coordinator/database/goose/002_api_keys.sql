@@ -10,7 +10,6 @@ CREATE TABLE api_keys (
     expires_at TIMESTAMP
 );
 CREATE INDEX idx_api_keys_wonder_net_id ON api_keys(wonder_net_id);
-CREATE INDEX idx_api_keys_key_hash ON api_keys(key_hash);
 
 -- +goose Down
 DROP TABLE IF EXISTS api_keys;

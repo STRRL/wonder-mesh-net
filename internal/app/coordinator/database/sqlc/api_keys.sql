@@ -6,6 +6,9 @@ RETURNING *;
 -- name: GetAPIKeyByHash :one
 SELECT * FROM api_keys WHERE key_hash = ?;
 
+-- name: GetAPIKeyByID :one
+SELECT * FROM api_keys WHERE id = ?;
+
 -- name: ListAPIKeysByWonderNet :many
 SELECT * FROM api_keys WHERE wonder_net_id = ? ORDER BY created_at DESC;
 

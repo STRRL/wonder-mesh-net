@@ -3,6 +3,7 @@ package apikey
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"strings"
 )
@@ -10,6 +11,9 @@ import (
 const (
 	Prefix    = "wmn_"
 	KeyLength = 32
+	// PrefixDisplayLength is the number of characters to show in the key prefix.
+	// Format: first 12 chars (e.g., "wmn_abcd1234") + "..."
+	PrefixDisplayLength = 12
 )
 
 // Key represents a generated API key with its hash for storage.
@@ -29,7 +33,7 @@ func Generate() (*Key, error) {
 
 	raw := Prefix + hex.EncodeToString(bytes)
 	hash := Hash(raw)
-	prefix := raw[:12] + "..."
+	prefix := raw[:PrefixDisplayLength] + "..."
 
 	return &Key{
 		Raw:    raw,
@@ -47,4 +51,10 @@ func Hash(raw string) string {
 // IsAPIKey checks if a token looks like an API key (starts with prefix).
 func IsAPIKey(token string) bool {
 	return strings.HasPrefix(token, Prefix)
+}
+
+// CompareHashes compares two hashes using constant-time comparison
+// to prevent timing attacks.
+func CompareHashes(a, b string) bool {
+	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
