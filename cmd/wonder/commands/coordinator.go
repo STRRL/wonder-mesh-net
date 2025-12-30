@@ -31,8 +31,6 @@ func NewCoordinatorCmd() *cobra.Command {
 	_ = viper.BindEnv("coordinator.keycloak_url", "KEYCLOAK_URL")
 	_ = viper.BindEnv("coordinator.keycloak_realm", "KEYCLOAK_REALM")
 	_ = viper.BindEnv("coordinator.keycloak_client_id", "KEYCLOAK_CLIENT_ID")
-	_ = viper.BindEnv("coordinator.keycloak_admin_client", "KEYCLOAK_ADMIN_CLIENT")
-	_ = viper.BindEnv("coordinator.keycloak_admin_secret", "KEYCLOAK_ADMIN_SECRET")
 
 	return cmd
 }
@@ -47,8 +45,6 @@ func runCoordinator(cmd *cobra.Command, args []string) {
 	cfg.KeycloakURL = viper.GetString("coordinator.keycloak_url")
 	cfg.KeycloakRealm = viper.GetString("coordinator.keycloak_realm")
 	cfg.KeycloakClientID = viper.GetString("coordinator.keycloak_client_id")
-	cfg.KeycloakAdminClient = viper.GetString("coordinator.keycloak_admin_client")
-	cfg.KeycloakAdminSecret = viper.GetString("coordinator.keycloak_admin_secret")
 
 	if cfg.JWTSecret == "" {
 		slog.Error("JWT_SECRET environment variable is required")

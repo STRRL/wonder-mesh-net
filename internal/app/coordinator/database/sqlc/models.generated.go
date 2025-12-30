@@ -5,15 +5,19 @@
 package sqlc
 
 import (
+	"database/sql"
 	"time"
 )
 
-type ServiceAccount struct {
-	ID               string    `json:"id"`
-	WonderNetID      string    `json:"wonder_net_id"`
-	KeycloakClientID string    `json:"keycloak_client_id"`
-	Name             string    `json:"name"`
-	CreatedAt        time.Time `json:"created_at"`
+type ApiKey struct {
+	ID          string       `json:"id"`
+	WonderNetID string       `json:"wonder_net_id"`
+	Name        string       `json:"name"`
+	KeyHash     string       `json:"key_hash"`
+	KeyPrefix   string       `json:"key_prefix"`
+	CreatedAt   time.Time    `json:"created_at"`
+	LastUsedAt  sql.NullTime `json:"last_used_at"`
+	ExpiresAt   sql.NullTime `json:"expires_at"`
 }
 
 type WonderNet struct {

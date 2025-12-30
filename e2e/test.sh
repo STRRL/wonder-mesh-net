@@ -344,49 +344,44 @@ else
 fi
 
 # ============================================
-# Deployer Test (using service account)
+# Deployer Test (using API Key)
 # ============================================
-log_info "=== Testing Deployer with Service Account ==="
+log_info "=== Testing Deployer with API Key ==="
 
-# Step 1: Create a service account for the deployer
-log_info "Creating service account for deployer..."
-SA_CREATE_RESPONSE=$(curl -s -X POST \
+# Step 1: Create an API key for the deployer
+log_info "Creating API key for deployer..."
+API_KEY_RESPONSE=$(curl -s -X POST \
     -H "Authorization: Bearer $ACCESS_TOKEN" \
     -H "Content-Type: application/json" \
-    -d '{"name": "deployer"}' \
-    "http://localhost:9080/coordinator/api/v1/service-accounts")
+    -d '{"name": "deployer-key", "expires_in": "24h"}' \
+    "http://localhost:9080/coordinator/api/v1/api-keys")
 
-SA_CLIENT_ID=$(echo "$SA_CREATE_RESPONSE" | sed -n 's/.*"client_id":"\([^"]*\)".*/\1/p')
-SA_CLIENT_SECRET=$(echo "$SA_CREATE_RESPONSE" | sed -n 's/.*"client_secret":"\([^"]*\)".*/\1/p')
+API_KEY=$(echo "$API_KEY_RESPONSE" | sed -n 's/.*"key":"\([^"]*\)".*/\1/p')
+API_KEY_ID=$(echo "$API_KEY_RESPONSE" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
 
-if [ -z "$SA_CLIENT_ID" ] || [ -z "$SA_CLIENT_SECRET" ]; then
-    log_error "Failed to create service account"
-    echo "$SA_CREATE_RESPONSE"
+if [ -z "$API_KEY" ]; then
+    log_error "Failed to create API key"
+    echo "$API_KEY_RESPONSE"
     exit 1
 fi
-log_info "Service account created: $SA_CLIENT_ID"
+log_info "API key created: ${API_KEY:0:20}..."
 
-# Step 2: Get access token using the service account (client credentials flow)
-log_info "Getting access token for service account..."
-SA_TOKEN_RESPONSE=$(curl -s -X POST \
-    "http://localhost:9090/realms/wonder/protocol/openid-connect/token" \
-    -H "Content-Type: application/x-www-form-urlencoded" \
-    -d "grant_type=client_credentials" \
-    -d "client_id=$SA_CLIENT_ID" \
-    -d "client_secret=$SA_CLIENT_SECRET")
+# Step 2: List API keys to verify
+log_info "Listing API keys..."
+API_KEYS_LIST=$(curl -s \
+    -H "Authorization: Bearer $ACCESS_TOKEN" \
+    "http://localhost:9080/coordinator/api/v1/api-keys")
 
-SA_ACCESS_TOKEN=$(echo "$SA_TOKEN_RESPONSE" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
-if [ -z "$SA_ACCESS_TOKEN" ]; then
-    log_error "Failed to get access token for service account"
-    echo "$SA_TOKEN_RESPONSE"
-    exit 1
+if ! echo "$API_KEYS_LIST" | grep -q "$API_KEY_ID"; then
+    log_warn "API key not found in list"
+    echo "$API_KEYS_LIST"
 fi
-log_info "Service account access token obtained: ${SA_ACCESS_TOKEN:0:50}..."
+log_info "API key listing works"
 
-# Step 3: Deployer joins mesh using service account token
-log_info "Deployer joining mesh with service account..."
+# Step 3: Deployer joins mesh using API key
+log_info "Deployer joining mesh with API key..."
 DEPLOYER_JOIN_RESPONSE=$(docker exec deployer curl -s -X POST \
-    -H "Authorization: Bearer $SA_ACCESS_TOKEN" \
+    -H "Authorization: Bearer $API_KEY" \
     -H "Content-Type: application/json" \
     "http://$HOST_IP:9080/coordinator/api/v1/deployer/join")
 
@@ -467,5 +462,5 @@ log_info "=== Deployer Test Complete ==="
 log_info "=== E2E Test Complete ==="
 log_info "3 workers connected to mesh successfully!"
 log_info "Keycloak JWT authentication verified!"
-log_info "Service account created and used for deployer authentication!"
+log_info "API key created and used for deployer authentication!"
 log_info "Deployer test passed - apps can be deployed and accessed via mesh!"

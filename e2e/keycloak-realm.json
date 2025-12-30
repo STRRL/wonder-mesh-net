@@ -23,17 +23,6 @@
       "attributes": {
         "post.logout.redirect.uris": "http://localhost:9080/*"
       }
-    },
-    {
-      "clientId": "coordinator-admin",
-      "name": "Coordinator Admin Client",
-      "enabled": true,
-      "publicClient": false,
-      "secret": "coordinator-admin-secret",
-      "serviceAccountsEnabled": true,
-      "directAccessGrantsEnabled": false,
-      "standardFlowEnabled": false,
-      "protocol": "openid-connect"
     }
   ],
   "users": [
@@ -51,20 +40,6 @@
           "temporary": false
         }
       ]
-    },
-    {
-      "username": "service-account-coordinator-admin",
-      "enabled": true,
-      "serviceAccountClientId": "coordinator-admin",
-      "realmRoles": ["default-roles-wonder"],
-      "clientRoles": {
-        "realm-management": [
-          "manage-clients",
-          "view-users",
-          "manage-users",
-          "query-users"
-        ]
-      }
     }
   ]
 }

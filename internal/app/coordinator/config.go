@@ -15,10 +15,6 @@ type Config struct {
 	KeycloakRealm string `mapstructure:"keycloak_realm"`
 	// KeycloakClientID is the OIDC client ID for the coordinator (used for audience validation).
 	KeycloakClientID string `mapstructure:"keycloak_client_id"`
-	// KeycloakAdminClient is the client ID for Keycloak Admin API access.
-	KeycloakAdminClient string `mapstructure:"keycloak_admin_client"`
-	// KeycloakAdminSecret is the client secret for Keycloak Admin API access.
-	KeycloakAdminSecret string `mapstructure:"keycloak_admin_secret"`
 }
 
 const (
