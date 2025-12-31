@@ -245,6 +245,51 @@ func (s *Server) requireAPIKey(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// requireAuthOrAPIKey wraps a handler that accepts either JWT session auth or API key auth.
+// For JWT auth, it validates the token and resolves the WonderNet from claims.
+// For API key auth, it validates the key and uses the associated WonderNet.
+// This is used for read-only endpoints that should be accessible to both users and third-party integrations.
+func (s *Server) requireAuthOrAPIKey(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := extractBearerToken(r)
+		if token == "" {
+			http.Error(w, "authorization required", http.StatusUnauthorized)
+			return
+		}
+
+		// Check if it's an API key
+		if apikey.IsAPIKey(token) {
+			wonderNet, err := s.apiKeyService.ValidateAPIKey(r.Context(), token)
+			if err != nil {
+				slog.Debug("API key validation failed", "error", err)
+				http.Error(w, "invalid api key", http.StatusUnauthorized)
+				return
+			}
+			ctx := context.WithValue(r.Context(), controller.ContextKeyWonderNet, wonderNet)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
+		// Otherwise, try JWT auth
+		claims, err := s.jwtValidator.Validate(token)
+		if err != nil {
+			slog.Debug("JWT validation failed", "error", err)
+			http.Error(w, "invalid token", http.StatusUnauthorized)
+			return
+		}
+
+		wonderNet, err := s.wonderNetService.ResolveWonderNetFromClaims(r.Context(), claims)
+		if err != nil {
+			slog.Error("resolve wonder net from claims", "error", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), controller.ContextKeyWonderNet, wonderNet)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	}
+}
+
 func extractBearerToken(r *http.Request) string {
 	auth := r.Header.Get("Authorization")
 	if auth == "" {
@@ -281,7 +326,9 @@ func (s *Server) Run() error {
 
 	// Protected endpoints - require JWT authentication and WonderNet
 	mux.HandleFunc("POST /coordinator/api/v1/join-token", s.requireAuth(s.requireWonderNet(joinTokenController.HandleCreateJoinToken)))
-	mux.HandleFunc("GET /coordinator/api/v1/nodes", s.requireAuth(s.requireWonderNet(nodesController.HandleListNodes)))
+
+	// Read-only endpoints - support both JWT session auth and API key auth
+	mux.HandleFunc("GET /coordinator/api/v1/nodes", s.requireAuthOrAPIKey(nodesController.HandleListNodes))
 
 	// API key management - JWT auth only (no API key auth to prevent privilege escalation)
 	mux.HandleFunc("POST /coordinator/api/v1/api-keys", s.requireAuth(s.requireWonderNet(apiKeyController.HandleCreate)))

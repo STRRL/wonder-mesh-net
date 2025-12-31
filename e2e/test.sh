@@ -378,7 +378,21 @@ if ! echo "$API_KEYS_LIST" | grep -q "$API_KEY_ID"; then
 fi
 log_info "API key listing works"
 
-# Step 3: Deployer joins mesh using API key
+# Step 3: Test API key can access nodes endpoint (read-only)
+log_info "Testing API key access to nodes endpoint..."
+NODES_WITH_API_KEY=$(curl -s \
+    -H "Authorization: Bearer $API_KEY" \
+    "http://localhost:9080/coordinator/api/v1/nodes")
+
+if echo "$NODES_WITH_API_KEY" | grep -q "nodes"; then
+    log_info "API key can access nodes endpoint (read-only access works)"
+else
+    log_error "API key cannot access nodes endpoint"
+    echo "$NODES_WITH_API_KEY"
+    exit 1
+fi
+
+# Step 4: Deployer joins mesh using API key
 log_info "Deployer joining mesh with API key..."
 DEPLOYER_JOIN_RESPONSE=$(docker exec deployer curl -s -X POST \
     -H "Authorization: Bearer $API_KEY" \
