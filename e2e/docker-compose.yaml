@@ -26,8 +26,6 @@ services:
       KEYCLOAK_URL: http://localhost:9090
       KEYCLOAK_REALM: wonder
       KEYCLOAK_CLIENT_ID: wonder-mesh-net
-      KEYCLOAK_ADMIN_CLIENT: coordinator-admin
-      KEYCLOAK_ADMIN_SECRET: coordinator-admin-secret
     volumes:
       - ./headscale-config.yaml:/etc/headscale/config.yaml
       - coordinator-data:/data

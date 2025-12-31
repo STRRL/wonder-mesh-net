@@ -17,10 +17,10 @@ import (
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/database"
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/repository"
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/service"
+	"github.com/strrl/wonder-mesh-net/pkg/apikey"
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
 	"github.com/strrl/wonder-mesh-net/pkg/jointoken"
 	"github.com/strrl/wonder-mesh-net/pkg/jwtauth"
-	"github.com/strrl/wonder-mesh-net/pkg/keycloak"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -40,11 +40,13 @@ type Server struct {
 
 	// Repositories
 	wonderNetRepository *repository.WonderNetRepository
+	apiKeyRepository    *repository.APIKeyRepository
 
 	// Services
 	wonderNetService *service.WonderNetService
 	workerService    *service.WorkerService
 	nodesService     *service.NodesService
+	apiKeyService    *service.APIKeyService
 }
 
 // BootstrapNewServer creates a new coordinator server.
@@ -124,32 +126,17 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 
 	// Create repositories
 	wonderNetRepository := repository.NewWonderNetRepository(db.Queries())
-	serviceAccountRepository := repository.NewServiceAccountRepository(db.Queries())
+	apiKeyRepository := repository.NewAPIKeyRepository(db.Queries())
 
 	// Create Headscale managers
 	wonderNetManager := headscale.NewWonderNetManager(headscaleClient)
 	aclManager := headscale.NewACLManager(headscaleClient)
 
-	// Create Keycloak admin client
-	keycloakClient := keycloak.NewAdminClient(keycloak.AdminClientConfig{
-		URL:          config.KeycloakURL,
-		Realm:        config.KeycloakRealm,
-		ClientID:     config.KeycloakAdminClient,
-		ClientSecret: config.KeycloakAdminSecret,
-	})
-
-	// Authenticate Keycloak admin client
-	if err := keycloakClient.Authenticate(ctx); err != nil {
-		_ = headscaleProcessManager.Stop()
-		_ = db.Close()
-		return nil, fmt.Errorf("authenticate keycloak admin client: %w", err)
-	}
-	slog.Info("authenticated with Keycloak admin API")
-
 	// Create services
-	wonderNetService := service.NewWonderNetService(wonderNetRepository, serviceAccountRepository, wonderNetManager, aclManager, keycloakClient, config.PublicURL)
+	wonderNetService := service.NewWonderNetService(wonderNetRepository, wonderNetManager, aclManager, config.PublicURL)
 	workerService := service.NewWorkerService(tokenGenerator, config.JWTSecret, wonderNetRepository, wonderNetService)
 	nodesService := service.NewNodesService(wonderNetManager)
+	apiKeyService := service.NewAPIKeyService(apiKeyRepository, wonderNetRepository)
 
 	// Create JWT validator for Keycloak tokens
 	jwksURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/certs", config.KeycloakURL, config.KeycloakRealm)
@@ -177,9 +164,11 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 		headscaleProcessManager: headscaleProcessManager,
 		jwtValidator:            jwtValidator,
 		wonderNetRepository:     wonderNetRepository,
+		apiKeyRepository:        apiKeyRepository,
 		wonderNetService:        wonderNetService,
 		workerService:           workerService,
 		nodesService:            nodesService,
+		apiKeyService:           apiKeyService,
 	}, nil
 }
 
@@ -208,7 +197,6 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 
 // requireWonderNet wraps a handler to resolve the WonderNet from JWT claims.
 // For regular users, it auto-creates a WonderNet if none exists.
-// For service accounts, it looks up the associated WonderNet.
 // Must be used after requireAuth.
 func (s *Server) requireWonderNet(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -218,14 +206,81 @@ func (s *Server) requireWonderNet(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		wonderNet, isServiceAccount, err := s.wonderNetService.ResolveWonderNetFromClaims(r.Context(), claims)
+		wonderNet, err := s.wonderNetService.ResolveWonderNetFromClaims(r.Context(), claims)
 		if err != nil {
-			if isServiceAccount {
-				slog.Error("get service account wonder net", "error", err)
-				http.Error(w, "service account not associated with wonder net", http.StatusUnauthorized)
+			slog.Error("get or create wonder net", "error", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), controller.ContextKeyWonderNet, wonderNet)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	}
+}
+
+// requireAPIKey wraps a handler with API key authentication.
+// It validates the API key and adds the associated WonderNet to the context.
+func (s *Server) requireAPIKey(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := extractBearerToken(r)
+		if token == "" {
+			http.Error(w, "authorization required", http.StatusUnauthorized)
+			return
+		}
+
+		if !apikey.IsAPIKey(token) {
+			http.Error(w, "invalid api key format", http.StatusUnauthorized)
+			return
+		}
+
+		wonderNet, err := s.apiKeyService.ValidateAPIKey(r.Context(), token)
+		if err != nil {
+			slog.Debug("API key validation failed", "error", err)
+			http.Error(w, "invalid api key", http.StatusUnauthorized)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), controller.ContextKeyWonderNet, wonderNet)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	}
+}
+
+// requireAuthOrAPIKey wraps a handler that accepts either JWT session auth or API key auth.
+// For JWT auth, it validates the token and resolves the WonderNet from claims.
+// For API key auth, it validates the key and uses the associated WonderNet.
+// This is used for read-only endpoints that should be accessible to both users and third-party integrations.
+func (s *Server) requireAuthOrAPIKey(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := extractBearerToken(r)
+		if token == "" {
+			http.Error(w, "authorization required", http.StatusUnauthorized)
+			return
+		}
+
+		// Check if it's an API key
+		if apikey.IsAPIKey(token) {
+			wonderNet, err := s.apiKeyService.ValidateAPIKey(r.Context(), token)
+			if err != nil {
+				slog.Debug("API key validation failed", "error", err)
+				http.Error(w, "invalid api key", http.StatusUnauthorized)
 				return
 			}
-			slog.Error("get or create wonder net", "error", err)
+			ctx := context.WithValue(r.Context(), controller.ContextKeyWonderNet, wonderNet)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
+		// Otherwise, try JWT auth
+		claims, err := s.jwtValidator.Validate(token)
+		if err != nil {
+			slog.Debug("JWT validation failed", "error", err)
+			http.Error(w, "invalid token", http.StatusUnauthorized)
+			return
+		}
+
+		wonderNet, err := s.wonderNetService.ResolveWonderNetFromClaims(r.Context(), claims)
+		if err != nil {
+			slog.Error("resolve wonder net from claims", "error", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
@@ -255,7 +310,7 @@ func (s *Server) Run() error {
 	workerController := controller.NewWorkerController(s.workerService)
 	joinTokenController := controller.NewJoinTokenController(s.workerService)
 	nodesController := controller.NewNodesController(s.nodesService)
-	serviceAccountController := controller.NewServiceAccountController(s.wonderNetService)
+	apiKeyController := controller.NewAPIKeyController(s.apiKeyService)
 	deployerController := controller.NewDeployerController(s.wonderNetService)
 
 	headscaleProxy, err := controller.NewHeadscaleProxyController("http://127.0.0.1:8080")
@@ -271,11 +326,17 @@ func (s *Server) Run() error {
 
 	// Protected endpoints - require JWT authentication and WonderNet
 	mux.HandleFunc("POST /coordinator/api/v1/join-token", s.requireAuth(s.requireWonderNet(joinTokenController.HandleCreateJoinToken)))
-	mux.HandleFunc("GET /coordinator/api/v1/nodes", s.requireAuth(s.requireWonderNet(nodesController.HandleListNodes)))
-	mux.HandleFunc("POST /coordinator/api/v1/service-accounts", s.requireAuth(s.requireWonderNet(serviceAccountController.HandleCreate)))
-	mux.HandleFunc("GET /coordinator/api/v1/service-accounts", s.requireAuth(s.requireWonderNet(serviceAccountController.HandleList)))
-	mux.HandleFunc("DELETE /coordinator/api/v1/service-accounts/{id}", s.requireAuth(s.requireWonderNet(serviceAccountController.HandleDelete)))
-	mux.HandleFunc("POST /coordinator/api/v1/deployer/join", s.requireAuth(s.requireWonderNet(deployerController.HandleDeployerJoin)))
+
+	// Read-only endpoints - support both JWT session auth and API key auth
+	mux.HandleFunc("GET /coordinator/api/v1/nodes", s.requireAuthOrAPIKey(nodesController.HandleListNodes))
+
+	// API key management - JWT auth only (no API key auth to prevent privilege escalation)
+	mux.HandleFunc("POST /coordinator/api/v1/api-keys", s.requireAuth(s.requireWonderNet(apiKeyController.HandleCreate)))
+	mux.HandleFunc("GET /coordinator/api/v1/api-keys", s.requireAuth(s.requireWonderNet(apiKeyController.HandleList)))
+	mux.HandleFunc("DELETE /coordinator/api/v1/api-keys/{id}", s.requireAuth(s.requireWonderNet(apiKeyController.HandleDelete)))
+
+	// Deployer endpoints - API key auth only
+	mux.HandleFunc("POST /coordinator/api/v1/deployer/join", s.requireAPIKey(deployerController.HandleDeployerJoin))
 
 	mux.HandleFunc("/coordinator/", func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
