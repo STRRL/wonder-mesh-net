@@ -165,27 +165,20 @@ func (v *Validator) Validate(tokenString string) (*Claims, error) {
 	}
 
 	if v.config.Audience != "" {
-		// Service accounts created by coordinator have azp matching their own client ID
-		// (e.g., wonder-net-xxx-deployer), not the main client. Since these are created
-		// via Keycloak Admin API by coordinator itself, they are trusted.
-		isServiceAccount := strings.HasPrefix(claims.PreferredUsername, "service-account-")
-
-		if !isServiceAccount {
-			found := false
-			for _, aud := range claims.Audience {
-				if aud == v.config.Audience {
-					found = true
-					break
-				}
-			}
-			// Keycloak doesn't include aud claim by default, but always includes azp (authorized party)
-			// which contains the client ID that requested the token
-			if !found && claims.Azp == v.config.Audience {
+		found := false
+		for _, aud := range claims.Audience {
+			if aud == v.config.Audience {
 				found = true
+				break
 			}
-			if !found {
-				return nil, fmt.Errorf("%w: %s not in aud=%v azp=%s", ErrInvalidAudience, v.config.Audience, claims.Audience, claims.Azp)
-			}
+		}
+		// Keycloak doesn't include aud claim by default, but always includes azp (authorized party)
+		// which contains the client ID that requested the token
+		if !found && claims.Azp == v.config.Audience {
+			found = true
+		}
+		if !found {
+			return nil, fmt.Errorf("%w: %s not in aud=%v azp=%s", ErrInvalidAudience, v.config.Audience, claims.Audience, claims.Azp)
 		}
 	}
 

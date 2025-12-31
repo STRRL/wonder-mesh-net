@@ -127,7 +127,12 @@ func (s *WonderNetService) GetOrCreateWonderNet(ctx context.Context, ownerID, di
 
 // ResolveWonderNetFromClaims returns the wonder net for a user based on JWT claims.
 // It auto-creates a WonderNet if none exists for the user.
+// Service account tokens are rejected since service account support was removed.
 func (s *WonderNetService) ResolveWonderNetFromClaims(ctx context.Context, claims *jwtauth.Claims) (*repository.WonderNet, error) {
+	if claims.IsServiceAccount() {
+		return nil, fmt.Errorf("service account tokens are not supported")
+	}
+
 	displayName := claims.PreferredUsername
 	if displayName == "" {
 		displayName = claims.Name
