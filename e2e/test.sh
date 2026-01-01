@@ -151,8 +151,9 @@ WORKER1_API_RESPONSE=$(docker exec worker-1 curl -s -X POST \
     -d "{\"token\": \"$JOIN_TOKEN\"}" \
     "http://$HOST_IP:9080/coordinator/api/v1/worker/join")
 
-WORKER1_AUTHKEY=$(echo "$WORKER1_API_RESPONSE" | sed -n 's/.*"authkey":"\([^"]*\)".*/\1/p')
-WORKER1_LOGIN_SERVER=$(echo "$WORKER1_API_RESPONSE" | sed -n 's/.*"headscale_url":"\([^"]*\)".*/\1/p' | sed "s/localhost/$HOST_IP/g")
+# Parse new API format: tailscale_connection_info contains authkey and login_server
+WORKER1_AUTHKEY=$(echo "$WORKER1_API_RESPONSE" | grep -o '"authkey":"[^"]*"' | sed 's/"authkey":"//;s/"$//')
+WORKER1_LOGIN_SERVER=$(echo "$WORKER1_API_RESPONSE" | grep -o '"login_server":"[^"]*"' | sed 's/"login_server":"//;s/"$//' | sed "s/localhost/$HOST_IP/g")
 
 if [ -z "$WORKER1_AUTHKEY" ]; then
     log_error "Failed to get authkey for worker 1"
@@ -183,8 +184,9 @@ WORKER2_API_RESPONSE=$(docker exec worker-2 curl -s -X POST \
     -d "{\"token\": \"$JOIN_TOKEN\"}" \
     "http://$HOST_IP:9080/coordinator/api/v1/worker/join")
 
-WORKER2_AUTHKEY=$(echo "$WORKER2_API_RESPONSE" | sed -n 's/.*"authkey":"\([^"]*\)".*/\1/p')
-WORKER2_LOGIN_SERVER=$(echo "$WORKER2_API_RESPONSE" | sed -n 's/.*"headscale_url":"\([^"]*\)".*/\1/p' | sed "s/localhost/$HOST_IP/g")
+# Parse new API format
+WORKER2_AUTHKEY=$(echo "$WORKER2_API_RESPONSE" | grep -o '"authkey":"[^"]*"' | sed 's/"authkey":"//;s/"$//')
+WORKER2_LOGIN_SERVER=$(echo "$WORKER2_API_RESPONSE" | grep -o '"login_server":"[^"]*"' | sed 's/"login_server":"//;s/"$//' | sed "s/localhost/$HOST_IP/g")
 
 if [ -z "$WORKER2_AUTHKEY" ]; then
     log_error "Failed to get authkey for worker 2"
@@ -215,8 +217,9 @@ WORKER3_API_RESPONSE=$(docker exec worker-3 curl -s -X POST \
     -d "{\"token\": \"$JOIN_TOKEN\"}" \
     "http://$HOST_IP:9080/coordinator/api/v1/worker/join")
 
-WORKER3_AUTHKEY=$(echo "$WORKER3_API_RESPONSE" | sed -n 's/.*"authkey":"\([^"]*\)".*/\1/p')
-WORKER3_LOGIN_SERVER=$(echo "$WORKER3_API_RESPONSE" | sed -n 's/.*"headscale_url":"\([^"]*\)".*/\1/p' | sed "s/localhost/$HOST_IP/g")
+# Parse new API format
+WORKER3_AUTHKEY=$(echo "$WORKER3_API_RESPONSE" | grep -o '"authkey":"[^"]*"' | sed 's/"authkey":"//;s/"$//')
+WORKER3_LOGIN_SERVER=$(echo "$WORKER3_API_RESPONSE" | grep -o '"login_server":"[^"]*"' | sed 's/"login_server":"//;s/"$//' | sed "s/localhost/$HOST_IP/g")
 
 if [ -z "$WORKER3_AUTHKEY" ]; then
     log_error "Failed to get authkey for worker 3"
@@ -399,8 +402,9 @@ DEPLOYER_JOIN_RESPONSE=$(docker exec deployer curl -s -X POST \
     -H "Content-Type: application/json" \
     "http://$HOST_IP:9080/coordinator/api/v1/deployer/join")
 
-DEPLOYER_AUTHKEY=$(echo "$DEPLOYER_JOIN_RESPONSE" | sed -n 's/.*"authkey":"\([^"]*\)".*/\1/p')
-DEPLOYER_LOGIN_SERVER=$(echo "$DEPLOYER_JOIN_RESPONSE" | sed -n 's/.*"headscale_url":"\([^"]*\)".*/\1/p' | sed "s/localhost/$HOST_IP/g")
+# Parse new API format
+DEPLOYER_AUTHKEY=$(echo "$DEPLOYER_JOIN_RESPONSE" | grep -o '"authkey":"[^"]*"' | sed 's/"authkey":"//;s/"$//')
+DEPLOYER_LOGIN_SERVER=$(echo "$DEPLOYER_JOIN_RESPONSE" | grep -o '"login_server":"[^"]*"' | sed 's/"login_server":"//;s/"$//' | sed "s/localhost/$HOST_IP/g")
 
 if [ -z "$DEPLOYER_AUTHKEY" ]; then
     log_error "Failed to get authkey for deployer"
