@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -48,6 +49,8 @@ func (s *NodesService) ListNodes(ctx context.Context, wonderNet *repository.Wond
 		// Parse ID from string to uint64
 		if id, err := strconv.ParseUint(node.ID, 10, 64); err == nil {
 			n.ID = id
+		} else {
+			slog.Warn("parse node ID", "node_name", node.Name, "raw_id", node.ID, "error", err)
 		}
 
 		if node.LastSeen != nil {

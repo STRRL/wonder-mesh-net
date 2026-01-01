@@ -358,22 +358,35 @@ CREATE TABLE memberships (
 
 ### MeshBackend Interface
 
+The interface is already implemented in `pkg/meshbackend/backend.go`:
+
 ```go
 type MeshBackend interface {
-    // Identity
-    Type() MeshType
+    // MeshType returns the mesh network type.
+    // Clients use this to determine how to process the metadata from CreateJoinCredentials.
+    MeshType() MeshType
 
-    // Realm management
-    CreateRealm(ctx context.Context, realmID string) error
-    DeleteRealm(ctx context.Context, realmID string) error
+    // CreateRealm creates an isolated network namespace.
+    CreateRealm(ctx context.Context, name string) error
 
-    // Node management
-    CreateAuthKey(ctx context.Context, realmID string, opts AuthKeyOptions) (*AuthKey, error)
-    ListNodes(ctx context.Context, realmID string) ([]Node, error)
-    DeleteNode(ctx context.Context, realmID string, nodeID string) error
+    // GetRealm checks if a realm exists.
+    GetRealm(ctx context.Context, name string) (exists bool, err error)
 
-    // Connectivity info
-    JoinMetadata(ctx context.Context, realmID string, authKey string) (map[string]any, error)
+    // CreateJoinCredentials generates credentials for a node to join the mesh.
+    // Returns backend-specific metadata serialized directly to the API response.
+    CreateJoinCredentials(ctx context.Context, realmName string, opts JoinOptions) (map[string]any, error)
+
+    // ListNodes returns all nodes in a realm.
+    ListNodes(ctx context.Context, realmName string) ([]*Node, error)
+
+    // Healthy performs a health check on the backend.
+    Healthy(ctx context.Context) error
+}
+
+type JoinOptions struct {
+    TTL       time.Duration
+    Reusable  bool
+    Ephemeral bool
 }
 
 type MeshType string
@@ -384,6 +397,11 @@ const (
     MeshTypeZeroTier  MeshType = "zerotier"
 )
 ```
+
+**Design Notes:**
+- `CreateJoinCredentials` combines auth key creation and metadata assembly into one operation
+- Backend-specific metadata (authkey, login_server, etc.) is returned as `map[string]any` to avoid meaningless abstraction
+- `DeleteRealm` and `DeleteNode` are deferred to future milestones as they require careful handling of connected nodes
 
 ### Acceptance Criteria
 

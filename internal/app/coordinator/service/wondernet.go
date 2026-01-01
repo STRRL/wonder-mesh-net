@@ -48,6 +48,8 @@ func (s *WonderNetService) ProvisionWonderNet(ctx context.Context, userID, displ
 		OwnerID:       userID,
 		HeadscaleUser: hsUser,
 		DisplayName:   displayName,
+		// TODO: get MeshType from MeshBackend when multi-backend support is added
+		MeshType: "tailscale",
 	}
 
 	if err := s.wonderNetRepository.Create(ctx, newWonderNet); err != nil {

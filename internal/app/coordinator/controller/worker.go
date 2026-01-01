@@ -72,6 +72,10 @@ func (c *WorkerController) HandleWorkerJoin(w http.ResponseWriter, r *http.Reque
 		resp.NetbirdConnectionInfo = creds.Metadata
 	case "zerotier":
 		resp.ZerotierConnectionInfo = creds.Metadata
+	default:
+		slog.Error("unsupported mesh type", "mesh_type", creds.MeshType)
+		http.Error(w, "unsupported mesh type", http.StatusInternalServerError)
+		return
 	}
 
 	if err := json.NewEncoder(w).Encode(resp); err != nil {

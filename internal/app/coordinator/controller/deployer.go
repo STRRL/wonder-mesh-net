@@ -54,6 +54,10 @@ func (c *DeployerController) HandleDeployerJoin(w http.ResponseWriter, r *http.R
 		resp.NetbirdConnectionInfo = metadata
 	case "zerotier":
 		resp.ZerotierConnectionInfo = metadata
+	default:
+		slog.Error("unsupported mesh type", "mesh_type", meshType)
+		http.Error(w, "unsupported mesh type", http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
