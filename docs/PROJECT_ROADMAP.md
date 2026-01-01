@@ -10,8 +10,8 @@
 - Long-term goal: Enable any organization or individual to become a coordinator operator
 
 **Timeline**:
-- Small-scale trial: 1 month (end of January 2025)
-- Full production launch: 6 months (end of June 2025)
+- Small-scale trial: 1 month (end of January 2026)
+- Full production launch: 6 months (end of June 2026)
 
 ---
 
@@ -57,11 +57,11 @@ This should be a single "Authorize Zeabur" click via OAuth 2.0.
 
 | Milestone | Objective | Target Date | Status |
 |-----------|-----------|-------------|--------|
-| **M0: Stable Foundation** | Test coverage, observability, worker leave | Jan 14, 2025 | Not Started |
-| **M1: Small-Scale Trial** | OAuth 2.0, Zeabur integration optimization | Jan 31, 2025 | Not Started |
-| **M2: Production Ready** | Org/Team, security hardening | Mar 31, 2025 | Not Started |
-| **M3: General Availability** | High availability, disaster recovery | May 31, 2025 | Not Started |
-| **M4: Open Ecosystem** | Self-hosting docs, multi-backend abstraction | Jun 30, 2025 | Not Started |
+| **M0: Stable Foundation** | Test coverage, observability, worker leave | Jan 14, 2026 | Not Started |
+| **M1: Small-Scale Trial** | OAuth 2.0, Zeabur integration optimization | Jan 31, 2026 | Not Started |
+| **M2: Production Ready** | Org/Team, security hardening | Mar 31, 2026 | Not Started |
+| **M3: General Availability** | High availability, disaster recovery | May 31, 2026 | Not Started |
+| **M4: Open Ecosystem** | Self-hosting docs, multi-backend abstraction | Jun 30, 2026 | Not Started |
 
 ---
 
@@ -69,7 +69,7 @@ This should be a single "Authorize Zeabur" click via OAuth 2.0.
 
 **Objective**: Bring existing features to production-grade reliability.
 
-**Target Date**: January 14, 2025
+**Target Date**: January 14, 2026
 
 ### Work Items
 
@@ -100,7 +100,7 @@ This should be a single "Authorize Zeabur" click via OAuth 2.0.
 
 **Objective**: Solve Zeabur integration pain point, enable 5-10 user trial.
 
-**Target Date**: January 31, 2025
+**Target Date**: January 31, 2026
 
 ### Work Items
 
@@ -184,7 +184,7 @@ This should be a single "Authorize Zeabur" click via OAuth 2.0.
 
 **Objective**: Support multi-user organizations, production-grade security.
 
-**Target Date**: March 31, 2025
+**Target Date**: March 31, 2026
 
 ### Work Items
 
@@ -260,7 +260,7 @@ CREATE TABLE memberships (
 
 **Objective**: Scale to 1000+ nodes, achieve 99.9% availability.
 
-**Target Date**: May 31, 2025
+**Target Date**: May 31, 2026
 
 ### Work Items
 
@@ -330,7 +330,7 @@ CREATE TABLE memberships (
 
 **Objective**: Enable anyone to run their own coordinator.
 
-**Target Date**: June 30, 2025
+**Target Date**: June 30, 2026
 
 ### Work Items
 

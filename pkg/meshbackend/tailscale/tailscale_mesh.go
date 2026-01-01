@@ -36,8 +36,17 @@ func (m *TailscaleMesh) MeshType() meshbackend.MeshType {
 }
 
 // CreateRealm creates a Headscale user (namespace) for the realm.
+// This method is idempotent - if the realm already exists, it returns nil.
 func (m *TailscaleMesh) CreateRealm(ctx context.Context, name string) error {
-	_, err := m.client.CreateUser(ctx, &v1.CreateUserRequest{Name: name})
+	exists, err := m.GetRealm(ctx, name)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+
+	_, err = m.client.CreateUser(ctx, &v1.CreateUserRequest{Name: name})
 	if err != nil {
 		return fmt.Errorf("create headscale user: %w", err)
 	}

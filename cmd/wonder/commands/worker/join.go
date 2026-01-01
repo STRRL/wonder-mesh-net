@@ -96,7 +96,7 @@ func getConnectionInfoString(info map[string]any, key string) string {
 func completeJoin(resp *joinResponse, coordinator string) error {
 	meshType := resp.MeshType
 	if meshType == "" {
-		meshType = "tailscale"
+		return fmt.Errorf("coordinator returned empty mesh_type; ensure coordinator and worker versions are compatible")
 	}
 
 	switch meshType {
