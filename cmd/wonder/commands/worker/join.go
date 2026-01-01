@@ -72,26 +72,23 @@ func runJoin(cmd *cobra.Command, args []string) error {
 }
 
 // joinResponse represents the response from the coordinator's join endpoint.
-// It supports both the new mesh_type/metadata format and legacy fields for backward compatibility.
+// Connection info is in mesh-type-specific fields.
 type joinResponse struct {
-	MeshType string         `json:"mesh_type"`
-	Metadata map[string]any `json:"metadata"`
-
-	// Legacy fields for backward compatibility
-	Authkey       string `json:"authkey"`
-	HeadscaleURL  string `json:"headscale_url"`
-	HeadscaleUser string `json:"headscale_user"`
+	MeshType                string         `json:"mesh_type"`
+	TailscaleConnectionInfo map[string]any `json:"tailscale_connection_info"`
+	NetbirdConnectionInfo   map[string]any `json:"netbird_connection_info"`
+	ZerotierConnectionInfo  map[string]any `json:"zerotier_connection_info"`
 }
 
-// getMetadataString extracts a string value from metadata with a fallback.
-func getMetadataString(metadata map[string]any, key, fallback string) string {
-	if metadata == nil {
-		return fallback
+// getConnectionInfoString extracts a string value from connection info.
+func getConnectionInfoString(info map[string]any, key string) string {
+	if info == nil {
+		return ""
 	}
-	if v, ok := metadata[key].(string); ok && v != "" {
+	if v, ok := info[key].(string); ok {
 		return v
 	}
-	return fallback
+	return ""
 }
 
 // completeJoin saves credentials locally and executes the appropriate mesh client
@@ -104,9 +101,14 @@ func completeJoin(resp *joinResponse, coordinator string) error {
 
 	switch meshType {
 	case "tailscale":
-		loginServer := getMetadataString(resp.Metadata, "login_server", resp.HeadscaleURL)
-		authkey := getMetadataString(resp.Metadata, "authkey", resp.Authkey)
-		headscaleUser := getMetadataString(resp.Metadata, "headscale_user", resp.HeadscaleUser)
+		info := resp.TailscaleConnectionInfo
+		loginServer := getConnectionInfoString(info, "login_server")
+		authkey := getConnectionInfoString(info, "authkey")
+		headscaleUser := getConnectionInfoString(info, "headscale_user")
+
+		if loginServer == "" || authkey == "" {
+			return fmt.Errorf("missing tailscale connection info from coordinator")
+		}
 
 		creds := &credentials{
 			User:           headscaleUser,

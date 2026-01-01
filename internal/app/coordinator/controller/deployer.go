@@ -45,20 +45,15 @@ func (c *DeployerController) HandleDeployerJoin(w http.ResponseWriter, r *http.R
 	meshType := string(c.meshBackend.MeshType())
 	resp := JoinCredentialsResponse{
 		MeshType: meshType,
-		Metadata: metadata,
 	}
 
-	// Populate legacy fields for backward compatibility with Tailscale
-	if meshType == "tailscale" {
-		if loginServer, ok := metadata["login_server"].(string); ok {
-			resp.HeadscaleURL = loginServer
-		}
-		if authkey, ok := metadata["authkey"].(string); ok {
-			resp.AuthKey = authkey
-		}
-		if hsUser, ok := metadata["headscale_user"].(string); ok {
-			resp.HeadscaleUser = hsUser
-		}
+	switch meshType {
+	case "tailscale":
+		resp.TailscaleConnectionInfo = metadata
+	case "netbird":
+		resp.NetbirdConnectionInfo = metadata
+	case "zerotier":
+		resp.ZerotierConnectionInfo = metadata
 	}
 
 	w.Header().Set("Content-Type", "application/json")

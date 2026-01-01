@@ -9,18 +9,16 @@ import (
 )
 
 // JoinCredentialsResponse contains credentials for joining the mesh.
+// The connection info field is named dynamically based on mesh_type:
+// - tailscale_connection_info for Tailscale
+// - netbird_connection_info for Netbird
+// - zerotier_connection_info for ZeroTier
 type JoinCredentialsResponse struct {
-	// MeshType identifies the mesh network type (e.g., "tailscale", "netbird")
 	MeshType string `json:"mesh_type"`
 
-	// Metadata contains mesh-specific credentials
-	// For Tailscale: login_server, authkey, headscale_user
-	Metadata map[string]any `json:"metadata"`
-
-	// Legacy fields for backward compatibility
-	AuthKey       string `json:"authkey,omitempty"`
-	HeadscaleURL  string `json:"headscale_url,omitempty"`
-	HeadscaleUser string `json:"headscale_user,omitempty"`
+	TailscaleConnectionInfo map[string]any `json:"tailscale_connection_info,omitempty"`
+	NetbirdConnectionInfo   map[string]any `json:"netbird_connection_info,omitempty"`
+	ZerotierConnectionInfo  map[string]any `json:"zerotier_connection_info,omitempty"`
 }
 
 // WorkerController handles worker node registration.
@@ -65,20 +63,15 @@ func (c *WorkerController) HandleWorkerJoin(w http.ResponseWriter, r *http.Reque
 	w.Header().Set("Content-Type", "application/json")
 	resp := JoinCredentialsResponse{
 		MeshType: creds.MeshType,
-		Metadata: creds.Metadata,
 	}
 
-	// Populate legacy fields for backward compatibility with Tailscale
-	if creds.MeshType == "tailscale" {
-		if loginServer, ok := creds.Metadata["login_server"].(string); ok {
-			resp.HeadscaleURL = loginServer
-		}
-		if authkey, ok := creds.Metadata["authkey"].(string); ok {
-			resp.AuthKey = authkey
-		}
-		if hsUser, ok := creds.Metadata["headscale_user"].(string); ok {
-			resp.HeadscaleUser = hsUser
-		}
+	switch creds.MeshType {
+	case "tailscale":
+		resp.TailscaleConnectionInfo = creds.Metadata
+	case "netbird":
+		resp.NetbirdConnectionInfo = creds.Metadata
+	case "zerotier":
+		resp.ZerotierConnectionInfo = creds.Metadata
 	}
 
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
