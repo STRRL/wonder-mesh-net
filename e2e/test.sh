@@ -138,105 +138,44 @@ if ! docker exec worker-1 ping -c 1 -W 1 host.docker.internal >/dev/null 2>&1; t
 fi
 log_info "Host IP (accessible from containers): $HOST_IP"
 
-# Worker 1: Join mesh
-log_info "Worker 1: Joining mesh..."
+# Copy wonder binary to workers
+log_info "Copying wonder binary to workers..."
+docker cp ../bin/wonder worker-1:/usr/local/bin/wonder
+docker cp ../bin/wonder worker-2:/usr/local/bin/wonder
+docker cp ../bin/wonder worker-3:/usr/local/bin/wonder
+
+# Rewrite join token with correct coordinator URL accessible from containers
+JOIN_TOKEN_FOR_WORKERS=$(echo "$JOIN_TOKEN" | sed "s|http://localhost:9080|http://$HOST_IP:9080|g")
+
+# Worker 1: Join mesh using wonder worker join
+log_info "Worker 1: Joining mesh using wonder worker join..."
 
 # Start tailscaled in worker-1
 docker exec worker-1 tailscaled --state=/var/lib/tailscale/tailscaled.state --socket=/var/run/tailscale/tailscaled.sock &
 sleep 3
 
-# Get authkey for worker 1
-WORKER1_API_RESPONSE=$(docker exec worker-1 curl -s -X POST \
-    -H 'Content-Type: application/json' \
-    -d "{\"token\": \"$JOIN_TOKEN\"}" \
-    "http://$HOST_IP:9080/coordinator/api/v1/worker/join")
+docker exec worker-1 wonder worker join "$JOIN_TOKEN_FOR_WORKERS" \
+    2>&1 || log_warn "wonder worker join returned non-zero exit code for Worker 1"
 
-# Parse new API format: tailscale_connection_info contains authkey and login_server
-WORKER1_AUTHKEY=$(echo "$WORKER1_API_RESPONSE" | grep -o '"authkey":"[^"]*"' | sed 's/"authkey":"//;s/"$//')
-WORKER1_LOGIN_SERVER=$(echo "$WORKER1_API_RESPONSE" | grep -o '"login_server":"[^"]*"' | sed 's/"login_server":"//;s/"$//' | sed "s/localhost/$HOST_IP/g")
-
-if [ -z "$WORKER1_AUTHKEY" ]; then
-    log_error "Failed to get authkey for worker 1"
-    echo "$WORKER1_API_RESPONSE"
-    exit 1
-fi
-log_info "Worker 1 authkey: ${WORKER1_AUTHKEY:0:20}..."
-log_info "Worker 1 login server: $WORKER1_LOGIN_SERVER"
-
-log_info "Running tailscale up for Worker 1..."
-docker exec worker-1 tailscale up \
-    --reset \
-    --authkey="$WORKER1_AUTHKEY" \
-    --login-server="$WORKER1_LOGIN_SERVER" \
-    --accept-routes \
-    --accept-dns=false \
-    2>&1 || log_warn "Tailscale up returned non-zero exit code for Worker 1"
-
-# Worker 2: Join mesh
-log_info "Worker 2: Joining mesh..."
+# Worker 2: Join mesh using wonder worker join
+log_info "Worker 2: Joining mesh using wonder worker join..."
 
 # Start tailscaled in worker-2
 docker exec worker-2 tailscaled --state=/var/lib/tailscale/tailscaled.state --socket=/var/run/tailscale/tailscaled.sock &
 sleep 3
 
-WORKER2_API_RESPONSE=$(docker exec worker-2 curl -s -X POST \
-    -H 'Content-Type: application/json' \
-    -d "{\"token\": \"$JOIN_TOKEN\"}" \
-    "http://$HOST_IP:9080/coordinator/api/v1/worker/join")
+docker exec worker-2 wonder worker join "$JOIN_TOKEN_FOR_WORKERS" \
+    2>&1 || log_warn "wonder worker join returned non-zero exit code for Worker 2"
 
-# Parse new API format
-WORKER2_AUTHKEY=$(echo "$WORKER2_API_RESPONSE" | grep -o '"authkey":"[^"]*"' | sed 's/"authkey":"//;s/"$//')
-WORKER2_LOGIN_SERVER=$(echo "$WORKER2_API_RESPONSE" | grep -o '"login_server":"[^"]*"' | sed 's/"login_server":"//;s/"$//' | sed "s/localhost/$HOST_IP/g")
-
-if [ -z "$WORKER2_AUTHKEY" ]; then
-    log_error "Failed to get authkey for worker 2"
-    echo "$WORKER2_API_RESPONSE"
-    exit 1
-fi
-log_info "Worker 2 authkey: ${WORKER2_AUTHKEY:0:20}..."
-log_info "Worker 2 login server: $WORKER2_LOGIN_SERVER"
-
-log_info "Running tailscale up for Worker 2..."
-docker exec worker-2 tailscale up \
-    --reset \
-    --authkey="$WORKER2_AUTHKEY" \
-    --login-server="$WORKER2_LOGIN_SERVER" \
-    --accept-routes \
-    --accept-dns=false \
-    2>&1 || log_warn "Tailscale up returned non-zero exit code for Worker 2"
-
-# Worker 3: Join mesh
-log_info "Worker 3: Joining mesh..."
+# Worker 3: Join mesh using wonder worker join
+log_info "Worker 3: Joining mesh using wonder worker join..."
 
 # Start tailscaled in worker-3
 docker exec worker-3 tailscaled --state=/var/lib/tailscale/tailscaled.state --socket=/var/run/tailscale/tailscaled.sock &
 sleep 3
 
-WORKER3_API_RESPONSE=$(docker exec worker-3 curl -s -X POST \
-    -H 'Content-Type: application/json' \
-    -d "{\"token\": \"$JOIN_TOKEN\"}" \
-    "http://$HOST_IP:9080/coordinator/api/v1/worker/join")
-
-# Parse new API format
-WORKER3_AUTHKEY=$(echo "$WORKER3_API_RESPONSE" | grep -o '"authkey":"[^"]*"' | sed 's/"authkey":"//;s/"$//')
-WORKER3_LOGIN_SERVER=$(echo "$WORKER3_API_RESPONSE" | grep -o '"login_server":"[^"]*"' | sed 's/"login_server":"//;s/"$//' | sed "s/localhost/$HOST_IP/g")
-
-if [ -z "$WORKER3_AUTHKEY" ]; then
-    log_error "Failed to get authkey for worker 3"
-    echo "$WORKER3_API_RESPONSE"
-    exit 1
-fi
-log_info "Worker 3 authkey: ${WORKER3_AUTHKEY:0:20}..."
-log_info "Worker 3 login server: $WORKER3_LOGIN_SERVER"
-
-log_info "Running tailscale up for Worker 3..."
-docker exec worker-3 tailscale up \
-    --reset \
-    --authkey="$WORKER3_AUTHKEY" \
-    --login-server="$WORKER3_LOGIN_SERVER" \
-    --accept-routes \
-    --accept-dns=false \
-    2>&1 || log_warn "Tailscale up returned non-zero exit code for Worker 3"
+docker exec worker-3 wonder worker join "$JOIN_TOKEN_FOR_WORKERS" \
+    2>&1 || log_warn "wonder worker join returned non-zero exit code for Worker 3"
 
 sleep 5
 

@@ -43,21 +43,19 @@ func (c *DeployerController) HandleDeployerJoin(w http.ResponseWriter, r *http.R
 	}
 
 	meshType := string(c.meshBackend.MeshType())
-	resp := JoinCredentialsResponse{
-		MeshType: meshType,
-	}
-
-	switch meshType {
-	case "tailscale":
-		resp.TailscaleConnectionInfo = metadata
-	case "netbird":
-		resp.NetbirdConnectionInfo = metadata
-	case "zerotier":
-		resp.ZerotierConnectionInfo = metadata
-	default:
+	if meshType != "tailscale" {
 		slog.Error("unsupported mesh type", "mesh_type", meshType)
 		http.Error(w, "unsupported mesh type", http.StatusInternalServerError)
 		return
+	}
+
+	resp := JoinCredentialsResponse{
+		MeshType: meshType,
+		TailscaleConnectionInfo: &TailscaleConnectionInfo{
+			LoginServer:   metadata["login_server"].(string),
+			Authkey:       metadata["authkey"].(string),
+			HeadscaleUser: metadata["headscale_user"].(string),
+		},
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -72,23 +72,16 @@ func runJoin(cmd *cobra.Command, args []string) error {
 }
 
 // joinResponse represents the response from the coordinator's join endpoint.
-// Connection info is in mesh-type-specific fields.
 type joinResponse struct {
-	MeshType                string         `json:"mesh_type"`
-	TailscaleConnectionInfo map[string]any `json:"tailscale_connection_info"`
-	NetbirdConnectionInfo   map[string]any `json:"netbird_connection_info"`
-	ZerotierConnectionInfo  map[string]any `json:"zerotier_connection_info"`
+	MeshType                string                      `json:"mesh_type"`
+	TailscaleConnectionInfo *tailscaleConnectionInfo    `json:"tailscale_connection_info,omitempty"`
 }
 
-// getConnectionInfoString extracts a string value from connection info.
-func getConnectionInfoString(info map[string]any, key string) string {
-	if info == nil {
-		return ""
-	}
-	if v, ok := info[key].(string); ok {
-		return v
-	}
-	return ""
+// tailscaleConnectionInfo contains the credentials for joining a Tailscale/Headscale mesh.
+type tailscaleConnectionInfo struct {
+	LoginServer   string `json:"login_server"`
+	Authkey       string `json:"authkey"`
+	HeadscaleUser string `json:"headscale_user"`
 }
 
 // completeJoin saves credentials locally and executes the appropriate mesh client
@@ -102,16 +95,12 @@ func completeJoin(resp *joinResponse, coordinator string) error {
 	switch meshType {
 	case "tailscale":
 		info := resp.TailscaleConnectionInfo
-		loginServer := getConnectionInfoString(info, "login_server")
-		authkey := getConnectionInfoString(info, "authkey")
-		headscaleUser := getConnectionInfoString(info, "headscale_user")
-
-		if loginServer == "" || authkey == "" {
+		if info == nil || info.LoginServer == "" || info.Authkey == "" {
 			return fmt.Errorf("missing tailscale connection info from coordinator")
 		}
 
 		creds := &credentials{
-			User:           headscaleUser,
+			User:           info.HeadscaleUser,
 			CoordinatorURL: coordinator,
 			JoinedAt:       time.Now(),
 		}
@@ -122,16 +111,10 @@ func completeJoin(resp *joinResponse, coordinator string) error {
 		fmt.Println()
 		fmt.Println("Connecting to Wonder Mesh Net...")
 
-		return runTailscaleUp(loginServer, authkey)
-
-	case "netbird":
-		return fmt.Errorf("netbird mesh type is not yet supported")
-
-	case "zerotier":
-		return fmt.Errorf("zerotier mesh type is not yet supported")
+		return runTailscaleUp(info.LoginServer, info.Authkey)
 
 	default:
-		return fmt.Errorf("unknown mesh type: %s", meshType)
+		return fmt.Errorf("unsupported mesh type: %s", meshType)
 	}
 }
 
