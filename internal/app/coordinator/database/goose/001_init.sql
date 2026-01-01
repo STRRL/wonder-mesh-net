@@ -4,7 +4,6 @@ CREATE TABLE wonder_nets (
     owner_id TEXT NOT NULL,
     headscale_user TEXT NOT NULL UNIQUE,
     display_name TEXT NOT NULL DEFAULT '',
-    mesh_type TEXT NOT NULL DEFAULT 'tailscale',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
