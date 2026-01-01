@@ -21,6 +21,8 @@ import (
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
 	"github.com/strrl/wonder-mesh-net/pkg/jointoken"
 	"github.com/strrl/wonder-mesh-net/pkg/jwtauth"
+	"github.com/strrl/wonder-mesh-net/pkg/meshbackend"
+	"github.com/strrl/wonder-mesh-net/pkg/meshbackend/tailscale"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -37,6 +39,9 @@ type Server struct {
 
 	// Auth components
 	jwtValidator *jwtauth.Validator
+
+	// Mesh backend
+	meshBackend meshbackend.MeshBackend
 
 	// Repositories
 	wonderNetRepository *repository.WonderNetRepository
@@ -116,13 +121,8 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 	}
 	headscaleClient := v1.NewHeadscaleServiceClient(headscaleConn)
 
-	// Both coordinatorURL and headscaleURL use PublicURL because the coordinator
-	// reverse-proxies Tailscale control plane traffic to embedded Headscale.
-	tokenGenerator := jointoken.NewGenerator(
-		config.JWTSecret,
-		config.PublicURL,
-		config.PublicURL,
-	)
+	// Create token generator for join tokens
+	tokenGenerator := jointoken.NewGenerator(config.JWTSecret, config.PublicURL)
 
 	// Create repositories
 	wonderNetRepository := repository.NewWonderNetRepository(db.Queries())
@@ -132,10 +132,13 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 	wonderNetManager := headscale.NewWonderNetManager(headscaleClient)
 	aclManager := headscale.NewACLManager(headscaleClient)
 
+	// Create mesh backend (Tailscale via Headscale)
+	meshBackend := tailscale.NewTailscaleMesh(headscaleClient, config.PublicURL)
+
 	// Create services
 	wonderNetService := service.NewWonderNetService(wonderNetRepository, wonderNetManager, aclManager, config.PublicURL)
-	workerService := service.NewWorkerService(tokenGenerator, config.JWTSecret, wonderNetRepository, wonderNetService)
-	nodesService := service.NewNodesService(wonderNetManager)
+	workerService := service.NewWorkerService(tokenGenerator, config.JWTSecret, wonderNetRepository, meshBackend)
+	nodesService := service.NewNodesService(meshBackend)
 	apiKeyService := service.NewAPIKeyService(apiKeyRepository, wonderNetRepository)
 
 	// Create JWT validator for Keycloak tokens
@@ -163,6 +166,7 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 		headscaleClient:         headscaleClient,
 		headscaleProcessManager: headscaleProcessManager,
 		jwtValidator:            jwtValidator,
+		meshBackend:             meshBackend,
 		wonderNetRepository:     wonderNetRepository,
 		apiKeyRepository:        apiKeyRepository,
 		wonderNetService:        wonderNetService,
@@ -311,7 +315,7 @@ func (s *Server) Run() error {
 	joinTokenController := controller.NewJoinTokenController(s.workerService)
 	nodesController := controller.NewNodesController(s.nodesService)
 	apiKeyController := controller.NewAPIKeyController(s.apiKeyService)
-	deployerController := controller.NewDeployerController(s.wonderNetService)
+	deployerController := controller.NewDeployerController(s.meshBackend)
 
 	headscaleProxy, err := controller.NewHeadscaleProxyController("http://127.0.0.1:8080")
 	if err != nil {

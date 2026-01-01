@@ -25,6 +25,7 @@ type WonderNet struct {
 	OwnerID       string    `json:"owner_id"`
 	HeadscaleUser string    `json:"headscale_user"`
 	DisplayName   string    `json:"display_name"`
+	MeshType      string    `json:"mesh_type"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }

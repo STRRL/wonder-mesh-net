@@ -10,9 +10,17 @@ import (
 
 // JoinCredentialsResponse contains credentials for joining the mesh.
 type JoinCredentialsResponse struct {
-	AuthKey      string `json:"authkey"`
-	HeadscaleURL string `json:"headscale_url"`
-	User         string `json:"user"`
+	// MeshType identifies the mesh network type (e.g., "tailscale", "netbird")
+	MeshType string `json:"mesh_type"`
+
+	// Metadata contains mesh-specific credentials
+	// For Tailscale: login_server, authkey, headscale_user
+	Metadata map[string]any `json:"metadata"`
+
+	// Legacy fields for backward compatibility
+	AuthKey       string `json:"authkey,omitempty"`
+	HeadscaleURL  string `json:"headscale_url,omitempty"`
+	HeadscaleUser string `json:"headscale_user,omitempty"`
 }
 
 // WorkerController handles worker node registration.
@@ -55,11 +63,25 @@ func (c *WorkerController) HandleWorkerJoin(w http.ResponseWriter, r *http.Reque
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(JoinCredentialsResponse{
-		AuthKey:      creds.AuthKey,
-		HeadscaleURL: creds.HeadscaleURL,
-		User:         creds.User,
-	}); err != nil {
+	resp := JoinCredentialsResponse{
+		MeshType: creds.MeshType,
+		Metadata: creds.Metadata,
+	}
+
+	// Populate legacy fields for backward compatibility with Tailscale
+	if creds.MeshType == "tailscale" {
+		if loginServer, ok := creds.Metadata["login_server"].(string); ok {
+			resp.HeadscaleURL = loginServer
+		}
+		if authkey, ok := creds.Metadata["authkey"].(string); ok {
+			resp.AuthKey = authkey
+		}
+		if hsUser, ok := creds.Metadata["headscale_user"].(string); ok {
+			resp.HeadscaleUser = hsUser
+		}
+	}
+
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		slog.Error("encode worker join response", "error", err)
 	}
 }

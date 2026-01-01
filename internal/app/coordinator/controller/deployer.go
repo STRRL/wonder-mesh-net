@@ -6,18 +6,18 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/service"
+	"github.com/strrl/wonder-mesh-net/pkg/meshbackend"
 )
 
 // DeployerController handles third-party PaaS deployer integration.
 type DeployerController struct {
-	wonderNetService *service.WonderNetService
+	meshBackend meshbackend.MeshBackend
 }
 
 // NewDeployerController creates a new DeployerController.
-func NewDeployerController(wonderNetService *service.WonderNetService) *DeployerController {
+func NewDeployerController(meshBackend meshbackend.MeshBackend) *DeployerController {
 	return &DeployerController{
-		wonderNetService: wonderNetService,
+		meshBackend: meshBackend,
 	}
 }
 
@@ -31,17 +31,36 @@ func (c *DeployerController) HandleDeployerJoin(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	authKey, err := c.wonderNetService.CreateAuthKey(r.Context(), wonderNet, 24*time.Hour, false)
+	metadata, err := c.meshBackend.CreateJoinCredentials(r.Context(), wonderNet.HeadscaleUser, meshbackend.JoinOptions{
+		TTL:       24 * time.Hour,
+		Reusable:  false,
+		Ephemeral: false,
+	})
 	if err != nil {
-		slog.Error("create auth key", "error", err)
-		http.Error(w, "create auth key", http.StatusInternalServerError)
+		slog.Error("create join credentials", "error", err)
+		http.Error(w, "create join credentials", http.StatusInternalServerError)
 		return
 	}
 
+	meshType := string(c.meshBackend.MeshType())
+	resp := JoinCredentialsResponse{
+		MeshType: meshType,
+		Metadata: metadata,
+	}
+
+	// Populate legacy fields for backward compatibility with Tailscale
+	if meshType == "tailscale" {
+		if loginServer, ok := metadata["login_server"].(string); ok {
+			resp.HeadscaleURL = loginServer
+		}
+		if authkey, ok := metadata["authkey"].(string); ok {
+			resp.AuthKey = authkey
+		}
+		if hsUser, ok := metadata["headscale_user"].(string); ok {
+			resp.HeadscaleUser = hsUser
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(JoinCredentialsResponse{
-		AuthKey:      authKey,
-		HeadscaleURL: c.wonderNetService.GetPublicURL(),
-		User:         wonderNet.HeadscaleUser,
-	})
+	_ = json.NewEncoder(w).Encode(resp)
 }

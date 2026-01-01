@@ -63,34 +63,74 @@ func runJoin(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("join: %s", string(body))
 	}
 
-	var result struct {
-		Authkey      string `json:"authkey"`
-		HeadscaleURL string `json:"headscale_url"`
-		User         string `json:"user"`
-	}
+	var result joinResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return fmt.Errorf("decode response: %w", err)
 	}
 
-	return completeJoin(result.Authkey, result.HeadscaleURL, result.User, info.CoordinatorURL)
+	return completeJoin(&result, info.CoordinatorURL)
 }
 
-// completeJoin saves credentials locally and executes tailscale up
-// to complete mesh network registration.
-func completeJoin(authkey, headscaleURL, user, coordinator string) error {
-	creds := &credentials{
-		User:           user,
-		CoordinatorURL: coordinator,
-		JoinedAt:       time.Now(),
+// joinResponse represents the response from the coordinator's join endpoint.
+// It supports both the new mesh_type/metadata format and legacy fields for backward compatibility.
+type joinResponse struct {
+	MeshType string         `json:"mesh_type"`
+	Metadata map[string]any `json:"metadata"`
+
+	// Legacy fields for backward compatibility
+	Authkey       string `json:"authkey"`
+	HeadscaleURL  string `json:"headscale_url"`
+	HeadscaleUser string `json:"headscale_user"`
+}
+
+// getMetadataString extracts a string value from metadata with a fallback.
+func getMetadataString(metadata map[string]any, key, fallback string) string {
+	if metadata == nil {
+		return fallback
 	}
-	if err := saveCredentials(creds); err != nil {
-		fmt.Printf("Warning: save credentials: %v\n", err)
+	if v, ok := metadata[key].(string); ok && v != "" {
+		return v
+	}
+	return fallback
+}
+
+// completeJoin saves credentials locally and executes the appropriate mesh client
+// to complete network registration based on mesh_type.
+func completeJoin(resp *joinResponse, coordinator string) error {
+	meshType := resp.MeshType
+	if meshType == "" {
+		meshType = "tailscale"
 	}
 
-	fmt.Println()
-	fmt.Println("Connecting to Wonder Mesh Net...")
+	switch meshType {
+	case "tailscale":
+		loginServer := getMetadataString(resp.Metadata, "login_server", resp.HeadscaleURL)
+		authkey := getMetadataString(resp.Metadata, "authkey", resp.Authkey)
+		headscaleUser := getMetadataString(resp.Metadata, "headscale_user", resp.HeadscaleUser)
 
-	return runTailscaleUp(headscaleURL, authkey)
+		creds := &credentials{
+			User:           headscaleUser,
+			CoordinatorURL: coordinator,
+			JoinedAt:       time.Now(),
+		}
+		if err := saveCredentials(creds); err != nil {
+			fmt.Printf("Warning: save credentials: %v\n", err)
+		}
+
+		fmt.Println()
+		fmt.Println("Connecting to Wonder Mesh Net...")
+
+		return runTailscaleUp(loginServer, authkey)
+
+	case "netbird":
+		return fmt.Errorf("netbird mesh type is not yet supported")
+
+	case "zerotier":
+		return fmt.Errorf("zerotier mesh type is not yet supported")
+
+	default:
+		return fmt.Errorf("unknown mesh type: %s", meshType)
+	}
 }
 
 // runTailscaleUp executes the tailscale up command with the provided
