@@ -6,7 +6,7 @@ This document describes the authentication architecture for Wonder Mesh Net.
 
 **Design Goal**: Enable users to authenticate via multiple identity providers (GitHub, Google, etc.) while keeping Coordinator simple.
 
-**Key Principle**:
+**Key Principles**:
 1. **Coordinator only talks to Keycloak** - Single OIDC integration point
 2. **Keycloak handles multi-provider** - Identity Brokering for GitHub, Google, etc.
 3. **Headscale is fully managed by Coordinator** - Coordinator provisions Headscale users, PreAuthKeys, and ACL policies via gRPC API. Headscale has no OIDC.
@@ -58,7 +58,7 @@ Wonder Mesh Net uses three distinct authentication mechanisms:
 | Mechanism | Issuer | Algorithm | TTL | Purpose |
 |-----------|--------|-----------|-----|---------|
 | **OIDC JWT** | External Provider | RSA/ECDSA (JWKS) | 5-60 min | User session authentication |
-| **Join Token** | Coordinator | HMAC-SHA256 | 1-24 hr | Worker node bootstrap |
+| **Join Token** | Coordinator | HMAC-SHA256 | 1-24 hr (default: 8 hr) | Worker node bootstrap |
 | **API Key** | Coordinator | SHA256 hash | Configurable | Third-party integrations |
 
 ### OIDC JWT (User Sessions)
