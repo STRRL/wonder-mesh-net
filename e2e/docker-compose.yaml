@@ -6,8 +6,8 @@ services:
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
-      KC_HOSTNAME_URL: http://localhost:9090
-      KC_HOSTNAME_ADMIN_URL: http://localhost:9090
+      KC_HOSTNAME_URL: http://keycloak:8080
+      KC_HOSTNAME_ADMIN_URL: http://keycloak:8080
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_RELATIVE_PATH: /
     volumes:
@@ -20,23 +20,23 @@ services:
       context: ..
       dockerfile: Dockerfile
     container_name: coordinator
-    network_mode: "host"
     environment:
       JWT_SECRET: e2e-test-jwt-secret-at-least-32-chars
-      KEYCLOAK_URL: http://localhost:9090
+      KEYCLOAK_URL: http://keycloak:8080
       KEYCLOAK_REALM: wonder
       KEYCLOAK_CLIENT_ID: wonder-mesh-net
+      PUBLIC_URL: http://coordinator:9080
     volumes:
       - ./headscale-config.yaml:/etc/headscale/config.yaml
       - coordinator-data:/data
+    ports:
+      - "9080:9080"
     depends_on:
       - keycloak
     command:
       - "coordinator"
       - "--listen"
       - ":9080"
-      - "--public-url"
-      - "http://localhost:9080"
 
   worker-1:
     build:

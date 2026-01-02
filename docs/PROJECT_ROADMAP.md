@@ -482,5 +482,3 @@ Key files for each area:
 | E2E tests | `e2e/test.sh` |
 
 ---
-
-*Last updated: December 31, 2024*

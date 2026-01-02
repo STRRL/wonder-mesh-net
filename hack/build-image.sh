@@ -34,6 +34,7 @@ PLATFORM="${PLATFORM:-}"
 
 echo "Version: ${VERSION}"
 echo "Image tag: ${IMAGE_TAG}"
+echo "Git SHA: ${GIT_SHA}"
 
 docker buildx inspect multiarch >/dev/null 2>&1 || \
     docker buildx create --use --name multiarch --driver docker-container

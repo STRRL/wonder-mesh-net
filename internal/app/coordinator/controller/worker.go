@@ -10,8 +10,8 @@ import (
 
 // JoinCredentialsResponse contains credentials for joining the mesh.
 type JoinCredentialsResponse struct {
-	MeshType                string                      `json:"mesh_type"`
-	TailscaleConnectionInfo *TailscaleConnectionInfo    `json:"tailscale_connection_info,omitempty"`
+	MeshType                string                   `json:"mesh_type"`
+	TailscaleConnectionInfo *TailscaleConnectionInfo `json:"tailscale_connection_info,omitempty"`
 }
 
 // TailscaleConnectionInfo contains the credentials for joining a Tailscale/Headscale mesh.
