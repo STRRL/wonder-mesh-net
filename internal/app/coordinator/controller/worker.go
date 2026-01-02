@@ -10,9 +10,15 @@ import (
 
 // JoinCredentialsResponse contains credentials for joining the mesh.
 type JoinCredentialsResponse struct {
-	AuthKey      string `json:"authkey"`
-	HeadscaleURL string `json:"headscale_url"`
-	User         string `json:"user"`
+	MeshType                string                   `json:"mesh_type"`
+	TailscaleConnectionInfo *TailscaleConnectionInfo `json:"tailscale_connection_info,omitempty"`
+}
+
+// TailscaleConnectionInfo contains the credentials for joining a Tailscale/Headscale mesh.
+type TailscaleConnectionInfo struct {
+	LoginServer   string `json:"login_server"`
+	Authkey       string `json:"authkey"`
+	HeadscaleUser string `json:"headscale_user"`
 }
 
 // WorkerController handles worker node registration.
@@ -54,12 +60,23 @@ func (c *WorkerController) HandleWorkerJoin(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	if creds.MeshType != "tailscale" {
+		slog.Error("unsupported mesh type", "mesh_type", creds.MeshType)
+		http.Error(w, "unsupported mesh type", http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(JoinCredentialsResponse{
-		AuthKey:      creds.AuthKey,
-		HeadscaleURL: creds.HeadscaleURL,
-		User:         creds.User,
-	}); err != nil {
+	resp := JoinCredentialsResponse{
+		MeshType: creds.MeshType,
+		TailscaleConnectionInfo: &TailscaleConnectionInfo{
+			LoginServer:   creds.Metadata["login_server"].(string),
+			Authkey:       creds.Metadata["authkey"].(string),
+			HeadscaleUser: creds.Metadata["headscale_user"].(string),
+		},
+	}
+
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		slog.Error("encode worker join response", "error", err)
 	}
 }

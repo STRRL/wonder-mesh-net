@@ -2,10 +2,12 @@ package service
 
 import (
 	"context"
+	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/repository"
-	"github.com/strrl/wonder-mesh-net/pkg/headscale"
+	"github.com/strrl/wonder-mesh-net/pkg/meshbackend"
 )
 
 // Node represents a mesh network node.
@@ -19,19 +21,19 @@ type Node struct {
 
 // NodesService handles node listing operations.
 type NodesService struct {
-	wonderNetManager *headscale.WonderNetManager
+	meshBackend meshbackend.MeshBackend
 }
 
 // NewNodesService creates a new NodesService.
-func NewNodesService(wonderNetManager *headscale.WonderNetManager) *NodesService {
+func NewNodesService(meshBackend meshbackend.MeshBackend) *NodesService {
 	return &NodesService{
-		wonderNetManager: wonderNetManager,
+		meshBackend: meshBackend,
 	}
 }
 
 // ListNodes returns all nodes in the given wonder net.
 func (s *NodesService) ListNodes(ctx context.Context, wonderNet *repository.WonderNet) ([]*Node, error) {
-	nodes, err := s.wonderNetManager.GetWonderNetNodes(ctx, wonderNet.HeadscaleUser)
+	nodes, err := s.meshBackend.ListNodes(ctx, wonderNet.HeadscaleUser)
 	if err != nil {
 		return nil, err
 	}
@@ -39,14 +41,20 @@ func (s *NodesService) ListNodes(ctx context.Context, wonderNet *repository.Wond
 	result := make([]*Node, len(nodes))
 	for i, node := range nodes {
 		n := &Node{
-			ID:      node.GetId(),
-			Name:    node.GetName(),
-			IPAddrs: node.GetIpAddresses(),
-			Online:  node.GetOnline(),
+			Name:    node.Name,
+			IPAddrs: node.Addresses,
+			Online:  node.Online,
 		}
-		if node.GetLastSeen() != nil {
-			t := node.GetLastSeen().AsTime()
-			n.LastSeen = &t
+
+		// Parse ID from string to uint64
+		if id, err := strconv.ParseUint(node.ID, 10, 64); err == nil {
+			n.ID = id
+		} else {
+			slog.Warn("parse node ID", "node_name", node.Name, "raw_id", node.ID, "error", err)
+		}
+
+		if node.LastSeen != nil {
+			n.LastSeen = node.LastSeen
 		}
 		result[i] = n
 	}

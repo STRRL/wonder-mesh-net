@@ -15,6 +15,7 @@ type WonderNet struct {
 	OwnerID       string
 	HeadscaleUser string
 	DisplayName   string
+	MeshType      string
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }
@@ -36,6 +37,7 @@ func (r *WonderNetRepository) Create(ctx context.Context, wn *WonderNet) error {
 		OwnerID:       wn.OwnerID,
 		HeadscaleUser: wn.HeadscaleUser,
 		DisplayName:   wn.DisplayName,
+		MeshType:      wn.MeshType,
 	})
 }
 
@@ -108,6 +110,7 @@ func dbWonderNetToWonderNet(row sqlc.WonderNet) *WonderNet {
 		OwnerID:       row.OwnerID,
 		HeadscaleUser: row.HeadscaleUser,
 		DisplayName:   row.DisplayName,
+		MeshType:      row.MeshType,
 		CreatedAt:     row.CreatedAt,
 		UpdatedAt:     row.UpdatedAt,
 	}

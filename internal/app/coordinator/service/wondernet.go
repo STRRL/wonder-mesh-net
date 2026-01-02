@@ -10,6 +10,7 @@ import (
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/repository"
 	"github.com/strrl/wonder-mesh-net/pkg/headscale"
 	"github.com/strrl/wonder-mesh-net/pkg/jwtauth"
+	"github.com/strrl/wonder-mesh-net/pkg/meshbackend"
 )
 
 var (
@@ -48,6 +49,8 @@ func (s *WonderNetService) ProvisionWonderNet(ctx context.Context, userID, displ
 		OwnerID:       userID,
 		HeadscaleUser: hsUser,
 		DisplayName:   displayName,
+		// TODO: get MeshType from MeshBackend when multi-backend support is added
+		MeshType: string(meshbackend.MeshTypeTailscale),
 	}
 
 	if err := s.wonderNetRepository.Create(ctx, newWonderNet); err != nil {

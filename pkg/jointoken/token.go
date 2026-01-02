@@ -1,15 +1,19 @@
 // Package jointoken provides JWT-based join tokens for worker nodes to securely
 // join a Wonder Mesh Net wonder net.
 //
-// Join tokens are short-lived JWTs that encode the necessary information for a
-// worker node to authenticate with the coordinator and obtain a Headscale PreAuthKey.
+// Join tokens are short-lived JWTs that encode the minimal information for a
+// worker node to contact the coordinator and obtain mesh credentials. The token
+// does not contain mesh-specific information (like Headscale URLs); that info
+// is negotiated during the join HTTP exchange.
+//
 // The token flow is:
 //
 //  1. User authenticates via Keycloak and requests a join token from the coordinator
-//  2. Coordinator generates a signed JWT containing wonder net and connection info
+//  2. Coordinator generates a signed JWT containing coordinator URL and wonder net ID
 //  3. User transfers the token to the worker node (via CLI copy-paste or file)
-//  4. Worker exchanges the JWT for a Headscale PreAuthKey
-//  5. Worker runs "tailscale up" with the PreAuthKey to join the mesh
+//  4. Worker contacts coordinator to exchange the token for mesh credentials
+//  5. Coordinator returns mesh_type and metadata (e.g., Tailscale login_server, authkey)
+//  6. Worker uses the mesh-specific credentials to join the network
 //
 // Tokens are signed using HMAC-SHA256 with a shared secret between coordinator
 // instances. The token TTL is typically short (hours) to limit exposure if leaked.
@@ -28,37 +32,29 @@ import (
 // Claims represents the JWT claims for a join token.
 //
 // It embeds the standard JWT registered claims (iat, exp, iss) and adds
-// custom claims specific to Wonder Mesh Net that the worker needs to join
-// the mesh network.
+// the minimal claims needed for a worker to contact the coordinator.
+// Mesh-specific information (like Headscale URLs) is NOT included here;
+// it's returned in the HTTP response when the token is exchanged.
 type Claims struct {
 	jwt.RegisteredClaims
 
 	// CoordinatorURL is the URL of the coordinator API that the worker
-	// should contact to exchange this token for a Headscale PreAuthKey.
+	// should contact to exchange this token for mesh credentials.
 	CoordinatorURL string `json:"coordinator_url"`
-
-	// HeadscaleURL is the URL of the Headscale control server.
-	// The worker uses this to configure the Tailscale client.
-	HeadscaleURL string `json:"headscale_url"`
 
 	// WonderNetID is the unique identifier for the wonder net (tenant namespace)
 	// that this worker will join. Used for multi-tenant isolation.
 	WonderNetID string `json:"wonder_net_id"`
-
-	// HeadscaleUser is the Headscale user (namespace) name that the worker
-	// will be registered under. This is the same UUID as the wonder net ID.
-	HeadscaleUser string `json:"headscale_user"`
 }
 
 // Generator creates signed join tokens for worker nodes.
 //
-// It holds the signing key and base URLs that are embedded into every token.
+// It holds the signing key and coordinator URL that are embedded into every token.
 // A single Generator instance should be reused across requests since it's
 // safe for concurrent use.
 type Generator struct {
 	signingKey     []byte
 	coordinatorURL string
-	headscaleURL   string
 }
 
 // NewGenerator creates a new token generator with the given configuration.
@@ -67,15 +63,13 @@ type Generator struct {
 //   - signingKey: The HMAC-SHA256 secret key for signing tokens. Must be shared
 //     with all coordinator instances and the Validator.
 //   - coordinatorURL: The public URL of the coordinator API (e.g., "https://wonder.example.com").
-//   - headscaleURL: The public URL of the Headscale control server.
 //
 // The signingKey should be at least 32 bytes of random data for security.
 // Use "openssl rand -hex 32" to generate a suitable key.
-func NewGenerator(signingKey, coordinatorURL, headscaleURL string) *Generator {
+func NewGenerator(signingKey, coordinatorURL string) *Generator {
 	return &Generator{
 		signingKey:     []byte(signingKey),
 		coordinatorURL: coordinatorURL,
-		headscaleURL:   headscaleURL,
 	}
 }
 
@@ -83,15 +77,14 @@ func NewGenerator(signingKey, coordinatorURL, headscaleURL string) *Generator {
 //
 // Parameters:
 //   - wonderNetID: The unique identifier for the wonder net (UUID format).
-//   - headscaleUser: The Headscale user/namespace name for this wonder net.
 //   - ttl: How long the token should be valid. Typical values are 1-24 hours.
 //
 // Returns the signed JWT string, or an error if signing fails.
 //
 // The generated token includes:
 //   - Standard JWT claims: iat (issued at), exp (expiration), iss (issuer)
-//   - Custom claims: coordinator URL, Headscale URL, wonder net ID, Headscale user
-func (g *Generator) Generate(wonderNetID, headscaleUser string, ttl time.Duration) (string, error) {
+//   - Custom claims: coordinator URL, wonder net ID
+func (g *Generator) Generate(wonderNetID string, ttl time.Duration) (string, error) {
 	now := time.Now()
 	claims := &Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -100,9 +93,7 @@ func (g *Generator) Generate(wonderNetID, headscaleUser string, ttl time.Duratio
 			Issuer:    "wonder-mesh-net",
 		},
 		CoordinatorURL: g.coordinatorURL,
-		HeadscaleURL:   g.headscaleURL,
 		WonderNetID:    wonderNetID,
-		HeadscaleUser:  headscaleUser,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -205,17 +196,13 @@ func DecodeFromCLI(encoded string) (string, error) {
 // JoinInfo contains a subset of token claims formatted for user display.
 //
 // This struct is used by the CLI to show users what a join token contains
-// before they use it to join a mesh. It intentionally omits sensitive
-// information like the realm ID.
+// before they use it to join a mesh.
 type JoinInfo struct {
 	// CoordinatorURL is the URL the worker will contact to exchange the token.
 	CoordinatorURL string `json:"coordinator_url"`
 
-	// HeadscaleURL is the Headscale control server URL.
-	HeadscaleURL string `json:"headscale_url"`
-
-	// HeadscaleUser is the namespace the worker will join.
-	HeadscaleUser string `json:"headscale_user"`
+	// WonderNetID is the wonder net the worker will join.
+	WonderNetID string `json:"wonder_net_id"`
 
 	// ExpiresAt is when the token becomes invalid.
 	ExpiresAt time.Time `json:"expires_at"`
@@ -240,8 +227,7 @@ func GetJoinInfo(tokenString string) (*JoinInfo, error) {
 
 	return &JoinInfo{
 		CoordinatorURL: claims.CoordinatorURL,
-		HeadscaleURL:   claims.HeadscaleURL,
-		HeadscaleUser:  claims.HeadscaleUser,
+		WonderNetID:    claims.WonderNetID,
 		ExpiresAt:      expiresAt,
 	}, nil
 }

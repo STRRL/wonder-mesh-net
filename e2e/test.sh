@@ -29,9 +29,56 @@ trap cleanup EXIT
 
 echo "=== Wonder Mesh Net E2E Test ==="
 
+# Generate headscale config with correct server_url for containers
+log_info "Generating headscale config..."
+cat > headscale-config.yaml << EOF
+server_url: http://coordinator:9080
+listen_addr: 0.0.0.0:8080
+metrics_listen_addr: ""
+grpc_listen_addr: 127.0.0.1:50443
+grpc_allow_insecure: true
+
+private_key_path: /data/headscale/private.key
+noise:
+  private_key_path: /data/headscale/noise_private.key
+
+prefixes:
+  v4: 100.64.0.0/10
+  v6: fd7a:115c:a1e0::/48
+  allocation: sequential
+
+database:
+  type: sqlite
+  sqlite:
+    path: /data/headscale/db.sqlite
+
+derp:
+  server:
+    enabled: false
+  urls:
+    - https://controlplane.tailscale.com/derpmap/default
+  auto_update_enabled: true
+  update_frequency: 24h
+
+disable_check_updates: true
+ephemeral_node_inactivity_timeout: 30m
+
+dns:
+  magic_dns: false
+  base_domain: ""
+  override_local_dns: false
+
+log:
+  format: text
+  level: info
+
+policy:
+  mode: database
+EOF
+
 # Start all Docker services
 log_info "Starting all services..."
-docker compose -f docker-compose.yaml up -d --build
+docker compose -f docker-compose.yaml up -d --build --force-recreate
 sleep 10
 
 # Wait for Keycloak
@@ -84,8 +131,9 @@ fi
 # ============================================
 log_info "Getting access token from Keycloak..."
 
-TOKEN_RESPONSE=$(curl -s -X POST \
-    "http://localhost:9090/realms/wonder/protocol/openid-connect/token" \
+# Get token from within a container so the issuer matches coordinator's expectation
+TOKEN_RESPONSE=$(docker exec deployer curl -s -X POST \
+    "http://keycloak:8080/realms/wonder/protocol/openid-connect/token" \
     -H "Content-Type: application/x-www-form-urlencoded" \
     -d "grant_type=password" \
     -d "client_id=wonder-mesh-net" \
@@ -105,10 +153,10 @@ log_info "Access token obtained: ${ACCESS_TOKEN:0:50}..."
 # Test protected endpoints with JWT
 # ============================================
 log_info "Creating join token..."
-JOIN_TOKEN_RESPONSE=$(curl -s -X POST \
+JOIN_TOKEN_RESPONSE=$(docker exec deployer curl -s -X POST \
     -H "Authorization: Bearer $ACCESS_TOKEN" \
     -H "Content-Type: application/json" \
-    "http://localhost:9080/coordinator/api/v1/join-token")
+    "http://coordinator:9080/coordinator/api/v1/join-token")
 
 JOIN_TOKEN=$(echo "$JOIN_TOKEN_RESPONSE" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
 if [ -z "$JOIN_TOKEN" ]; then
@@ -119,9 +167,9 @@ fi
 log_info "Join token created: ${JOIN_TOKEN:0:80}..."
 
 log_info "Testing nodes endpoint..."
-NODES_BY_TOKEN=$(curl -s \
+NODES_BY_TOKEN=$(docker exec deployer curl -s \
     -H "Authorization: Bearer $ACCESS_TOKEN" \
-    "http://localhost:9080/coordinator/api/v1/nodes")
+    "http://coordinator:9080/coordinator/api/v1/nodes")
 
 if ! echo "$NODES_BY_TOKEN" | grep -q '"nodes"'; then
     log_error "Failed to get nodes with access token"
@@ -130,110 +178,33 @@ if ! echo "$NODES_BY_TOKEN" | grep -q '"nodes"'; then
 fi
 log_info "Nodes endpoint works with access token"
 
-# Get host IP that containers can reach (coordinator uses host network)
-HOST_IP="host.docker.internal"
-# On Linux, host.docker.internal may not work, use docker bridge gateway
-if ! docker exec worker-1 ping -c 1 -W 1 host.docker.internal >/dev/null 2>&1; then
-    HOST_IP=$(docker network inspect bridge -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}' 2>/dev/null || echo "172.17.0.1")
-fi
-log_info "Host IP (accessible from containers): $HOST_IP"
+# Build Linux amd64 wonder binary for workers
+log_info "Building wonder binary for Linux..."
+(cd .. && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-s -w" -o bin/wonder-linux ./cmd/wonder)
 
-# Worker 1: Join mesh
-log_info "Worker 1: Joining mesh..."
+# Copy wonder binary to workers
+log_info "Copying wonder binary to workers..."
+docker cp ../bin/wonder-linux worker-1:/usr/local/bin/wonder
+docker cp ../bin/wonder-linux worker-2:/usr/local/bin/wonder
+docker cp ../bin/wonder-linux worker-3:/usr/local/bin/wonder
 
-# Start tailscaled in worker-1
-docker exec worker-1 tailscaled --state=/var/lib/tailscale/tailscaled.state --socket=/var/run/tailscale/tailscaled.sock &
-sleep 3
+# Coordinator URL accessible from containers (using container name in bridge network)
+COORDINATOR_URL="http://coordinator:9080"
 
-# Get authkey for worker 1
-WORKER1_API_RESPONSE=$(docker exec worker-1 curl -s -X POST \
-    -H 'Content-Type: application/json' \
-    -d "{\"token\": \"$JOIN_TOKEN\"}" \
-    "http://$HOST_IP:9080/coordinator/api/v1/worker/join")
+# Worker 1: Join mesh using wonder worker join
+log_info "Worker 1: Joining mesh using wonder worker join..."
+docker exec worker-1 wonder worker join --coordinator-url="$COORDINATOR_URL" "$JOIN_TOKEN" \
+    2>&1 || log_warn "wonder worker join returned non-zero exit code for Worker 1"
 
-WORKER1_AUTHKEY=$(echo "$WORKER1_API_RESPONSE" | sed -n 's/.*"authkey":"\([^"]*\)".*/\1/p')
-WORKER1_LOGIN_SERVER=$(echo "$WORKER1_API_RESPONSE" | sed -n 's/.*"headscale_url":"\([^"]*\)".*/\1/p' | sed "s/localhost/$HOST_IP/g")
+# Worker 2: Join mesh using wonder worker join
+log_info "Worker 2: Joining mesh using wonder worker join..."
+docker exec worker-2 wonder worker join --coordinator-url="$COORDINATOR_URL" "$JOIN_TOKEN" \
+    2>&1 || log_warn "wonder worker join returned non-zero exit code for Worker 2"
 
-if [ -z "$WORKER1_AUTHKEY" ]; then
-    log_error "Failed to get authkey for worker 1"
-    echo "$WORKER1_API_RESPONSE"
-    exit 1
-fi
-log_info "Worker 1 authkey: ${WORKER1_AUTHKEY:0:20}..."
-log_info "Worker 1 login server: $WORKER1_LOGIN_SERVER"
-
-log_info "Running tailscale up for Worker 1..."
-docker exec worker-1 tailscale up \
-    --reset \
-    --authkey="$WORKER1_AUTHKEY" \
-    --login-server="$WORKER1_LOGIN_SERVER" \
-    --accept-routes \
-    --accept-dns=false \
-    2>&1 || log_warn "Tailscale up returned non-zero exit code for Worker 1"
-
-# Worker 2: Join mesh
-log_info "Worker 2: Joining mesh..."
-
-# Start tailscaled in worker-2
-docker exec worker-2 tailscaled --state=/var/lib/tailscale/tailscaled.state --socket=/var/run/tailscale/tailscaled.sock &
-sleep 3
-
-WORKER2_API_RESPONSE=$(docker exec worker-2 curl -s -X POST \
-    -H 'Content-Type: application/json' \
-    -d "{\"token\": \"$JOIN_TOKEN\"}" \
-    "http://$HOST_IP:9080/coordinator/api/v1/worker/join")
-
-WORKER2_AUTHKEY=$(echo "$WORKER2_API_RESPONSE" | sed -n 's/.*"authkey":"\([^"]*\)".*/\1/p')
-WORKER2_LOGIN_SERVER=$(echo "$WORKER2_API_RESPONSE" | sed -n 's/.*"headscale_url":"\([^"]*\)".*/\1/p' | sed "s/localhost/$HOST_IP/g")
-
-if [ -z "$WORKER2_AUTHKEY" ]; then
-    log_error "Failed to get authkey for worker 2"
-    echo "$WORKER2_API_RESPONSE"
-    exit 1
-fi
-log_info "Worker 2 authkey: ${WORKER2_AUTHKEY:0:20}..."
-log_info "Worker 2 login server: $WORKER2_LOGIN_SERVER"
-
-log_info "Running tailscale up for Worker 2..."
-docker exec worker-2 tailscale up \
-    --reset \
-    --authkey="$WORKER2_AUTHKEY" \
-    --login-server="$WORKER2_LOGIN_SERVER" \
-    --accept-routes \
-    --accept-dns=false \
-    2>&1 || log_warn "Tailscale up returned non-zero exit code for Worker 2"
-
-# Worker 3: Join mesh
-log_info "Worker 3: Joining mesh..."
-
-# Start tailscaled in worker-3
-docker exec worker-3 tailscaled --state=/var/lib/tailscale/tailscaled.state --socket=/var/run/tailscale/tailscaled.sock &
-sleep 3
-
-WORKER3_API_RESPONSE=$(docker exec worker-3 curl -s -X POST \
-    -H 'Content-Type: application/json' \
-    -d "{\"token\": \"$JOIN_TOKEN\"}" \
-    "http://$HOST_IP:9080/coordinator/api/v1/worker/join")
-
-WORKER3_AUTHKEY=$(echo "$WORKER3_API_RESPONSE" | sed -n 's/.*"authkey":"\([^"]*\)".*/\1/p')
-WORKER3_LOGIN_SERVER=$(echo "$WORKER3_API_RESPONSE" | sed -n 's/.*"headscale_url":"\([^"]*\)".*/\1/p' | sed "s/localhost/$HOST_IP/g")
-
-if [ -z "$WORKER3_AUTHKEY" ]; then
-    log_error "Failed to get authkey for worker 3"
-    echo "$WORKER3_API_RESPONSE"
-    exit 1
-fi
-log_info "Worker 3 authkey: ${WORKER3_AUTHKEY:0:20}..."
-log_info "Worker 3 login server: $WORKER3_LOGIN_SERVER"
-
-log_info "Running tailscale up for Worker 3..."
-docker exec worker-3 tailscale up \
-    --reset \
-    --authkey="$WORKER3_AUTHKEY" \
-    --login-server="$WORKER3_LOGIN_SERVER" \
-    --accept-routes \
-    --accept-dns=false \
-    2>&1 || log_warn "Tailscale up returned non-zero exit code for Worker 3"
+# Worker 3: Join mesh using wonder worker join
+log_info "Worker 3: Joining mesh using wonder worker join..."
+docker exec worker-3 wonder worker join --coordinator-url="$COORDINATOR_URL" "$JOIN_TOKEN" \
+    2>&1 || log_warn "wonder worker join returned non-zero exit code for Worker 3"
 
 sleep 5
 
@@ -311,9 +282,9 @@ fi
 # ============================================
 log_info "=== Verifying nodes visible after workers joined ==="
 
-NODES_FINAL=$(curl -s \
+NODES_FINAL=$(docker exec deployer curl -s \
     -H "Authorization: Bearer $ACCESS_TOKEN" \
-    "http://localhost:9080/coordinator/api/v1/nodes")
+    "http://coordinator:9080/coordinator/api/v1/nodes")
 
 NODE_COUNT=$(echo "$NODES_FINAL" | sed -n 's/.*"count":\([0-9]*\).*/\1/p')
 log_info "Nodes visible: $NODE_COUNT"
@@ -350,11 +321,11 @@ log_info "=== Testing Deployer with API Key ==="
 
 # Step 1: Create an API key for the deployer
 log_info "Creating API key for deployer..."
-API_KEY_RESPONSE=$(curl -s -X POST \
+API_KEY_RESPONSE=$(docker exec deployer curl -s -X POST \
     -H "Authorization: Bearer $ACCESS_TOKEN" \
     -H "Content-Type: application/json" \
     -d '{"name": "deployer-key", "expires_in": "24h"}' \
-    "http://localhost:9080/coordinator/api/v1/api-keys")
+    "http://coordinator:9080/coordinator/api/v1/api-keys")
 
 API_KEY=$(echo "$API_KEY_RESPONSE" | sed -n 's/.*"key":"\([^"]*\)".*/\1/p')
 API_KEY_ID=$(echo "$API_KEY_RESPONSE" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
@@ -368,9 +339,9 @@ log_info "API key created: ${API_KEY:0:20}..."
 
 # Step 2: List API keys to verify
 log_info "Listing API keys..."
-API_KEYS_LIST=$(curl -s \
+API_KEYS_LIST=$(docker exec deployer curl -s \
     -H "Authorization: Bearer $ACCESS_TOKEN" \
-    "http://localhost:9080/coordinator/api/v1/api-keys")
+    "http://coordinator:9080/coordinator/api/v1/api-keys")
 
 if ! echo "$API_KEYS_LIST" | grep -q "$API_KEY_ID"; then
     log_warn "API key not found in list"
@@ -380,9 +351,9 @@ log_info "API key listing works"
 
 # Step 3: Test API key can access nodes endpoint (read-only)
 log_info "Testing API key access to nodes endpoint..."
-NODES_WITH_API_KEY=$(curl -s \
+NODES_WITH_API_KEY=$(docker exec deployer curl -s \
     -H "Authorization: Bearer $API_KEY" \
-    "http://localhost:9080/coordinator/api/v1/nodes")
+    "http://coordinator:9080/coordinator/api/v1/nodes")
 
 if echo "$NODES_WITH_API_KEY" | grep -q "nodes"; then
     log_info "API key can access nodes endpoint (read-only access works)"
@@ -397,10 +368,11 @@ log_info "Deployer joining mesh with API key..."
 DEPLOYER_JOIN_RESPONSE=$(docker exec deployer curl -s -X POST \
     -H "Authorization: Bearer $API_KEY" \
     -H "Content-Type: application/json" \
-    "http://$HOST_IP:9080/coordinator/api/v1/deployer/join")
+    "http://coordinator:9080/coordinator/api/v1/deployer/join")
 
-DEPLOYER_AUTHKEY=$(echo "$DEPLOYER_JOIN_RESPONSE" | sed -n 's/.*"authkey":"\([^"]*\)".*/\1/p')
-DEPLOYER_LOGIN_SERVER=$(echo "$DEPLOYER_JOIN_RESPONSE" | sed -n 's/.*"headscale_url":"\([^"]*\)".*/\1/p' | sed "s/localhost/$HOST_IP/g")
+# Parse new API format
+DEPLOYER_AUTHKEY=$(echo "$DEPLOYER_JOIN_RESPONSE" | grep -o '"authkey":"[^"]*"' | sed 's/"authkey":"//;s/"$//')
+DEPLOYER_LOGIN_SERVER=$(echo "$DEPLOYER_JOIN_RESPONSE" | grep -o '"login_server":"[^"]*"' | sed 's/"login_server":"//;s/"$//')
 
 if [ -z "$DEPLOYER_AUTHKEY" ]; then
     log_error "Failed to get authkey for deployer"

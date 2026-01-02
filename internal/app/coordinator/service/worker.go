@@ -6,13 +6,13 @@ import (
 
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/repository"
 	"github.com/strrl/wonder-mesh-net/pkg/jointoken"
+	"github.com/strrl/wonder-mesh-net/pkg/meshbackend"
 )
 
 // JoinCredentials contains the credentials for a worker to join the mesh.
 type JoinCredentials struct {
-	AuthKey      string
-	HeadscaleURL string
-	User         string
+	MeshType string
+	Metadata map[string]any
 }
 
 // WorkerService handles worker join token operations.
@@ -20,7 +20,7 @@ type WorkerService struct {
 	tokenGenerator      *jointoken.Generator
 	jwtSecret           string
 	wonderNetRepository *repository.WonderNetRepository
-	wonderNetService    *WonderNetService
+	meshBackend         meshbackend.MeshBackend
 }
 
 // NewWorkerService creates a new WorkerService.
@@ -28,19 +28,19 @@ func NewWorkerService(
 	tokenGenerator *jointoken.Generator,
 	jwtSecret string,
 	wonderNetRepository *repository.WonderNetRepository,
-	wonderNetService *WonderNetService,
+	meshBackend meshbackend.MeshBackend,
 ) *WorkerService {
 	return &WorkerService{
 		tokenGenerator:      tokenGenerator,
 		jwtSecret:           jwtSecret,
 		wonderNetRepository: wonderNetRepository,
-		wonderNetService:    wonderNetService,
+		meshBackend:         meshBackend,
 	}
 }
 
 // GenerateJoinToken creates a JWT for a worker to join the mesh.
 func (s *WorkerService) GenerateJoinToken(ctx context.Context, wonderNet *repository.WonderNet, ttl time.Duration) (string, error) {
-	return s.tokenGenerator.Generate(wonderNet.ID, wonderNet.HeadscaleUser, ttl)
+	return s.tokenGenerator.Generate(wonderNet.ID, ttl)
 }
 
 // ExchangeJoinToken validates a JWT and returns credentials for joining the mesh.
@@ -56,14 +56,17 @@ func (s *WorkerService) ExchangeJoinToken(ctx context.Context, token string) (*J
 		return nil, ErrInvalidToken
 	}
 
-	authKey, err := s.wonderNetService.CreateAuthKey(ctx, wonderNet, 24*time.Hour, false)
+	metadata, err := s.meshBackend.CreateJoinCredentials(ctx, wonderNet.HeadscaleUser, meshbackend.JoinOptions{
+		TTL:       24 * time.Hour,
+		Reusable:  false,
+		Ephemeral: false,
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	return &JoinCredentials{
-		AuthKey:      authKey,
-		HeadscaleURL: s.wonderNetService.GetPublicURL(),
-		User:         claims.HeadscaleUser,
+		MeshType: string(s.meshBackend.MeshType()),
+		Metadata: metadata,
 	}, nil
 }
