@@ -57,13 +57,13 @@ Wonder Mesh Net uses three distinct authentication mechanisms:
 
 | Mechanism | Issuer | Algorithm | TTL | Purpose |
 |-----------|--------|-----------|-----|---------|
-| **OIDC JWT** | External Provider | RSA/ECDSA (JWKS) | 5-60 min | User session authentication |
+| **OIDC JWT** | Keycloak | RSA/ECDSA (JWKS) | 5-60 min | User session authentication |
 | **Join Token** | Coordinator | HMAC-SHA256 | 1-24 hr (default: 8 hr) | Worker node bootstrap |
 | **API Key** | Coordinator | SHA256 hash | Configurable | Third-party integrations |
 
 ### OIDC JWT (User Sessions)
 
-External identity providers (Keycloak, GitHub) issue JWTs after user authentication. Coordinator validates these tokens and establishes user sessions.
+External identity providers (GitHub, Google, etc.) authenticate users. Keycloak brokers these logins and issues JWTs, which Coordinator validates to establish user sessions.
 
 ### Join Token (Worker Bootstrap)
 
@@ -171,7 +171,7 @@ In Keycloak Admin Console:
 ```mermaid
 flowchart LR
     subgraph external["External IdP"]
-        ext_id["github:123"]
+        ext_id["GitHub:123"]
     end
 
     subgraph keycloak["Keycloak"]
@@ -211,7 +211,7 @@ sequenceDiagram
     User->>Portal: Login (GitHub/Google via Keycloak)
     Portal-->>User: Dashboard
     User->>Portal: Click "Create Join Token"
-    Portal-->>User: Join Token (JWT, 8hr TTL)
+    Portal-->>User: Join Token (8hr TTL)
     User->>User: Copy token
     end
 
@@ -384,7 +384,7 @@ Each WonderNet maps to exactly one Headscale "user" (namespace). Nodes within a 
 }
 ```
 
-Each rule allows nodes within the same namespace to communicate. Cross-namespace communication is denied by default.
+Each rule allows nodes within the same namespace to communicate. The `@` suffix is Headscale's syntax for "all nodes belonging to this user". Cross-namespace communication is denied by default.
 
 ### ACL Management
 
