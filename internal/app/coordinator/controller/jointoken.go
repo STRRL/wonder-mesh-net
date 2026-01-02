@@ -41,7 +41,7 @@ func (c *JoinTokenController) HandleCreateJoinToken(w http.ResponseWriter, r *ht
 		return
 	}
 
-	token, err := c.workerService.GenerateJoinToken(r.Context(), wonderNet, 1*time.Hour)
+	token, err := c.workerService.GenerateJoinToken(r.Context(), wonderNet, 8*time.Hour)
 	if err != nil {
 		slog.Error("generate join token", "error", err)
 		http.Error(w, "generate join token", http.StatusInternalServerError)
@@ -51,6 +51,6 @@ func (c *JoinTokenController) HandleCreateJoinToken(w http.ResponseWriter, r *ht
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(JoinTokenResponse{
 		Token:     token,
-		ExpiresIn: 3600,
+		ExpiresIn: 28800,
 	})
 }
