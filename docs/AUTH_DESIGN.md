@@ -92,7 +92,7 @@ sequenceDiagram
     participant Keycloak
     participant IdP as External IdP
 
-    User->>Coordinator: GET /oidc/login
+    User->>Coordinator: GET /coordinator/oidc/login
     Coordinator-->>User: Redirect to Keycloak
 
     User->>Keycloak: Select external IdP
@@ -104,7 +104,7 @@ sequenceDiagram
     Note over Keycloak: Create/link user<br/>Issue Keycloak JWT
 
     Keycloak-->>User: Redirect with auth code
-    User->>Coordinator: GET /oidc/callback?code=xxx
+    User->>Coordinator: GET /coordinator/oidc/callback?code=xxx
     Coordinator->>Keycloak: Exchange code for JWT
     Keycloak-->>Coordinator: Keycloak JWT
     Coordinator-->>User: Set session cookie
@@ -222,7 +222,7 @@ sequenceDiagram
 
     rect rgb(230, 255, 230)
     Note over Worker,Mesh: Step 3: Worker Joins Mesh
-    Worker->>Portal: POST /worker/join {token}
+    Worker->>Portal: POST /coordinator/api/v1/worker/join {token}
     Portal-->>Worker: {authkey, login_server}
     Worker->>Mesh: tailscale up --authkey=xxx
     Mesh-->>Worker: Connected, IP assigned
@@ -246,13 +246,13 @@ sequenceDiagram
     participant Keycloak as OIDC Provider
     participant Headscale
 
-    User->>Coordinator: GET /oidc/login
+    User->>Coordinator: GET /coordinator/oidc/login
     Coordinator-->>User: Redirect to provider
 
     User->>Keycloak: Authenticate
     Keycloak-->>User: Redirect with auth code
 
-    User->>Coordinator: GET /oidc/callback?code=xxx
+    User->>Coordinator: GET /coordinator/oidc/callback?code=xxx
     Coordinator->>Keycloak: Exchange code for tokens
     Keycloak-->>Coordinator: ID Token + Access Token
 
@@ -271,7 +271,7 @@ sequenceDiagram
     participant Headscale
     participant Tailscale
 
-    Worker->>Coordinator: POST /api/v1/worker/join<br/>{token: "eyJ..."}
+    Worker->>Coordinator: POST /coordinator/api/v1/worker/join<br/>{token: "eyJ..."}
 
     Note over Coordinator: Validate join token (HMAC)<br/>Extract WonderNet ID
 
@@ -291,7 +291,7 @@ sequenceDiagram
     participant Coordinator
     participant Database
 
-    Deployer->>Coordinator: POST /api/v1/deployer/join<br/>Authorization: Bearer wmn_xxx...
+    Deployer->>Coordinator: POST /coordinator/api/v1/deployer/join<br/>Authorization: Bearer wmn_xxx...
 
     Note over Coordinator: Hash API key
 
@@ -309,16 +309,16 @@ sequenceDiagram
 
 | Endpoint | JWT Session | API Key | None | Notes |
 |----------|:-----------:|:-------:|:----:|-------|
-| `GET /oidc/login` | - | - | ✅ | Start OIDC flow |
-| `GET /oidc/callback` | - | - | ✅ | OIDC callback |
-| `POST /api/v1/join-token` | ✅ | ❌ | - | Privileged: generate join token |
-| `POST /api/v1/authkey` | ✅ | ❌ | - | Privileged: direct authkey |
-| `GET /api/v1/api-keys` | ✅ | ❌ | - | Privileged: list API keys |
-| `POST /api/v1/api-keys` | ✅ | ❌ | - | Privileged: create API key |
-| `DELETE /api/v1/api-keys/{id}` | ✅ | ❌ | - | Privileged: delete API key |
-| `GET /api/v1/nodes` | ✅ | ✅ | - | Read-only |
-| `POST /api/v1/deployer/join` | ❌ | ✅ | - | Third-party integration |
-| `POST /api/v1/worker/join` | - | - | ✅ | Validates join token internally |
+| `GET /coordinator/oidc/login` | - | - | ✅ | Start OIDC flow |
+| `GET /coordinator/oidc/callback` | - | - | ✅ | OIDC callback |
+| `POST /coordinator/api/v1/join-token` | ✅ | ❌ | - | Privileged: generate join token |
+| `POST /coordinator/api/v1/authkey` | ✅ | ❌ | - | Privileged: direct authkey |
+| `GET /coordinator/api/v1/api-keys` | ✅ | ❌ | - | Privileged: list API keys |
+| `POST /coordinator/api/v1/api-keys` | ✅ | ❌ | - | Privileged: create API key |
+| `DELETE /coordinator/api/v1/api-keys/{id}` | ✅ | ❌ | - | Privileged: delete API key |
+| `GET /coordinator/api/v1/nodes` | ✅ | ✅ | - | Read-only |
+| `POST /coordinator/api/v1/deployer/join` | ❌ | ✅ | - | Third-party integration |
+| `POST /coordinator/api/v1/worker/join` | - | - | ✅ | Validates join token internally |
 | `GET /coordinator/health` | - | - | ✅ | Health check |
 
 **Security Principle**: API keys cannot call privileged endpoints to prevent privilege escalation.
