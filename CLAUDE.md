@@ -73,8 +73,9 @@ pkg/
 **Auth flow**: User logs in via OIDC -> coordinator creates Headscale user -> generates session token -> user creates join token -> worker exchanges token for PreAuthKey -> runs `tailscale up` with authkey.
 
 **Coordinator endpoints**:
-- `/coordinator/oidc/login?provider=github` - Start OIDC flow (planned, see #50)
-- `/coordinator/oidc/callback` - OIDC callback, creates realm (planned, see #50)
+- `/coordinator/oidc/login` - Start OIDC flow, redirect to Keycloak (no auth required)
+- `/coordinator/oidc/callback` - OIDC callback, create session cookie (no auth required)
+- `/coordinator/oidc/logout` - Clear session cookie (no auth required)
 - `/coordinator/api/v1/join-token` - Generate JWT for worker join (session only)
 - `/coordinator/api/v1/worker/join` - Worker exchanges JWT for Headscale PreAuthKey (no auth required)
 - `/coordinator/api/v1/nodes` - List nodes (session or API key)
