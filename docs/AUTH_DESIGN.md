@@ -446,7 +446,7 @@ The Keycloak realm should be configured with:
 1. **Client for Coordinator**
    - Client ID: `coordinator`
    - Access Type: confidential
-   - Valid Redirect URIs: `https://coordinator.example.com/oidc/callback`
+   - Valid Redirect URIs: `https://coordinator.example.com/coordinator/oidc/callback`
 
 2. **Identity Providers** (for multi-provider support)
    - Any OIDC-compliant IdP

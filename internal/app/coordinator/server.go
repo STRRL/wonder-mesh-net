@@ -39,6 +39,7 @@ type Server struct {
 
 	// Auth components
 	jwtValidator *jwtauth.Validator
+	oidcService  *service.OIDCService
 
 	// Mesh backend
 	meshBackend meshbackend.MeshBackend
@@ -159,6 +160,14 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 	}
 	slog.Info("JWT validator started", "jwks_url", jwksURL)
 
+	oidcService := service.NewOIDCService(service.OIDCConfig{
+		KeycloakURL:  config.KeycloakURL,
+		Realm:        config.KeycloakRealm,
+		ClientID:     config.KeycloakClientID,
+		ClientSecret: config.KeycloakClientSecret,
+		RedirectURI:  config.PublicURL + "/coordinator/oidc/callback",
+	}, jwtValidator)
+
 	return &Server{
 		config:                  config,
 		db:                      db,
@@ -166,6 +175,7 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 		headscaleClient:         headscaleClient,
 		headscaleProcessManager: headscaleProcessManager,
 		jwtValidator:            jwtValidator,
+		oidcService:             oidcService,
 		meshBackend:             meshBackend,
 		wonderNetRepository:     wonderNetRepository,
 		apiKeyRepository:        apiKeyRepository,
@@ -177,25 +187,39 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 }
 
 // requireAuth wraps a handler with JWT authentication.
-// It validates the JWT token and adds the claims to the request context.
+// It validates the JWT token (from Authorization header) or session cookie
+// and adds the claims to the request context.
 // This middleware only handles authentication, not WonderNet resolution.
 func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := extractBearerToken(r)
-		if token == "" {
-			http.Error(w, "authorization required", http.StatusUnauthorized)
+		if token != "" {
+			claims, err := s.jwtValidator.Validate(token)
+			if err != nil {
+				slog.Debug("JWT validation failed", "error", err)
+				http.Error(w, "invalid token", http.StatusUnauthorized)
+				return
+			}
+			ctx := context.WithValue(r.Context(), jwtauth.ContextKeyClaims, claims)
+			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
 
-		claims, err := s.jwtValidator.Validate(token)
-		if err != nil {
-			slog.Debug("JWT validation failed", "error", err)
-			http.Error(w, "invalid token", http.StatusUnauthorized)
-			return
+		cookie, err := r.Cookie(s.oidcService.GetSessionCookieName())
+		if err == nil && cookie.Value != "" {
+			session, err := s.oidcService.GetSession(cookie.Value)
+			if err == nil {
+				claims, err := s.jwtValidator.Validate(session.AccessToken)
+				if err == nil {
+					ctx := context.WithValue(r.Context(), jwtauth.ContextKeyClaims, claims)
+					next.ServeHTTP(w, r.WithContext(ctx))
+					return
+				}
+				slog.Debug("session access token validation failed", "error", err)
+			}
 		}
 
-		ctx := context.WithValue(r.Context(), jwtauth.ContextKeyClaims, claims)
-		next.ServeHTTP(w, r.WithContext(ctx))
+		http.Error(w, "authorization required", http.StatusUnauthorized)
 	}
 }
 
@@ -249,20 +273,16 @@ func (s *Server) requireAPIKey(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// requireAuthOrAPIKey wraps a handler that accepts either JWT session auth or API key auth.
-// For JWT auth, it validates the token and resolves the WonderNet from claims.
+// requireAuthOrAPIKey wraps a handler that accepts JWT session auth, session cookie, or API key auth.
+// For JWT/session auth, it validates the token and resolves the WonderNet from claims.
 // For API key auth, it validates the key and uses the associated WonderNet.
 // This is used for read-only endpoints that should be accessible to both users and third-party integrations.
 func (s *Server) requireAuthOrAPIKey(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := extractBearerToken(r)
-		if token == "" {
-			http.Error(w, "authorization required", http.StatusUnauthorized)
-			return
-		}
 
 		// Check if it's an API key
-		if apikey.IsAPIKey(token) {
+		if token != "" && apikey.IsAPIKey(token) {
 			wonderNet, err := s.apiKeyService.ValidateAPIKey(r.Context(), token)
 			if err != nil {
 				slog.Debug("API key validation failed", "error", err)
@@ -274,23 +294,47 @@ func (s *Server) requireAuthOrAPIKey(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		// Otherwise, try JWT auth
-		claims, err := s.jwtValidator.Validate(token)
-		if err != nil {
-			slog.Debug("JWT validation failed", "error", err)
-			http.Error(w, "invalid token", http.StatusUnauthorized)
+		// Try JWT from Authorization header
+		if token != "" {
+			claims, err := s.jwtValidator.Validate(token)
+			if err != nil {
+				slog.Debug("JWT validation failed", "error", err)
+				http.Error(w, "invalid token", http.StatusUnauthorized)
+				return
+			}
+
+			wonderNet, err := s.wonderNetService.ResolveWonderNetFromClaims(r.Context(), claims)
+			if err != nil {
+				slog.Error("resolve wonder net from claims", "error", err)
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
+			}
+
+			ctx := context.WithValue(r.Context(), controller.ContextKeyWonderNet, wonderNet)
+			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
 
-		wonderNet, err := s.wonderNetService.ResolveWonderNetFromClaims(r.Context(), claims)
-		if err != nil {
-			slog.Error("resolve wonder net from claims", "error", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
+		// Try session cookie
+		cookie, err := r.Cookie(s.oidcService.GetSessionCookieName())
+		if err == nil && cookie.Value != "" {
+			session, err := s.oidcService.GetSession(cookie.Value)
+			if err == nil {
+				claims, err := s.jwtValidator.Validate(session.AccessToken)
+				if err == nil {
+					wonderNet, err := s.wonderNetService.ResolveWonderNetFromClaims(r.Context(), claims)
+					if err == nil {
+						ctx := context.WithValue(r.Context(), controller.ContextKeyWonderNet, wonderNet)
+						next.ServeHTTP(w, r.WithContext(ctx))
+						return
+					}
+					slog.Error("resolve wonder net from claims", "error", err)
+				}
+				slog.Debug("session access token validation failed", "error", err)
+			}
 		}
 
-		ctx := context.WithValue(r.Context(), controller.ContextKeyWonderNet, wonderNet)
-		next.ServeHTTP(w, r.WithContext(ctx))
+		http.Error(w, "authorization required", http.StatusUnauthorized)
 	}
 }
 
@@ -317,6 +361,14 @@ func (s *Server) Run() error {
 	apiKeyController := controller.NewAPIKeyController(s.apiKeyService)
 	deployerController := controller.NewDeployerController(s.meshBackend)
 
+	secureCookie := strings.HasPrefix(s.config.PublicURL, "https://")
+	oidcController := controller.NewOIDCController(
+		s.oidcService,
+		s.wonderNetService,
+		s.config.PublicURL,
+		secureCookie,
+	)
+
 	headscaleProxy, err := controller.NewHeadscaleProxyController("http://127.0.0.1:8080")
 	if err != nil {
 		return err
@@ -324,6 +376,11 @@ func (s *Server) Run() error {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /coordinator/health", healthController.ServeHTTP)
+
+	// OIDC authentication endpoints (no auth required)
+	mux.HandleFunc("GET /coordinator/oidc/login", oidcController.HandleLogin)
+	mux.HandleFunc("GET /coordinator/oidc/callback", oidcController.HandleCallback)
+	mux.HandleFunc("GET /coordinator/oidc/logout", oidcController.HandleLogout)
 
 	// Worker endpoints (join token exchange doesn't require auth)
 	mux.HandleFunc("POST /coordinator/api/v1/worker/join", workerController.HandleWorkerJoin)

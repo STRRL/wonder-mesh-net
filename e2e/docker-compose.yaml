@@ -25,6 +25,7 @@ services:
       KEYCLOAK_URL: http://keycloak:8080
       KEYCLOAK_REALM: wonder
       KEYCLOAK_CLIENT_ID: wonder-mesh-net
+      KEYCLOAK_CLIENT_SECRET: wonder-secret
       PUBLIC_URL: http://coordinator:9080
     volumes:
       - ./headscale-config.yaml:/etc/headscale/config.yaml
