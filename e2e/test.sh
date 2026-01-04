@@ -127,6 +127,36 @@ else
 fi
 
 # ============================================
+# Test OIDC Login Endpoint
+# ============================================
+log_info "=== Testing OIDC Login Endpoint ==="
+
+log_info "Testing /coordinator/oidc/login redirect..."
+LOGIN_RESPONSE=$(docker exec deployer curl -sI "http://coordinator:9080/coordinator/oidc/login" 2>&1)
+
+if echo "$LOGIN_RESPONSE" | grep -q "302 Found"; then
+    log_info "OIDC login endpoint returns 302 redirect (expected)"
+else
+    log_error "OIDC login endpoint did not return 302"
+    echo "$LOGIN_RESPONSE"
+fi
+
+LOCATION_HEADER=$(echo "$LOGIN_RESPONSE" | grep -i "^location:" | head -1)
+if echo "$LOCATION_HEADER" | grep -q "keycloak:8080/realms/wonder"; then
+    log_info "OIDC login redirects to Keycloak (expected)"
+else
+    log_warn "OIDC login redirect location unexpected: $LOCATION_HEADER"
+fi
+
+if echo "$LOGIN_RESPONSE" | grep -iq "set-cookie.*wonder_oauth_state"; then
+    log_info "OIDC login sets state cookie (expected)"
+else
+    log_warn "OIDC login state cookie not found"
+fi
+
+log_info "=== OIDC Login Endpoint Test Complete ==="
+
+# ============================================
 # Get access token from Keycloak using ROPC
 # ============================================
 log_info "Getting access token from Keycloak..."

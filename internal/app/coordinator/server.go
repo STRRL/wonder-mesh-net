@@ -52,6 +52,7 @@ type Server struct {
 	workerService    *service.WorkerService
 	nodesService     *service.NodesService
 	apiKeyService    *service.APIKeyService
+	oidcService      *service.OIDCService
 }
 
 // BootstrapNewServer creates a new coordinator server.
@@ -159,6 +160,15 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 	}
 	slog.Info("JWT validator started", "jwks_url", jwksURL)
 
+	// Create OIDC service for login/callback flow
+	oidcService := service.NewOIDCService(service.OIDCConfig{
+		KeycloakURL:  config.KeycloakURL,
+		Realm:        config.KeycloakRealm,
+		ClientID:     config.KeycloakClientID,
+		ClientSecret: config.KeycloakClientSecret,
+		RedirectURI:  config.PublicURL + "/coordinator/oidc/callback",
+	}, jwtValidator)
+
 	return &Server{
 		config:                  config,
 		db:                      db,
@@ -173,6 +183,7 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 		workerService:           workerService,
 		nodesService:            nodesService,
 		apiKeyService:           apiKeyService,
+		oidcService:             oidcService,
 	}, nil
 }
 
@@ -316,6 +327,11 @@ func (s *Server) Run() error {
 	nodesController := controller.NewNodesController(s.nodesService)
 	apiKeyController := controller.NewAPIKeyController(s.apiKeyService)
 	deployerController := controller.NewDeployerController(s.meshBackend)
+	oidcController := controller.NewOIDCController(
+		s.oidcService,
+		s.wonderNetService,
+		strings.HasPrefix(s.config.PublicURL, "https://"),
+	)
 
 	headscaleProxy, err := controller.NewHeadscaleProxyController("http://127.0.0.1:8080")
 	if err != nil {
@@ -324,6 +340,10 @@ func (s *Server) Run() error {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /coordinator/health", healthController.ServeHTTP)
+
+	// OIDC endpoints (no auth required - these initiate/complete the auth flow)
+	mux.HandleFunc("GET /coordinator/oidc/login", oidcController.HandleLogin)
+	mux.HandleFunc("GET /coordinator/oidc/callback", oidcController.HandleCallback)
 
 	// Worker endpoints (join token exchange doesn't require auth)
 	mux.HandleFunc("POST /coordinator/api/v1/worker/join", workerController.HandleWorkerJoin)
