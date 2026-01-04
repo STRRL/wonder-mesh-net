@@ -151,7 +151,7 @@ func TestOIDCController_HandleLogout(t *testing.T) {
 	oidcService := service.NewOIDCService(config, nil)
 	controller := NewOIDCController(oidcService, nil, "https://coordinator.example.com", true)
 
-	sessionID, _ := oidcService.CreateSession("user-123", "access-token", "refresh-token", 3600)
+	sessionID, _, _ := oidcService.CreateSession("user-123", "access-token", "refresh-token", 3600)
 
 	req := httptest.NewRequest(http.MethodGet, "/coordinator/oidc/logout", nil)
 	req.AddCookie(&http.Cookie{Name: oidcService.GetSessionCookieName(), Value: sessionID})
@@ -199,15 +199,21 @@ func TestOIDCController_DeterminePostLoginRedirect(t *testing.T) {
 	controller := NewOIDCController(oidcService, nil, "https://coordinator.example.com", true)
 
 	tests := []struct {
-		name     string
-		query    string
-		want     string
+		name  string
+		query string
+		want  string
 	}{
 		{"no redirect_to", "", "/"},
 		{"valid path", "?redirect_to=/dashboard", "/dashboard"},
-		{"same host", "?redirect_to=https://coordinator.example.com/settings", "/"},
-		{"different host", "?redirect_to=https://evil.com/phish", "/"},
-		{"invalid url", "?redirect_to=://invalid", "/"},
+		{"valid nested path", "?redirect_to=/api/v1/nodes", "/api/v1/nodes"},
+		{"valid path with query", "?redirect_to=/dashboard?tab=settings", "/dashboard?tab=settings"},
+		{"absolute URL same host", "?redirect_to=https://coordinator.example.com/settings", "/"},
+		{"absolute URL different host", "?redirect_to=https://evil.com/phish", "/"},
+		{"protocol-relative URL", "?redirect_to=//evil.com/phish", "/"},
+		{"javascript scheme", "?redirect_to=javascript:alert(1)", "/"},
+		{"data scheme", "?redirect_to=data:text/html,<script>alert(1)</script>", "/"},
+		{"empty path", "?redirect_to=", "/"},
+		{"just slash", "?redirect_to=/", "/"},
 	}
 
 	for _, tt := range tests {
@@ -216,6 +222,37 @@ func TestOIDCController_DeterminePostLoginRedirect(t *testing.T) {
 			got := controller.determinePostLoginRedirect(req)
 			if got != tt.want {
 				t.Errorf("determinePostLoginRedirect() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsSafeRedirectPath(t *testing.T) {
+	tests := []struct {
+		path string
+		want bool
+	}{
+		{"/", true},
+		{"/dashboard", true},
+		{"/api/v1/nodes", true},
+		{"/path?query=value", true},
+		{"", false},
+		{"//evil.com", false},
+		{"//evil.com/path", false},
+		{"javascript:alert(1)", false},
+		{"data:text/html,<script>", false},
+		{"https://evil.com", false},
+		{"http://evil.com", false},
+		{"ftp://evil.com", false},
+		{"relative/path", false},
+		{"../parent", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			got := isSafeRedirectPath(tt.path)
+			if got != tt.want {
+				t.Errorf("isSafeRedirectPath(%q) = %v, want %v", tt.path, got, tt.want)
 			}
 		})
 	}

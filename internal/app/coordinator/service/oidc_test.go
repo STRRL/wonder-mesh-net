@@ -92,12 +92,15 @@ func TestOIDCService_Session(t *testing.T) {
 	}
 	svc := NewOIDCService(config, nil)
 
-	sessionID, err := svc.CreateSession("user-123", "access-token", "refresh-token", 3600)
+	sessionID, ttl, err := svc.CreateSession("user-123", "access-token", "refresh-token", 3600)
 	if err != nil {
 		t.Fatalf("CreateSession: %v", err)
 	}
 	if sessionID == "" {
 		t.Error("sessionID should not be empty")
+	}
+	if ttl != time.Hour {
+		t.Errorf("ttl = %v, want %v", ttl, time.Hour)
 	}
 
 	session, err := svc.GetSession(sessionID)
@@ -121,6 +124,41 @@ func TestOIDCService_Session(t *testing.T) {
 	svc.DeleteSession(sessionID)
 	if _, err := svc.GetSession(sessionID); err != ErrSessionNotFound {
 		t.Errorf("GetSession after delete = %v, want ErrSessionNotFound", err)
+	}
+}
+
+func TestOIDCService_SessionTTL(t *testing.T) {
+	config := OIDCConfig{
+		KeycloakURL:  "https://auth.example.com",
+		Realm:        "wonder-mesh",
+		ClientID:     "coordinator",
+		ClientSecret: "secret",
+		RedirectURI:  "https://coordinator.example.com/coordinator/oidc/callback",
+	}
+	svc := NewOIDCService(config, nil)
+
+	tests := []struct {
+		name      string
+		expiresIn int
+		wantTTL   time.Duration
+	}{
+		{"short token (5 min)", 300, 5 * time.Minute},
+		{"medium token (1 hour)", 3600, time.Hour},
+		{"long token (exceeds 24h)", 100000, 24 * time.Hour},
+		{"zero expiresIn", 0, 24 * time.Hour},
+		{"negative expiresIn", -1, 24 * time.Hour},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, ttl, err := svc.CreateSession("user", "token", "refresh", tt.expiresIn)
+			if err != nil {
+				t.Fatalf("CreateSession: %v", err)
+			}
+			if ttl != tt.wantTTL {
+				t.Errorf("ttl = %v, want %v", ttl, tt.wantTTL)
+			}
+		})
 	}
 }
 

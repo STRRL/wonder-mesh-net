@@ -160,14 +160,12 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 	}
 	slog.Info("JWT validator started", "jwks_url", jwksURL)
 
-	// Create OIDC service for login flow
 	oidcService := service.NewOIDCService(service.OIDCConfig{
 		KeycloakURL:  config.KeycloakURL,
 		Realm:        config.KeycloakRealm,
 		ClientID:     config.KeycloakClientID,
 		ClientSecret: config.KeycloakClientSecret,
 		RedirectURI:  config.PublicURL + "/coordinator/oidc/callback",
-		JWTSecret:    config.JWTSecret,
 	}, jwtValidator)
 
 	return &Server{

@@ -59,6 +59,11 @@ func runCoordinator(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	if cfg.KeycloakClientSecret == "" {
+		slog.Error("KEYCLOAK_CLIENT_SECRET environment variable is required")
+		os.Exit(1)
+	}
+
 	server, err := coordinator.BootstrapNewServer(&cfg)
 	if err != nil {
 		slog.Error("create server", "error", err)

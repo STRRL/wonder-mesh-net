@@ -3,11 +3,27 @@ package controller
 import (
 	"log/slog"
 	"net/http"
-	"net/url"
+	"strings"
 	"time"
 
 	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/service"
 )
+
+// isSafeRedirectPath checks if the redirect path is safe to use.
+// Only allows relative paths starting with "/" but not "//".
+// This prevents open redirect attacks via javascript:, data:, or protocol-relative URLs.
+func isSafeRedirectPath(path string) bool {
+	if path == "" {
+		return false
+	}
+	if !strings.HasPrefix(path, "/") {
+		return false
+	}
+	if strings.HasPrefix(path, "//") {
+		return false
+	}
+	return true
+}
 
 const (
 	defaultPostLoginRedirect = "/"
@@ -108,7 +124,7 @@ func (c *OIDCController) HandleCallback(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	sessionID, err := c.oidcService.CreateSession(
+	sessionID, sessionTTL, err := c.oidcService.CreateSession(
 		claims.Subject,
 		tokenResp.AccessToken,
 		tokenResp.RefreshToken,
@@ -127,7 +143,7 @@ func (c *OIDCController) HandleCallback(w http.ResponseWriter, r *http.Request) 
 		HttpOnly: true,
 		Secure:   c.secureCookie,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int(24 * time.Hour / time.Second),
+		MaxAge:   int(sessionTTL / time.Second),
 	}
 	http.SetCookie(w, cookie)
 
@@ -157,21 +173,10 @@ func (c *OIDCController) HandleLogout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
-// determinePostLoginRedirect determines where to redirect after successful login.
 func (c *OIDCController) determinePostLoginRedirect(r *http.Request) string {
 	redirectTo := r.URL.Query().Get("redirect_to")
-	if redirectTo == "" {
+	if !isSafeRedirectPath(redirectTo) {
 		return defaultPostLoginRedirect
 	}
-
-	parsed, err := url.Parse(redirectTo)
-	if err != nil {
-		return defaultPostLoginRedirect
-	}
-
-	if parsed.Host != "" && parsed.Host != r.Host {
-		return defaultPostLoginRedirect
-	}
-
 	return redirectTo
 }

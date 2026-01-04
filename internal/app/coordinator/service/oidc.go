@@ -19,20 +19,19 @@ import (
 )
 
 const (
-	stateLength     = 32
-	stateTTL        = 10 * time.Minute
+	stateLength       = 32
+	stateTTL          = 10 * time.Minute
 	sessionCookieName = "wonder_session"
-	sessionTTL      = 24 * time.Hour
+	sessionTTL        = 24 * time.Hour
+	cleanupInterval   = 5 * time.Minute
 )
 
-// OIDCConfig holds configuration for the OIDC service.
 type OIDCConfig struct {
-	KeycloakURL      string
-	Realm            string
-	ClientID         string
-	ClientSecret     string
-	RedirectURI      string
-	JWTSecret        string
+	KeycloakURL  string
+	Realm        string
+	ClientID     string
+	ClientSecret string
+	RedirectURI  string
 }
 
 // TokenResponse represents the response from the token endpoint.
@@ -58,24 +57,47 @@ type OIDCService struct {
 	jwtValidator *jwtauth.Validator
 	httpClient   *http.Client
 
-	states   map[string]time.Time
-	stateMu  sync.RWMutex
+	states  map[string]time.Time
+	stateMu sync.RWMutex
 
 	sessions  map[string]*SessionData
 	sessionMu sync.RWMutex
+
+	stopCleanup chan struct{}
 }
 
-// NewOIDCService creates a new OIDC service.
 func NewOIDCService(config OIDCConfig, jwtValidator *jwtauth.Validator) *OIDCService {
-	return &OIDCService{
+	s := &OIDCService{
 		config:       config,
 		jwtValidator: jwtValidator,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		states:   make(map[string]time.Time),
-		sessions: make(map[string]*SessionData),
+		states:      make(map[string]time.Time),
+		sessions:    make(map[string]*SessionData),
+		stopCleanup: make(chan struct{}),
 	}
+	go s.runCleanup()
+	return s
+}
+
+func (s *OIDCService) runCleanup() {
+	ticker := time.NewTicker(cleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			s.CleanupExpiredStates()
+			s.CleanupExpiredSessions()
+		case <-s.stopCleanup:
+			return
+		}
+	}
+}
+
+func (s *OIDCService) Stop() {
+	close(s.stopCleanup)
 }
 
 // GenerateAuthURL generates the Keycloak authorization URL with a new state parameter.
@@ -177,11 +199,18 @@ func (s *OIDCService) ValidateIDToken(idToken string) (*jwtauth.Claims, error) {
 	return claims, nil
 }
 
-// CreateSession creates a new session for the authenticated user.
-func (s *OIDCService) CreateSession(userID, accessToken, refreshToken string, expiresIn int) (string, error) {
+func (s *OIDCService) CreateSession(userID, accessToken, refreshToken string, expiresIn int) (string, time.Duration, error) {
 	sessionID, err := generateRandomString(32)
 	if err != nil {
-		return "", fmt.Errorf("generate session ID: %w", err)
+		return "", 0, fmt.Errorf("generate session ID: %w", err)
+	}
+
+	ttl := sessionTTL
+	if expiresIn > 0 {
+		tokenTTL := time.Duration(expiresIn) * time.Second
+		if tokenTTL < ttl {
+			ttl = tokenTTL
+		}
 	}
 
 	sessionHash := hashSessionID(sessionID)
@@ -191,11 +220,11 @@ func (s *OIDCService) CreateSession(userID, accessToken, refreshToken string, ex
 		UserID:       userID,
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
-		ExpiresAt:    time.Now().Add(sessionTTL),
+		ExpiresAt:    time.Now().Add(ttl),
 	}
 	s.sessionMu.Unlock()
 
-	return sessionID, nil
+	return sessionID, ttl, nil
 }
 
 // GetSession retrieves session data by session ID.
@@ -260,13 +289,16 @@ func (s *OIDCService) GetSessionCookieName() string {
 	return sessionCookieName
 }
 
-// generateRandomString generates a cryptographically secure random string.
 func generateRandomString(length int) (string, error) {
-	bytes := make([]byte, length)
+	if length <= 0 {
+		return "", nil
+	}
+	bytesNeeded := (length*6 + 7) / 8
+	bytes := make([]byte, bytesNeeded)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", err
 	}
-	return base64.URLEncoding.EncodeToString(bytes)[:length], nil
+	return base64.RawURLEncoding.EncodeToString(bytes)[:length], nil
 }
 
 // hashSessionID creates a SHA256 hash of the session ID for storage.
