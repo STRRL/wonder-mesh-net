@@ -113,9 +113,8 @@ fi
 log_info "Access token obtained: ${ACCESS_TOKEN:0:50}..."
 
 log_info "Creating join token..."
-JOIN_TOKEN_RESPONSE=$(docker exec deployer curl -s -X POST \
+JOIN_TOKEN_RESPONSE=$(docker exec deployer curl -s \
     -H "Authorization: Bearer $ACCESS_TOKEN" \
-    -H "Content-Type: application/json" \
     "http://nginx/coordinator/api/v1/join-token")
 
 JOIN_TOKEN=$(echo "$JOIN_TOKEN_RESPONSE" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')

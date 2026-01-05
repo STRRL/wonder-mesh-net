@@ -27,10 +27,10 @@ type JoinTokenResponse struct {
 	ExpiresIn int    `json:"expires_in"`
 }
 
-// HandleCreateJoinToken handles POST /api/v1/join-token requests.
+// HandleCreateJoinToken handles GET /api/v1/join-token requests.
 // Creates a JWT join token for worker nodes.
 func (c *JoinTokenController) HandleCreateJoinToken(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
