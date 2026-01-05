@@ -1,12 +1,14 @@
-server_url: http://coordinator:9080
+server_url: http://nginx
 listen_addr: 0.0.0.0:8080
 metrics_listen_addr: ""
-grpc_listen_addr: 127.0.0.1:50443
+grpc_listen_addr: 0.0.0.0:50443
 grpc_allow_insecure: true
+unix_socket: /var/run/headscale/headscale.sock
+unix_socket_permission: "0770"
 
-private_key_path: /data/headscale/private.key
+private_key_path: /var/lib/headscale/private.key
 noise:
-  private_key_path: /data/headscale/noise_private.key
+  private_key_path: /var/lib/headscale/noise_private.key
 
 prefixes:
   v4: 100.64.0.0/10
@@ -16,7 +18,7 @@ prefixes:
 database:
   type: sqlite
   sqlite:
-    path: /data/headscale/db.sqlite
+    path: /var/lib/headscale/db.sqlite
 
 derp:
   server:

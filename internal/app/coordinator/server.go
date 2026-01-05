@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -31,24 +30,19 @@ const minJWTSecretLength = 32
 
 // Server is the coordinator server that manages multi-tenant wonder net access.
 type Server struct {
-	config                  *Config
-	db                      *database.Manager
-	headscaleConn           *grpc.ClientConn
-	headscaleClient         v1.HeadscaleServiceClient
-	headscaleProcessManager *headscale.ProcessManager
+	config          *Config
+	db              *database.Manager
+	headscaleConn   *grpc.ClientConn
+	headscaleClient v1.HeadscaleServiceClient
 
-	// Auth components
 	jwtValidator *jwtauth.Validator
 	oidcService  *service.OIDCService
 
-	// Mesh backend
 	meshBackend meshbackend.MeshBackend
 
-	// Repositories
 	wonderNetRepository *repository.WonderNetRepository
 	apiKeyRepository    *repository.APIKeyRepository
 
-	// Services
 	wonderNetService *service.WonderNetService
 	workerService    *service.WorkerService
 	nodesService     *service.NodesService
@@ -64,9 +58,6 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 	if err := os.MkdirAll(DefaultCoordinatorDataDir, 0755); err != nil {
 		return nil, fmt.Errorf("create coordinator data dir: %w", err)
 	}
-	if err := os.MkdirAll(DefaultHeadscaleDataDir, 0755); err != nil {
-		return nil, fmt.Errorf("create headscale data dir: %w", err)
-	}
 
 	db, err := database.NewManager(database.Config{
 		Driver: database.DriverSQLite,
@@ -80,45 +71,14 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	slog.Info("starting embedded Headscale")
-
-	configPath := filepath.Join(DefaultHeadscaleConfigDir, "config.yaml")
-	headscaleProcessManager := headscale.NewProcessManager(headscale.ProcessConfig{
-		BinaryPath: DefaultHeadscaleBinary,
-		ConfigPath: configPath,
-		DataDir:    DefaultHeadscaleDataDir,
-	})
-
-	if err := headscaleProcessManager.Start(ctx); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("start headscale: %w", err)
-	}
-
-	if err := headscaleProcessManager.WaitReady(ctx, 30*time.Second); err != nil {
-		_ = headscaleProcessManager.Stop()
-		_ = db.Close()
-		return nil, fmt.Errorf("headscale not ready: %w", err)
-	}
-
-	slog.Info("Headscale started successfully")
-
-	apiKey, err := headscaleProcessManager.CreateAPIKey(ctx)
-	if err != nil {
-		_ = headscaleProcessManager.Stop()
-		_ = db.Close()
-		return nil, fmt.Errorf("create headscale API key: %w", err)
-	}
-	slog.Info("Headscale API key created")
-
+	slog.Info("connecting to Headscale", "socket", config.HeadscaleUnixSocket)
 	headscaleConn, err := grpc.NewClient(
-		DefaultHeadscaleGRPCAddr,
+		"unix://"+config.HeadscaleUnixSocket,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithPerRPCCredentials(&headscale.APIKeyCredentials{APIKey: apiKey}),
 	)
 	if err != nil {
-		_ = headscaleProcessManager.Stop()
 		_ = db.Close()
-		return nil, fmt.Errorf("connect to headscale gRPC: %w", err)
+		return nil, fmt.Errorf("connect to headscale: %w", err)
 	}
 	headscaleClient := v1.NewHeadscaleServiceClient(headscaleConn)
 
@@ -152,9 +112,8 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 		RefreshInterval: 5 * time.Minute,
 	})
 
-	// Start JWT validator background refresh
 	if err := jwtValidator.Start(ctx); err != nil {
-		_ = headscaleProcessManager.Stop()
+		_ = headscaleConn.Close()
 		_ = db.Close()
 		return nil, fmt.Errorf("start JWT validator: %w", err)
 	}
@@ -169,20 +128,19 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 	}, jwtValidator)
 
 	return &Server{
-		config:                  config,
-		db:                      db,
-		headscaleConn:           headscaleConn,
-		headscaleClient:         headscaleClient,
-		headscaleProcessManager: headscaleProcessManager,
-		jwtValidator:            jwtValidator,
-		oidcService:             oidcService,
-		meshBackend:             meshBackend,
-		wonderNetRepository:     wonderNetRepository,
-		apiKeyRepository:        apiKeyRepository,
-		wonderNetService:        wonderNetService,
-		workerService:           workerService,
-		nodesService:            nodesService,
-		apiKeyService:           apiKeyService,
+		config:              config,
+		db:                  db,
+		headscaleConn:       headscaleConn,
+		headscaleClient:     headscaleClient,
+		jwtValidator:        jwtValidator,
+		oidcService:         oidcService,
+		meshBackend:         meshBackend,
+		wonderNetRepository: wonderNetRepository,
+		apiKeyRepository:    apiKeyRepository,
+		wonderNetService:    wonderNetService,
+		workerService:       workerService,
+		nodesService:        nodesService,
+		apiKeyService:       apiKeyService,
 	}, nil
 }
 
@@ -369,7 +327,7 @@ func (s *Server) Run() error {
 		secureCookie,
 	)
 
-	headscaleProxy, err := controller.NewHeadscaleProxyController("http://127.0.0.1:8080")
+	headscaleProxy, err := controller.NewHeadscaleProxyController(s.config.HeadscaleURL)
 	if err != nil {
 		return err
 	}
@@ -444,15 +402,9 @@ func (s *Server) Run() error {
 	return s.Close()
 }
 
-// Close closes all server resources
 func (s *Server) Close() error {
 	if s.headscaleConn != nil {
 		_ = s.headscaleConn.Close()
-	}
-	if s.headscaleProcessManager != nil {
-		if err := s.headscaleProcessManager.Stop(); err != nil {
-			slog.Warn("stop headscale", "error", err)
-		}
 	}
 	if s.db != nil {
 		return s.db.Close()

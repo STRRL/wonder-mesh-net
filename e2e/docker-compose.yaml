@@ -1,4 +1,15 @@
 services:
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8080:80"
+    depends_on:
+      - keycloak
+      - headscale
+
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
     container_name: keycloak
@@ -6,38 +17,44 @@ services:
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
-      KC_HOSTNAME_URL: http://keycloak:8080
-      KC_HOSTNAME_ADMIN_URL: http://keycloak:8080
+      KC_HOSTNAME_URL: http://nginx
+      KC_HOSTNAME_ADMIN_URL: http://nginx
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_RELATIVE_PATH: /
+      KC_PROXY_HEADERS: xforwarded
     volumes:
       - ./keycloak-realm.json:/opt/keycloak/data/import/realm.json
-    ports:
-      - "9090:8080"
+
+  headscale:
+    image: headscale/headscale:0.27.1
+    container_name: headscale
+    command: serve
+    volumes:
+      - ./headscale-config.yaml:/etc/headscale/config.yaml:ro
+      - headscale-data:/var/lib/headscale
+      - headscale-run:/var/run/headscale
 
   coordinator:
     build:
       context: ..
       dockerfile: Dockerfile
     container_name: coordinator
+    restart: on-failure
     environment:
       JWT_SECRET: e2e-test-jwt-secret-at-least-32-chars
-      KEYCLOAK_URL: http://keycloak:8080
+      HEADSCALE_URL: http://headscale:8080
+      HEADSCALE_UNIX_SOCKET: /var/run/headscale/headscale.sock
+      KEYCLOAK_URL: http://nginx
       KEYCLOAK_REALM: wonder
       KEYCLOAK_CLIENT_ID: wonder-mesh-net
       KEYCLOAK_CLIENT_SECRET: wonder-secret
-      PUBLIC_URL: http://coordinator:9080
+      PUBLIC_URL: http://nginx
     volumes:
-      - ./headscale-config.yaml:/etc/headscale/config.yaml
-      - coordinator-data:/data
-    ports:
-      - "9080:9080"
+      - headscale-run:/var/run/headscale:ro
+      - coordinator-data:/data/coordinator
     depends_on:
-      - keycloak
-    command:
-      - "coordinator"
-      - "--listen"
-      - ":9080"
+      - headscale
+      - nginx
 
   worker-1:
     build:
@@ -49,7 +66,7 @@ services:
     volumes:
       - /dev/net/tun:/dev/net/tun
     depends_on:
-      - coordinator
+      - nginx
 
   worker-2:
     build:
@@ -61,7 +78,7 @@ services:
     volumes:
       - /dev/net/tun:/dev/net/tun
     depends_on:
-      - coordinator
+      - nginx
 
   worker-3:
     build:
@@ -73,7 +90,7 @@ services:
     volumes:
       - /dev/net/tun:/dev/net/tun
     depends_on:
-      - coordinator
+      - nginx
 
   deployer:
     build:
@@ -82,7 +99,9 @@ services:
     container_name: deployer
     hostname: deployer
     depends_on:
-      - coordinator
+      - nginx
 
 volumes:
+  headscale-data:
+  headscale-run:
   coordinator-data:
