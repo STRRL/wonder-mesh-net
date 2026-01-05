@@ -28,6 +28,8 @@ func NewCoordinatorCmd() *cobra.Command {
 	_ = viper.BindEnv("coordinator.listen", "LISTEN")
 	_ = viper.BindEnv("coordinator.public_url", "PUBLIC_URL")
 	_ = viper.BindEnv("coordinator.jwt_secret", "JWT_SECRET")
+	_ = viper.BindEnv("coordinator.headscale_url", "HEADSCALE_URL")
+	_ = viper.BindEnv("coordinator.headscale_unix_socket", "HEADSCALE_UNIX_SOCKET")
 	_ = viper.BindEnv("coordinator.keycloak_url", "KEYCLOAK_URL")
 	_ = viper.BindEnv("coordinator.keycloak_realm", "KEYCLOAK_REALM")
 	_ = viper.BindEnv("coordinator.keycloak_client_id", "KEYCLOAK_CLIENT_ID")
@@ -43,10 +45,19 @@ func runCoordinator(cmd *cobra.Command, args []string) {
 	cfg.Listen = viper.GetString("coordinator.listen")
 	cfg.PublicURL = viper.GetString("coordinator.public_url")
 	cfg.JWTSecret = viper.GetString("coordinator.jwt_secret")
+	cfg.HeadscaleURL = viper.GetString("coordinator.headscale_url")
+	cfg.HeadscaleUnixSocket = viper.GetString("coordinator.headscale_unix_socket")
 	cfg.KeycloakURL = viper.GetString("coordinator.keycloak_url")
 	cfg.KeycloakRealm = viper.GetString("coordinator.keycloak_realm")
 	cfg.KeycloakClientID = viper.GetString("coordinator.keycloak_client_id")
 	cfg.KeycloakClientSecret = viper.GetString("coordinator.keycloak_client_secret")
+
+	if cfg.HeadscaleURL == "" {
+		cfg.HeadscaleURL = coordinator.DefaultHeadscaleURL
+	}
+	if cfg.HeadscaleUnixSocket == "" {
+		cfg.HeadscaleUnixSocket = coordinator.DefaultHeadscaleUnixSocket
+	}
 
 	if cfg.JWTSecret == "" {
 		slog.Error("JWT_SECRET environment variable is required")

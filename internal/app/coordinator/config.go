@@ -9,6 +9,11 @@ type Config struct {
 	// JWTSecret is the signing key for join tokens. If empty, a random one is generated.
 	JWTSecret string `mapstructure:"jwt_secret"`
 
+	// HeadscaleURL is the HTTP URL of the Headscale server (e.g., "http://headscale:8080").
+	HeadscaleURL string `mapstructure:"headscale_url"`
+	// HeadscaleUnixSocket is the path to Headscale Unix socket (e.g., "/var/run/headscale/headscale.sock").
+	HeadscaleUnixSocket string `mapstructure:"headscale_unix_socket"`
+
 	// KeycloakURL is the base URL of the Keycloak server (e.g., "https://auth.example.com").
 	KeycloakURL string `mapstructure:"keycloak_url"`
 	// KeycloakRealm is the Keycloak realm for user authentication (e.g., "wonder-mesh").
@@ -20,12 +25,8 @@ type Config struct {
 }
 
 const (
-	DefaultHeadscaleBinary    = "headscale"
-	DefaultHeadscaleConfigDir = "/etc/headscale"
-	DefaultDataDir            = "/data"
-	DefaultHeadscaleDataDir   = "/data/headscale"
-	DefaultCoordinatorDataDir = "/data/coordinator"
-	DefaultDatabaseDSN        = "file:/data/coordinator/coordinator.db?_journal_mode=WAL&_busy_timeout=5000"
-	DefaultHeadscaleURL       = "http://127.0.0.1:8080"
-	DefaultHeadscaleGRPCAddr  = "127.0.0.1:50443"
+	DefaultCoordinatorDataDir  = "/data/coordinator"
+	DefaultDatabaseDSN         = "file:/data/coordinator/coordinator.db?_journal_mode=WAL&_busy_timeout=5000"
+	DefaultHeadscaleURL        = "http://127.0.0.1:8080"
+	DefaultHeadscaleUnixSocket = "/var/run/headscale/headscale.sock"
 )
