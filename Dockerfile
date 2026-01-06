@@ -1,12 +1,12 @@
 # Stage 1: Build frontend
 FROM node:22-alpine AS frontend
 
-WORKDIR /app/web
+WORKDIR /app/webui
 
-COPY web/package*.json ./
+COPY webui/package*.json ./
 RUN npm ci
 
-COPY web/ ./
+COPY webui/ ./
 RUN npm run build
 
 # Stage 2: Build Go binary
@@ -24,7 +24,7 @@ RUN go mod download
 
 COPY . .
 
-COPY --from=frontend /app/web/dist/ ./internal/app/coordinator/ui/static/
+COPY --from=frontend /app/webui/dist/ ./internal/app/coordinator/webui/static/
 
 RUN CGO_ENABLED=1 go build -ldflags "-s -w -X github.com/strrl/wonder-mesh-net/cmd/wonder/commands.version=${VERSION} -X github.com/strrl/wonder-mesh-net/cmd/wonder/commands.gitSHA=${GIT_SHA}" -o /wonder ./cmd/wonder
 

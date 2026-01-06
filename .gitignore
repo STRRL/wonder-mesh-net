@@ -45,8 +45,8 @@ data/
 e2e/cookies.txt
 
 # Web UI build artifacts
-web/node_modules/
-web/dist/
-web/tsconfig.tsbuildinfo
-internal/app/coordinator/ui/static/assets/
-!internal/app/coordinator/ui/static/index.html
+webui/node_modules/
+webui/dist/
+webui/tsconfig.tsbuildinfo
+internal/app/coordinator/webui/static/assets/
+!internal/app/coordinator/webui/static/index.html
