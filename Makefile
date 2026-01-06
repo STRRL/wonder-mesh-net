@@ -1,4 +1,4 @@
-.PHONY: help build build-all clean test check image generate web web-deps web-clean
+.PHONY: help build build-go build-all clean test check image generate web web-deps web-clean
 
 # Build variables
 BINARY_NAME := wonder
@@ -48,9 +48,11 @@ web: web-deps ## Build web UI
 web-clean: ## Clean web build artifacts
 	rm -rf $(WEB_DIR)/node_modules $(WEB_DIST) $(UI_STATIC)/assets
 
-build: web ## Build the wonder binary (includes web UI)
+build-go: ## Build Go binary only (uses existing/placeholder UI)
 	@mkdir -p $(BUILD_DIR)
 	$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/wonder
+
+build: web build-go ## Build the wonder binary (includes web UI)
 
 build-all: ## Build for all platforms (linux/darwin, amd64/arm64)
 	@mkdir -p $(BUILD_DIR)

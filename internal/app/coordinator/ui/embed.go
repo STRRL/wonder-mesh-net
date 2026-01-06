@@ -32,7 +32,8 @@ func Handler() (http.Handler, error) {
 			path = "/index.html"
 		}
 
-		r.URL.Path = path
-		fileServer.ServeHTTP(w, r)
+		req := r.Clone(r.Context())
+		req.URL.Path = path
+		fileServer.ServeHTTP(w, req)
 	}), nil
 }

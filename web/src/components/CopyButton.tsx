@@ -14,7 +14,7 @@ export default function CopyButton({ text, label = 'Copy' }: CopyButtonProps) {
       setStatus('copied')
       setTimeout(() => setStatus('idle'), 2000)
     } catch (err) {
-      console.error('copy to clipboard:', err)
+      console.error('Failed to copy text to clipboard:', err)
       setStatus('error')
       setTimeout(() => setStatus('idle'), 2000)
     }
