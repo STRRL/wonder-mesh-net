@@ -98,19 +98,36 @@ type tailscaleConnectionInfo struct {
 	HeadscaleUser string `json:"headscale_user"`
 }
 
-// checkTailscaleInstalled verifies that the tailscale binary is available in PATH.
-// Returns a user-friendly error with installation instructions if not found.
+// checkTailscaleInstalled verifies that the tailscale CLI and tailscaled daemon
+// binaries are available in PATH. Returns a user-friendly error with installation
+// instructions if either is not found.
 func checkTailscaleInstalled() error {
-	_, err := exec.LookPath("tailscale")
-	if err != nil {
-		return fmt.Errorf(`tailscale not found
+	if _, err := exec.LookPath("tailscale"); err != nil {
+		return tailscaleNotFoundError("tailscale")
+	}
+	if _, err := exec.LookPath("tailscaled"); err != nil {
+		return tailscaleNotFoundError("tailscaled (Tailscale daemon)")
+	}
+	return nil
+}
+
+// tailscaleNotFoundError returns a user-friendly error with platform-specific
+// installation instructions.
+func tailscaleNotFoundError(binary string) error {
+	if runtime.GOOS == "windows" {
+		return fmt.Errorf(`%s not found
+
+To install Tailscale on Windows, visit:
+  https://tailscale.com/download/windows
+
+Then retry the join command`, binary)
+	}
+	return fmt.Errorf(`%s not found
 
 To install Tailscale, run:
   curl -fsSL https://tailscale.com/install.sh | sh
 
-Then retry the join command`)
-	}
-	return nil
+Then retry the join command`, binary)
 }
 
 // completeJoin saves credentials locally and executes the appropriate mesh client
