@@ -4,9 +4,20 @@ FROM golang:1.25-alpine AS builder
 ARG VERSION=dev
 ARG GIT_SHA=unknown
 
-RUN apk add --no-cache gcc musl-dev
+RUN apk add --no-cache gcc musl-dev nodejs npm
 
 WORKDIR /app
+
+# Frontend build first (better layer caching)
+COPY web/package*.json web/
+RUN cd web && npm ci
+
+COPY web/ web/
+RUN cd web && npm run build
+RUN mkdir -p internal/app/coordinator/ui/static && \
+    cp -r web/dist/* internal/app/coordinator/ui/static/
+
+# Go build
 COPY go.mod go.sum ./
 RUN go mod download
 

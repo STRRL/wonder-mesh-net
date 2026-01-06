@@ -43,3 +43,9 @@ data/
 
 # E2E test artifacts
 e2e/cookies.txt
+
+# Web UI build artifacts
+web/node_modules/
+web/dist/
+internal/app/coordinator/ui/static/*
+!internal/app/coordinator/ui/static/.gitkeep
