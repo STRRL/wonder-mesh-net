@@ -47,5 +47,6 @@ e2e/cookies.txt
 # Web UI build artifacts
 web/node_modules/
 web/dist/
+web/tsconfig.tsbuildinfo
 internal/app/coordinator/ui/static/*
 !internal/app/coordinator/ui/static/.gitkeep

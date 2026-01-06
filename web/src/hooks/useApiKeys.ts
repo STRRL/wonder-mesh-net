@@ -12,7 +12,7 @@ export function useApiKeys() {
     setError(null)
     try {
       const response = await api.getApiKeys()
-      setApiKeys(response.api_keys || [])
+      setApiKeys(response || [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error occurred')
     } finally {

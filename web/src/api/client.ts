@@ -1,7 +1,7 @@
 import type {
   NodeListResponse,
   JoinTokenResponse,
-  ApiKeyListResponse,
+  ApiKeyInfo,
   CreateApiKeyRequest,
   CreateApiKeyResponse,
 } from './types'
@@ -45,7 +45,7 @@ class ApiClient {
     return this.fetch('/coordinator/api/v1/join-token', { method: 'POST' })
   }
 
-  async getApiKeys(): Promise<ApiKeyListResponse> {
+  async getApiKeys(): Promise<ApiKeyInfo[]> {
     return this.fetch('/coordinator/api/v1/api-keys')
   }
 

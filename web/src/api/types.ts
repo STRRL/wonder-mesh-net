@@ -26,9 +26,6 @@ export interface ApiKeyInfo {
   expires_at?: string
 }
 
-export interface ApiKeyListResponse {
-  api_keys: ApiKeyInfo[]
-}
 
 export interface CreateApiKeyRequest {
   name: string

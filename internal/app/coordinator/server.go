@@ -363,7 +363,11 @@ func (s *Server) Run() error {
 	})
 
 	// Web UI - served at /ui/
-	mux.Handle("/ui/", http.StripPrefix("/ui", ui.Handler()))
+	uiHandler, err := ui.Handler()
+	if err != nil {
+		return fmt.Errorf("initialize ui handler: %w", err)
+	}
+	mux.Handle("/ui/", http.StripPrefix("/ui", uiHandler))
 
 	mux.Handle("/", headscaleProxy)
 

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"embed"
+	"fmt"
 	"io/fs"
 	"net/http"
 	"strings"
@@ -12,10 +13,11 @@ var staticFS embed.FS
 
 // Handler returns an http.Handler that serves the embedded UI static files.
 // It handles SPA routing by serving index.html for unknown paths.
-func Handler() http.Handler {
+// Returns an error if the embedded filesystem cannot be accessed.
+func Handler() (http.Handler, error) {
 	subFS, err := fs.Sub(staticFS, "static")
 	if err != nil {
-		panic("embed static fs: " + err.Error())
+		return nil, fmt.Errorf("embed static fs: %w", err)
 	}
 	fileServer := http.FileServer(http.FS(subFS))
 
@@ -32,5 +34,5 @@ func Handler() http.Handler {
 
 		r.URL.Path = path
 		fileServer.ServeHTTP(w, r)
-	})
+	}), nil
 }
