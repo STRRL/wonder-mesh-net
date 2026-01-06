@@ -123,6 +123,38 @@ type tailscaleConnectionInfo struct {
 	HeadscaleUser string `json:"headscale_user"`
 }
 
+// checkTailscaleInstalled verifies that the tailscale CLI and tailscaled daemon
+// binaries are available in PATH. Returns a user-friendly error with installation
+// instructions if either is not found.
+func checkTailscaleInstalled() error {
+	if _, err := exec.LookPath("tailscale"); err != nil {
+		return tailscaleNotFoundError("tailscale")
+	}
+	if _, err := exec.LookPath("tailscaled"); err != nil {
+		return tailscaleNotFoundError("tailscaled (Tailscale daemon)")
+	}
+	return nil
+}
+
+// tailscaleNotFoundError returns a user-friendly error with platform-specific
+// installation instructions.
+func tailscaleNotFoundError(binary string) error {
+	if runtime.GOOS == "windows" {
+		return fmt.Errorf(`%s not found
+
+To install Tailscale on Windows, visit:
+  https://tailscale.com/download/windows
+
+Then retry the join command`, binary)
+	}
+	return fmt.Errorf(`%s not found
+
+To install Tailscale, run:
+  curl -fsSL https://tailscale.com/install.sh | sh
+
+Then retry the join command`, binary)
+}
+
 // completeJoin saves credentials locally and executes the appropriate mesh client
 // to complete network registration based on mesh_type.
 func completeJoin(resp *joinResponse, coordinator string) error {
@@ -133,6 +165,9 @@ func completeJoin(resp *joinResponse, coordinator string) error {
 
 	switch meshType {
 	case "tailscale":
+		if err := checkTailscaleInstalled(); err != nil {
+			return err
+		}
 		info := resp.TailscaleConnectionInfo
 		if info == nil || info.LoginServer == "" || info.Authkey == "" {
 			return fmt.Errorf("missing tailscale connection info from coordinator")
