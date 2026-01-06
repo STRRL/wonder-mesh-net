@@ -48,5 +48,5 @@ e2e/cookies.txt
 web/node_modules/
 web/dist/
 web/tsconfig.tsbuildinfo
-internal/app/coordinator/ui/static/*
-!internal/app/coordinator/ui/static/.gitkeep
+internal/app/coordinator/ui/static/assets/
+!internal/app/coordinator/ui/static/index.html

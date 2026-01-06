@@ -42,13 +42,11 @@ web-deps: ## Install web dependencies
 
 web: web-deps ## Build web UI
 	cd $(WEB_DIR) && npm run build
-	rm -rf $(UI_STATIC)
-	cp -r $(WEB_DIST) $(UI_STATIC)
+	rm -rf $(UI_STATIC)/assets
+	cp -r $(WEB_DIST)/* $(UI_STATIC)/
 
 web-clean: ## Clean web build artifacts
-	rm -rf $(WEB_DIR)/node_modules $(WEB_DIST) $(UI_STATIC)
-	mkdir -p $(UI_STATIC)
-	touch $(UI_STATIC)/.gitkeep
+	rm -rf $(WEB_DIR)/node_modules $(WEB_DIST) $(UI_STATIC)/assets
 
 build: web ## Build the wonder binary (includes web UI)
 	@mkdir -p $(BUILD_DIR)
