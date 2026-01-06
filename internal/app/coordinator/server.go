@@ -344,7 +344,7 @@ func (s *Server) Run() error {
 	mux.HandleFunc("POST /coordinator/api/v1/worker/join", workerController.HandleWorkerJoin)
 
 	// Protected endpoints - require JWT authentication and WonderNet
-	mux.HandleFunc("POST /coordinator/api/v1/join-token", s.requireAuth(s.requireWonderNet(joinTokenController.HandleCreateJoinToken)))
+	mux.HandleFunc("GET /coordinator/api/v1/join-token", s.requireAuth(s.requireWonderNet(joinTokenController.HandleCreateJoinToken)))
 
 	// Read-only endpoints - support both JWT session auth and API key auth
 	mux.HandleFunc("GET /coordinator/api/v1/nodes", s.requireAuthOrAPIKey(nodesController.HandleListNodes))

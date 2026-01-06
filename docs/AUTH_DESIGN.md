@@ -311,7 +311,7 @@ sequenceDiagram
 |----------|:-----------:|:-------:|:----:|-------|
 | `GET /coordinator/oidc/login` | - | - | ✅ | Start OIDC flow |
 | `GET /coordinator/oidc/callback` | - | - | ✅ | OIDC callback |
-| `POST /coordinator/api/v1/join-token` | ✅ | ❌ | - | Privileged: generate join token |
+| `GET /coordinator/api/v1/join-token` | ✅ | ❌ | - | Privileged: generate join token |
 | `GET /coordinator/api/v1/api-keys` | ✅ | ❌ | - | Privileged: list API keys |
 | `POST /coordinator/api/v1/api-keys` | ✅ | ❌ | - | Privileged: create API key |
 | `DELETE /coordinator/api/v1/api-keys/{id}` | ✅ | ❌ | - | Privileged: delete API key |
