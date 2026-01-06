@@ -1,29 +1,34 @@
-# Build stage
+# Stage 1: Build frontend
+FROM node:22-alpine AS frontend
+
+WORKDIR /app/web
+
+COPY web/package*.json ./
+RUN npm ci
+
+COPY web/ ./
+RUN npm run build
+
+# Stage 2: Build Go binary
 FROM golang:1.25-alpine AS builder
 
 ARG VERSION=dev
 ARG GIT_SHA=unknown
 
-RUN apk add --no-cache gcc musl-dev nodejs npm
+RUN apk add --no-cache gcc musl-dev
 
 WORKDIR /app
 
-# Go dependencies first (better layer caching)
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy all source files
 COPY . .
 
-# Frontend build (after COPY . . to avoid being overwritten)
-RUN cd web && npm ci && npm run build
-RUN rm -rf internal/app/coordinator/ui/static/assets && \
-    cp -r web/dist/* internal/app/coordinator/ui/static/
+COPY --from=frontend /app/web/dist/ ./internal/app/coordinator/ui/static/
 
-# Go build
 RUN CGO_ENABLED=1 go build -ldflags "-s -w -X github.com/strrl/wonder-mesh-net/cmd/wonder/commands.version=${VERSION} -X github.com/strrl/wonder-mesh-net/cmd/wonder/commands.gitSHA=${GIT_SHA}" -o /wonder ./cmd/wonder
 
-# Runtime stage
+# Stage 3: Runtime
 FROM alpine:3.20
 
 LABEL org.opencontainers.image.source="https://github.com/STRRL/wonder-mesh-net" \
