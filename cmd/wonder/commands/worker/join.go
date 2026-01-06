@@ -9,11 +9,24 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/strrl/wonder-mesh-net/pkg/jointoken"
 )
+
+// normalizeURL ensures the URL has a protocol scheme and no trailing slash.
+// If no scheme is present, https:// is prepended.
+func normalizeURL(rawURL string) string {
+	if rawURL == "" {
+		return rawURL
+	}
+	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
+		rawURL = "https://" + rawURL
+	}
+	return strings.TrimSuffix(rawURL, "/")
+}
 
 var joinFlags struct {
 	coordinatorURL string
@@ -60,6 +73,7 @@ func runJoin(cmd *cobra.Command, args []string) error {
 	if joinFlags.coordinatorURL != "" {
 		coordinatorURL = joinFlags.coordinatorURL
 	}
+	coordinatorURL = normalizeURL(coordinatorURL)
 
 	reqBody, _ := json.Marshal(map[string]string{"token": token})
 	resp, err := http.Post(
