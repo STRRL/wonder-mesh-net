@@ -8,20 +8,19 @@ RUN apk add --no-cache gcc musl-dev nodejs npm
 
 WORKDIR /app
 
-# Frontend build first (better layer caching)
-COPY web/package*.json web/
-RUN cd web && npm ci
-
-COPY web/ web/
-RUN cd web && npm run build
-RUN mkdir -p internal/app/coordinator/ui/static && \
-    cp -r web/dist/* internal/app/coordinator/ui/static/
-
-# Go build
+# Go dependencies first (better layer caching)
 COPY go.mod go.sum ./
 RUN go mod download
 
+# Copy all source files
 COPY . .
+
+# Frontend build (after COPY . . to avoid being overwritten)
+RUN cd web && npm ci && npm run build
+RUN rm -rf internal/app/coordinator/ui/static/assets && \
+    cp -r web/dist/* internal/app/coordinator/ui/static/
+
+# Go build
 RUN CGO_ENABLED=1 go build -ldflags "-s -w -X github.com/strrl/wonder-mesh-net/cmd/wonder/commands.version=${VERSION} -X github.com/strrl/wonder-mesh-net/cmd/wonder/commands.gitSHA=${GIT_SHA}" -o /wonder ./cmd/wonder
 
 # Runtime stage
