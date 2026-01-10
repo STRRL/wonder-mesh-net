@@ -1,0 +1,21 @@
+{{- if .Values.keycloak.persistence.enabled -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "wonder-mesh-net.fullname" . }}-keycloak
+  labels:
+    {{- include "wonder-mesh-net.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.keycloak.persistence.accessMode | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.keycloak.persistence.size | quote }}
+  {{- if .Values.persistence.storageClass }}
+  {{- if (eq "-" .Values.persistence.storageClass) }}
+  storageClassName: ""
+  {{- else }}
+  storageClassName: "{{ .Values.persistence.storageClass }}"
+  {{- end }}
+  {{- end }}
+{{- end }}

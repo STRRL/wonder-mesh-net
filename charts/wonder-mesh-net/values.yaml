@@ -1,0 +1,196 @@
+headscale:
+  enabled: true
+  image:
+    repository: headscale/headscale
+    tag: 0.27.1
+    pullPolicy: IfNotPresent
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+      - ALL
+  resources: {}
+  config:
+    server_url: "http://localhost:8080"
+    unix_socket: /var/run/headscale/headscale.sock
+    unix_socket_permission: "0770"
+    listen_addr: ":8080"
+    metrics_listen_addr: ":9090"
+    grpc_listen_addr: ":50443"
+    grpc_allow_insecure: true
+    prefixes:
+      v4: "100.64.0.0/10"
+      v6: "fd7a:115c:a1e0::/48"
+    derp:
+      server:
+        enabled: false
+      urls:
+        - "https://controlplane.tailscale.com/derpmap/default"
+    disable_check_updates: false
+    ephemeral_node_inactivity_timeout: "30m"
+    node_pruning_enabled: false
+    log:
+      level: "info"
+  probes:
+    livenessProbe:
+      tcpSocket:
+        port: 8080
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+    readinessProbe:
+      tcpSocket:
+        port: 8080
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+
+keycloak:
+  enabled: false
+  production: false
+  image:
+    repository: quay.io/keycloak/keycloak
+    tag: "26.0"
+    pullPolicy: IfNotPresent
+  adminUser: admin
+  adminPassword: admin
+  service:
+    type: ClusterIP
+    port: 8080
+  persistence:
+    enabled: false
+    size: 1Gi
+    accessMode: ReadWriteOnce
+  extraEnv: []
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  resources:
+    # limits:
+    #   memory: "1024Mi"
+    #   cpu: "500m"
+    # requests:
+    #   memory: "512Mi"
+    #   cpu: "250m"
+  probes:
+    # livenessProbe:
+    #   httpGet:
+    #     path: /health/live
+    #     port: http
+    #   initialDelaySeconds: 60
+    #   periodSeconds: 20
+    #   timeoutSeconds: 5
+    # readinessProbe:
+    #   httpGet:
+    #     path: /health/ready
+    #     port: http
+    #   initialDelaySeconds: 30
+    #   periodSeconds: 10
+    #   timeoutSeconds: 5
+
+postgres:
+  enabled: false
+  image:
+    repository: postgres
+    tag: "16-alpine"
+    pullPolicy: IfNotPresent
+  service:
+    port: 5432
+  persistence:
+    enabled: false
+    size: 1Gi
+    accessMode: ReadWriteOnce
+  auth:
+    database: keycloak
+    username: keycloak
+    password: keycloak
+  resources: {}
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+coordinator:
+  image:
+    repository: ghcr.io/strrl/wonder-mesh-net
+    pullPolicy: IfNotPresent
+    tag: ""
+
+  podAnnotations: {}
+
+  publicUrl: "http://localhost:9080"
+  
+  jwtSecret: ""
+  
+  oidc:
+    url: "https://auth.example.com"
+    realm: "wonder"
+    clientId: "wonder-mesh-net"
+    clientSecret: "wonder-secret"
+
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+
+  podSecurityContext:
+    fsGroup: 1000
+
+  probes:
+    livenessProbe:
+      httpGet:
+        path: /coordinator/health
+        port: http
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 5
+    readinessProbe:
+      httpGet:
+        path: /coordinator/health
+        port: http
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 5
+  resources:
+    # limits:
+    #   cpu: 100m
+    #   memory: 128Mi
+    # requests:
+    #   cpu: 100m
+    #   memory: 128Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: wonder.example.com
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+
+persistence:
+  enabled: false
+  accessMode: ReadWriteOnce
+  size: 1Gi

@@ -1,0 +1,14 @@
+{{- if and .Values.keycloak.enabled .Values.postgres.enabled .Values.postgres.persistence.enabled -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "wonder-mesh-net.fullname" . }}-postgresql
+  labels:
+    {{- include "wonder-mesh-net.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.postgres.persistence.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.postgres.persistence.size }}
+{{- end }}

@@ -1,0 +1,142 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wonder-mesh-net.fullname" . }}
+  labels:
+    {{- include "wonder-mesh-net.labels" . | nindent 4 }}
+    app.kubernetes.io/component: coordinator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "wonder-mesh-net.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: coordinator
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap-headscale.yaml") . | sha256sum }}
+        {{- with .Values.coordinator.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "wonder-mesh-net.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: coordinator
+    spec:
+      serviceAccountName: {{ include "wonder-mesh-net.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: coordinator
+          securityContext:
+            {{- toYaml .Values.coordinator.securityContext | nindent 12 }}
+          image: "{{ .Values.coordinator.image.repository }}:{{ .Values.coordinator.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.coordinator.image.pullPolicy }}
+          {{- if .Values.coordinator.probes }}
+          {{- toYaml .Values.coordinator.probes | nindent 10 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: 9080
+              protocol: TCP
+          env:
+            - name: LISTEN
+              value: ":9080"
+            - name: PUBLIC_URL
+              value: {{ .Values.coordinator.publicUrl | quote }}
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wonder-mesh-net.fullname" . }}-secret
+                  key: jwt-secret
+            - name: HEADSCALE_URL
+              value: {{ .Values.headscale.config.server_url | default "http://localhost:8080" | quote }}
+            - name: HEADSCALE_UNIX_SOCKET
+              value: {{ .Values.headscale.config.unix_socket | quote }}
+            {{- if .Values.keycloak.enabled }}
+            - name: KEYCLOAK_URL
+              # If Keycloak is enabled in chart, point to the internal service.
+              # Note: For OIDC browser flow to work, this internal URL must be reachable by browser too (e.g. tunneling/VPN),
+              # OR the user must manually set coordinator.oidc.url to a public URL and keycloak.service.type/Ingress accordingly.
+              # Here we default to the service DNS for backend communication.
+              value: "http://{{ include "wonder-mesh-net.fullname" . }}-keycloak:{{ .Values.keycloak.service.port }}"
+            - name: KEYCLOAK_REALM
+              value: {{ .Values.coordinator.oidc.realm | quote }}
+            - name: KEYCLOAK_CLIENT_ID
+              value: {{ .Values.coordinator.oidc.clientId | quote }}
+            - name: KEYCLOAK_CLIENT_SECRET
+              value: {{ .Values.coordinator.oidc.clientSecret | quote }}
+            {{- else }}
+            - name: KEYCLOAK_URL
+              value: {{ .Values.coordinator.oidc.url | quote }}
+            - name: KEYCLOAK_REALM
+              value: {{ .Values.coordinator.oidc.realm | quote }}
+            - name: KEYCLOAK_CLIENT_ID
+              value: {{ .Values.coordinator.oidc.clientId | quote }}
+            - name: KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wonder-mesh-net.fullname" . }}-secret
+                  key: keycloak-client-secret
+            {{- end }}
+          volumeMounts:
+            - name: headscale-socket
+              mountPath: /var/run/headscale
+            - name: coordinator-data
+              mountPath: /data/coordinator
+          resources:
+            {{- toYaml .Values.coordinator.resources | nindent 12 }}
+        {{- if .Values.headscale.enabled }}
+        - name: headscale
+          securityContext:
+            {{- toYaml .Values.headscale.securityContext | nindent 12 }}
+          image: "{{ .Values.headscale.image.repository }}:{{ .Values.headscale.image.tag }}"
+          imagePullPolicy: {{ .Values.headscale.image.pullPolicy }}
+          {{- if .Values.headscale.probes }}
+          {{- toYaml .Values.headscale.probes | nindent 10 }}
+          {{- end }}
+          command: ["headscale", "serve"]
+          volumeMounts:
+            - name: headscale-config
+              mountPath: /etc/headscale/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: headscale-data
+              mountPath: /var/lib/headscale
+            - name: headscale-socket
+              mountPath: /var/run/headscale
+          resources:
+            {{- toYaml .Values.headscale.resources | nindent 12 }}
+        {{- end }}
+      volumes:
+        - name: headscale-config
+          configMap:
+            name: {{ include "wonder-mesh-net.fullname" . }}-headscale
+        - name: headscale-socket
+          emptyDir: {}
+        - name: coordinator-data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "wonder-mesh-net.fullname" . }}-coordinator
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: headscale-data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "wonder-mesh-net.fullname" . }}-headscale
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+
+      {{- with .Values.coordinator.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.coordinator.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.coordinator.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
