@@ -29,13 +29,15 @@ type CiliumConfig struct {
 	RolloutTimeout  time.Duration
 }
 
-// DefaultCiliumConfig returns sensible defaults for Docker-in-Docker environments
+// DefaultCiliumConfig returns sensible defaults for Docker-in-Docker environments.
+// KubeProxyFree is true because kubeadm init skips kube-proxy installation,
+// so Cilium must handle Service/ClusterIP load-balancing.
 func DefaultCiliumConfig() CiliumConfig {
 	return CiliumConfig{
 		Version:         "",
 		TunnelMode:      "vxlan",
 		IPAM:            "cluster-pool",
-		KubeProxyFree:   false,
+		KubeProxyFree:   true,
 		HubbleEnabled:   false,
 		WaitForRollout:  true,
 		RolloutTimeout:  5 * time.Minute,
@@ -59,10 +61,13 @@ CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli
 ARCH=$(dpkg --print-architecture 2>/dev/null || echo "amd64")
 
 curl -L --fail --remote-name-all \
-    "https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-${ARCH}.tar.gz"
+    "https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-${ARCH}.tar.gz" \
+    "https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-${ARCH}.tar.gz.sha256sum"
+
+sha256sum -c "cilium-linux-${ARCH}.tar.gz.sha256sum"
 
 tar xzvf cilium-linux-${ARCH}.tar.gz -C /usr/local/bin
-rm cilium-linux-${ARCH}.tar.gz
+rm cilium-linux-${ARCH}.tar.gz cilium-linux-${ARCH}.tar.gz.sha256sum
 
 echo "Cilium CLI installed"
 cilium version --client
@@ -98,7 +103,9 @@ func (c *CiliumManager) Install(ctx context.Context, controlPlaneIP string, conf
 
 	installFlags = append(installFlags, fmt.Sprintf("--set ipam.mode=%s", config.IPAM))
 
-	if !config.KubeProxyFree {
+	if config.KubeProxyFree {
+		installFlags = append(installFlags, "--set kubeProxyReplacement=true")
+	} else {
 		installFlags = append(installFlags, "--set kubeProxyReplacement=false")
 	}
 

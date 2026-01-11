@@ -41,6 +41,9 @@ func NewSSHClient(config SSHConfig) (*SSHClient, error) {
 		Auth: []ssh.AuthMethod{
 			ssh.Password(config.Password),
 		},
+		// NOTE: InsecureIgnoreHostKey disables host key verification.
+		// This is acceptable for demo/example purposes only. In production,
+		// use proper host key verification (e.g., known_hosts file).
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         config.Timeout,
 	}
@@ -167,9 +170,17 @@ func (c *SSHClient) CopyFile(ctx context.Context, host string, content []byte, r
 	}
 	defer session.Close()
 
-	escapedContent := strings.ReplaceAll(string(content), "'", "'\"'\"'")
-	cmd := fmt.Sprintf("cat > %s << 'EOFMARKER'\n%s\nEOFMARKER\nchmod %s %s",
-		remotePath, escapedContent, mode, remotePath)
+	stdin, err := session.StdinPipe()
+	if err != nil {
+		return fmt.Errorf("create stdin pipe: %w", err)
+	}
+
+	cmd := fmt.Sprintf("cat > %s && chmod %s %s", remotePath, mode, remotePath)
+
+	go func() {
+		defer stdin.Close()
+		_, _ = stdin.Write(content)
+	}()
 
 	return session.Run(cmd)
 }

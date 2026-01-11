@@ -69,6 +69,8 @@ for i in {1..30}; do
 done
 log_info "Coordinator is ready"
 
+# NOTE: These credentials are for DEMO USE ONLY. Do not use in production.
+# In production, use proper secret management and environment variables.
 log_info "Getting access token from Keycloak..."
 TOKEN_RESPONSE=$(docker exec kubeadm-deployer curl -s -X POST \
     "http://nginx/realms/wonder/protocol/openid-connect/token" \
@@ -79,10 +81,9 @@ TOKEN_RESPONSE=$(docker exec kubeadm-deployer curl -s -X POST \
     -d "username=testuser" \
     -d "password=testpass")
 
-ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token // empty')
 if [ -z "$ACCESS_TOKEN" ]; then
-    log_error "Failed to get access token"
-    echo "$TOKEN_RESPONSE"
+    log_error "Failed to get access token (check Keycloak logs for details)"
     exit 1
 fi
 log_info "Access token obtained"
@@ -92,10 +93,9 @@ JOIN_TOKEN_RESPONSE=$(docker exec kubeadm-deployer curl -s \
     -H "Authorization: Bearer $ACCESS_TOKEN" \
     "http://nginx/coordinator/api/v1/join-token")
 
-JOIN_TOKEN=$(echo "$JOIN_TOKEN_RESPONSE" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+JOIN_TOKEN=$(echo "$JOIN_TOKEN_RESPONSE" | jq -r '.token // empty')
 if [ -z "$JOIN_TOKEN" ]; then
-    log_error "Failed to create join token"
-    echo "$JOIN_TOKEN_RESPONSE"
+    log_error "Failed to create join token (check coordinator logs for details)"
     exit 1
 fi
 log_info "Join token created"
@@ -151,10 +151,9 @@ API_KEY_RESPONSE=$(docker exec kubeadm-deployer curl -s -X POST \
     -d '{"name": "kubeadm-deployer", "expires_in": "24h"}' \
     "http://nginx/coordinator/api/v1/api-keys")
 
-API_KEY=$(echo "$API_KEY_RESPONSE" | sed -n 's/.*"key":"\([^"]*\)".*/\1/p')
+API_KEY=$(echo "$API_KEY_RESPONSE" | jq -r '.key // empty')
 if [ -z "$API_KEY" ]; then
-    log_error "Failed to create API key"
-    echo "$API_KEY_RESPONSE"
+    log_error "Failed to create API key (check coordinator logs for details)"
     exit 1
 fi
 log_info "API key created"
@@ -165,12 +164,11 @@ DEPLOYER_JOIN_RESPONSE=$(docker exec kubeadm-deployer curl -s -X POST \
     -H "Content-Type: application/json" \
     "http://nginx/coordinator/api/v1/deployer/join")
 
-DEPLOYER_AUTHKEY=$(echo "$DEPLOYER_JOIN_RESPONSE" | grep -o '"authkey":"[^"]*"' | sed 's/"authkey":"//;s/"$//')
-DEPLOYER_LOGIN_SERVER=$(echo "$DEPLOYER_JOIN_RESPONSE" | grep -o '"login_server":"[^"]*"' | sed 's/"login_server":"//;s/"$//')
+DEPLOYER_AUTHKEY=$(echo "$DEPLOYER_JOIN_RESPONSE" | jq -r '.tailscale_connection_info.authkey // empty')
+DEPLOYER_LOGIN_SERVER=$(echo "$DEPLOYER_JOIN_RESPONSE" | jq -r '.tailscale_connection_info.login_server // empty')
 
 if [ -z "$DEPLOYER_AUTHKEY" ]; then
-    log_error "Failed to get authkey for deployer"
-    echo "$DEPLOYER_JOIN_RESPONSE"
+    log_error "Failed to get authkey for deployer (check coordinator logs for details)"
     exit 1
 fi
 

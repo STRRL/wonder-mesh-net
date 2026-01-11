@@ -42,6 +42,9 @@ RUN systemctl set-default multi-user.target && \
         systemd-binfmt.service
 
 # Configure SSH for root access
+# WARNING: Hard-coded password and root login are for DEMO USE ONLY.
+# Do NOT use this image in production or exposed environments.
+# For production: use SSH keys, disable password auth, disable root login.
 RUN mkdir -p /run/sshd && \
     echo 'root:worker' | chpasswd && \
     sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config && \

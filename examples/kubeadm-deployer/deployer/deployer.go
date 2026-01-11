@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/strrl/wonder-mesh-net/pkg/wondersdk"
@@ -221,10 +220,7 @@ func (d *Deployer) SaveKubeconfig(path string) error {
 		return fmt.Errorf("no kubeconfig available")
 	}
 
-	kubeconfig := d.kubeconfig
-	kubeconfig = strings.ReplaceAll(kubeconfig, d.controlPlaneIP+":6443", d.controlPlaneIP+":6443")
-
-	if err := os.WriteFile(path, []byte(kubeconfig), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(d.kubeconfig), 0600); err != nil {
 		return fmt.Errorf("write kubeconfig: %w", err)
 	}
 
