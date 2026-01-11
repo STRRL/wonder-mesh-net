@@ -1,0 +1,83 @@
+# Systemd-enabled worker image for Kubernetes in Docker
+# Based on Ubuntu 24.04 with systemd as PID 1
+FROM ubuntu:24.04
+
+ENV container=docker
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install systemd and essential packages
+RUN apt-get update && apt-get install -y \
+    systemd \
+    systemd-sysv \
+    dbus \
+    kmod \
+    iproute2 \
+    iptables \
+    curl \
+    ca-certificates \
+    openssh-server \
+    gnupg \
+    lsb-release \
+    iputils-ping \
+    apt-transport-https \
+    socat \
+    conntrack \
+    ebtables \
+    ethtool \
+    && rm -rf /var/lib/apt/lists/*
+
+# Configure systemd for container environment
+# Mask units that don't work in containers
+RUN systemctl set-default multi-user.target && \
+    systemctl mask \
+        dev-hugepages.mount \
+        sys-fs-fuse-connections.mount \
+        systemd-journald-audit.socket \
+        systemd-udev-trigger.service \
+        systemd-udevd.service \
+        systemd-modules-load.service \
+        systemd-random-seed.service \
+        systemd-firstboot.service \
+        systemd-machine-id-commit.service \
+        systemd-binfmt.service
+
+# Configure SSH for root access
+RUN mkdir -p /run/sshd && \
+    echo 'root:worker' | chpasswd && \
+    sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    sed -i 's/#PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
+    systemctl enable ssh
+
+# Install Tailscale
+RUN curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg \
+    | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null && \
+    curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list \
+    | tee /etc/apt/sources.list.d/tailscale.list && \
+    apt-get update && apt-get install -y tailscale && \
+    systemctl enable tailscaled && \
+    rm -rf /var/lib/apt/lists/*
+
+# Pre-configure kernel modules (loaded from host)
+RUN mkdir -p /etc/modules-load.d && \
+    echo "br_netfilter" > /etc/modules-load.d/k8s.conf && \
+    echo "overlay" >> /etc/modules-load.d/k8s.conf
+
+# Pre-configure sysctl for kubernetes
+RUN mkdir -p /etc/sysctl.d && \
+    echo "net.bridge.bridge-nf-call-iptables = 1" > /etc/sysctl.d/k8s.conf && \
+    echo "net.bridge.bridge-nf-call-ip6tables = 1" >> /etc/sysctl.d/k8s.conf && \
+    echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.d/k8s.conf
+
+# Copy and enable entrypoint script
+COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Clean up
+RUN rm -f /etc/machine-id && \
+    rm -f /var/lib/dbus/machine-id
+
+# Use SIGRTMIN+3 to stop systemd gracefully
+STOPSIGNAL SIGRTMIN+3
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["/sbin/init"]

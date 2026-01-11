@@ -1,0 +1,48 @@
+# Deployer image for kubeadm-deployer
+# Contains the Go binary, Tailscale (userspace), and kubectl
+FROM golang:1.23-alpine AS builder
+
+WORKDIR /app
+
+# Copy go mod files from root
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build the kubeadm-deployer binary
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags "-s -w" \
+    -o /kubeadm-deployer ./examples/kubeadm-deployer
+
+# Final image
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    openssh-client \
+    ca-certificates \
+    netcat-openbsd \
+    jq \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install kubectl
+RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
+    chmod +x kubectl && \
+    mv kubectl /usr/local/bin/
+
+# Install Tailscale (for userspace networking)
+RUN curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg \
+    | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null && \
+    curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list \
+    | tee /etc/apt/sources.list.d/tailscale.list && \
+    apt-get update && apt-get install -y tailscale && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy the kubeadm-deployer binary
+COPY --from=builder /kubeadm-deployer /usr/local/bin/kubeadm-deployer
+
+# Default command keeps container running
+CMD ["sleep", "infinity"]
