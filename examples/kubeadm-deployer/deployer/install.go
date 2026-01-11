@@ -71,7 +71,10 @@ sed -i '/swap/d' /etc/fstab || true
 	return nil
 }
 
-// InstallContainerd installs containerd runtime
+// InstallContainerd installs containerd runtime.
+// NOTE: This downloads packages from Docker's official repository with GPG verification.
+// For production, ensure you're connecting to legitimate sources and consider
+// additional verification or using pre-built images.
 func (i *Installer) InstallContainerd(ctx context.Context, nodeIP string) error {
 	slog.Info("installing containerd", "node", nodeIP)
 

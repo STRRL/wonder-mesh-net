@@ -224,7 +224,10 @@ func (k *KubeadmManager) CopyKubeconfig(ctx context.Context, controlPlaneIP stri
 	return result.Stdout, nil
 }
 
-// ResetNode runs kubeadm reset on a node
+// ResetNode runs kubeadm reset on a node.
+// WARNING: This is a destructive operation. The iptables flush will disrupt
+// active network connections. Only use in demo/test environments or when
+// intentionally tearing down a cluster.
 func (k *KubeadmManager) ResetNode(ctx context.Context, nodeIP string) error {
 	slog.Info("resetting node", "node", nodeIP)
 
