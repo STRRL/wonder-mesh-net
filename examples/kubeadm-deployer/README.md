@@ -74,7 +74,7 @@ docker exec kubeadm-deployer curl -s -X POST \
 
 # 5. Run deployer
 docker exec kubeadm-deployer kubeadm-deployer \
-    --coordinator-url="http://nginx" \
+    --coordinator-url="http://nginx/coordinator" \
     --api-key="<your-api-key>" \
     --verbose
 ```
