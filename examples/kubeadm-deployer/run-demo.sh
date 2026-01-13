@@ -197,7 +197,7 @@ NODES_RESPONSE=$(docker exec kubeadm-deployer curl -s \
     -H "Authorization: Bearer $API_KEY" \
     "http://nginx/coordinator/api/v1/nodes")
 
-NODE_COUNT=$(echo "$NODES_RESPONSE" | sed -n 's/.*"count":\([0-9]*\).*/\1/p')
+NODE_COUNT=$(echo "$NODES_RESPONSE" | jq -r '.count // 0' 2>/dev/null || echo 0)
 log_info "Nodes visible: $NODE_COUNT"
 
 if [ "$NODE_COUNT" -lt 3 ]; then
