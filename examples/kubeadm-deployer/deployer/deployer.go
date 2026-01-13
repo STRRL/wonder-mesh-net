@@ -12,6 +12,11 @@ import (
 	"github.com/strrl/wonder-mesh-net/pkg/wondersdk"
 )
 
+const (
+	kubeVersion    = "1.31"
+	podNetworkCIDR = "10.233.233.0/24"
+)
+
 // Config holds the deployer configuration
 type Config struct {
 	CoordinatorURL string
@@ -19,8 +24,6 @@ type Config struct {
 	SSHUser        string
 	SSHPassword    string
 	SOCKS5Addr     string
-	KubeVersion    string
-	PodNetworkCIDR string
 }
 
 // Deployer orchestrates Kubernetes cluster bootstrap
@@ -43,12 +46,6 @@ func NewDeployer(config Config) (*Deployer, error) {
 	}
 	if config.SOCKS5Addr == "" {
 		config.SOCKS5Addr = "localhost:1080"
-	}
-	if config.KubeVersion == "" {
-		config.KubeVersion = "1.31"
-	}
-	if config.PodNetworkCIDR == "" {
-		config.PodNetworkCIDR = "10.233.233.0/24"
 	}
 
 	sdkClient := wondersdk.NewClient(config.CoordinatorURL, config.APIKey)
@@ -360,7 +357,7 @@ echo "containerd installed successfully"
 }
 
 func (d *Deployer) installKubeadm(ctx context.Context, nodeIP string) error {
-	slog.Info("installing kubeadm", "node", nodeIP, "version", d.config.KubeVersion)
+	slog.Info("installing kubeadm", "node", nodeIP, "version", kubeVersion)
 
 	installCmd := fmt.Sprintf(`
 set -e
@@ -387,7 +384,7 @@ apt-mark hold kubelet kubeadm kubectl
 systemctl enable kubelet
 
 echo "kubeadm installed successfully"
-`, d.config.KubeVersion, d.config.KubeVersion)
+`, kubeVersion, kubeVersion)
 
 	result, err := d.executor.RunOnNode(ctx, nodeIP, installCmd)
 	if err != nil {
@@ -425,7 +422,7 @@ echo "=== END KUBECONFIG ==="
 echo "=== JOIN COMMAND ==="
 kubeadm token create --print-join-command
 echo "=== END JOIN COMMAND ==="
-`, d.controlPlaneIP, d.config.PodNetworkCIDR)
+`, d.controlPlaneIP, podNetworkCIDR)
 
 	result, err := d.executor.RunOnNode(ctx, d.controlPlaneIP, initCmd)
 	if err != nil {
