@@ -121,14 +121,14 @@ Flags:
       --api-key string           API key for authentication (required)
       --coordinator-url string   Wonder Mesh Net coordinator URL (required)
   -h, --help                     help for kubeadm-deployer
-      --kube-version string      Kubernetes version to install (default "1.31")
-      --kubeconfig-output string Path to save admin kubeconfig (default "/tmp/kubeconfig")
-      --pod-network-cidr string  Pod network CIDR (default "10.244.0.0/16")
-      --socks5-addr string       SOCKS5 proxy address for mesh access (default "localhost:1080")
-      --ssh-password string      SSH password for node access (default "worker")
-      --ssh-user string          SSH username for node access (default "root")
   -v, --verbose                  Enable verbose logging
 ```
+
+Default values are hardcoded for demo simplicity:
+- Kubernetes version: 1.31
+- Pod network CIDR: 10.233.233.0/24
+- SSH user/password: root/worker
+- SOCKS5 proxy: localhost:1080
 
 ## SDK Usage Example
 
