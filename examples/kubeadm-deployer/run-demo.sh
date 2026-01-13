@@ -212,12 +212,8 @@ echo "==========================================="
 
 log_info "Starting kubeadm-deployer..."
 docker exec kubeadm-deployer kubeadm-deployer \
-    --coordinator-url="http://nginx" \
+    --coordinator-url="http://nginx/coordinator" \
     --api-key="$API_KEY" \
-    --ssh-user="root" \
-    --ssh-password="worker" \
-    --socks5-addr="localhost:1080" \
-    --kubeconfig-output="/tmp/kubeconfig" \
     --verbose
 
 DEPLOY_EXIT=$?

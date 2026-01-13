@@ -49,7 +49,7 @@ func NewDeployer(config Config) (*Deployer, error) {
 		config.KubeVersion = "1.31"
 	}
 	if config.PodNetworkCIDR == "" {
-		config.PodNetworkCIDR = "10.244.0.0/16"
+		config.PodNetworkCIDR = "10.233.233.0/24"
 	}
 
 	sdkClient := wondersdk.NewClient(config.CoordinatorURL, config.APIKey)

@@ -140,11 +140,6 @@ import "github.com/strrl/wonder-mesh-net/pkg/wondersdk"
 // Create client
 client := wondersdk.NewClient(coordinatorURL, apiKey)
 
-// Check coordinator health
-if err := client.Health(ctx); err != nil {
-    log.Fatal(err)
-}
-
 // Discover online nodes
 nodes, err := client.GetOnlineNodes(ctx, "")
 if err != nil {
