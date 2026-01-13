@@ -89,7 +89,7 @@ services:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
       - /dev/net/tun:/dev/net/tun
       - k8s-node-1-var:/var
-    cgroupns: host
+    cgroup: host
     depends_on:
       - nginx
     networks:
@@ -110,7 +110,7 @@ services:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
       - /dev/net/tun:/dev/net/tun
       - k8s-node-2-var:/var
-    cgroupns: host
+    cgroup: host
     depends_on:
       - nginx
     networks:
@@ -131,7 +131,7 @@ services:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
       - /dev/net/tun:/dev/net/tun
       - k8s-node-3-var:/var
-    cgroupns: host
+    cgroup: host
     depends_on:
       - nginx
     networks:
