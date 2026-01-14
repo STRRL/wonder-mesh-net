@@ -171,12 +171,23 @@ func (d *Deployer) Reset(ctx context.Context) error {
 func (d *Deployer) discoverNodes(ctx context.Context) ([]wondersdk.Node, error) {
 	slog.Info("discovering nodes from coordinator")
 
-	nodes, err := d.sdkClient.GetOnlineNodes(ctx, "")
+	allNodes, err := d.sdkClient.GetOnlineNodes(ctx, "")
 	if err != nil {
 		return nil, fmt.Errorf("get online nodes: %w", err)
 	}
 
-	slog.Info("discovered nodes", "count", len(nodes))
+	hostname, _ := os.Hostname()
+
+	nodes := make([]wondersdk.Node, 0, len(allNodes))
+	for _, node := range allNodes {
+		if node.Name == hostname {
+			slog.Debug("skipping self", "name", node.Name)
+			continue
+		}
+		nodes = append(nodes, node)
+	}
+
+	slog.Info("discovered nodes", "count", len(nodes), "excluded_self", hostname)
 	for _, node := range nodes {
 		slog.Debug("node", "name", node.Name, "addresses", node.Addresses, "online", node.Online)
 	}
