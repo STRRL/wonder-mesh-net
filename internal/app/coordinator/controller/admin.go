@@ -31,8 +31,9 @@ type AdminNodeResponse struct {
 
 // AdminNodeListResponse represents the response for listing nodes across all wonder nets.
 type AdminNodeListResponse struct {
-	Nodes []AdminNodeResponse `json:"nodes"`
-	Count int                 `json:"count"`
+	Nodes  []AdminNodeResponse `json:"nodes"`
+	Count  int                 `json:"count"`
+	Errors []string            `json:"errors,omitempty"`
 }
 
 // AdminController handles admin API endpoints.
@@ -134,7 +135,7 @@ func (c *AdminController) HandleListWonderNetNodes(w http.ResponseWriter, r *htt
 	nodes, err := c.nodesService.ListNodes(r.Context(), wonderNet)
 	if err != nil {
 		slog.Error("list nodes", "error", err, "wonder_net_id", wonderNetID)
-		http.Error(w, "list nodes", http.StatusInternalServerError)
+		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
@@ -168,10 +169,12 @@ func (c *AdminController) HandleListAllNodes(w http.ResponseWriter, r *http.Requ
 	}
 
 	var result []AdminNodeResponse
+	var errors []string
 	for _, wn := range wonderNets {
 		nodes, err := c.nodesService.ListNodes(r.Context(), wn)
 		if err != nil {
 			slog.Warn("list nodes for wonder net", "error", err, "wonder_net_id", wn.ID)
+			errors = append(errors, "wonder_net "+wn.ID+": "+err.Error())
 			continue
 		}
 		for _, node := range nodes {
@@ -193,7 +196,8 @@ func (c *AdminController) HandleListAllNodes(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(AdminNodeListResponse{
-		Nodes: result,
-		Count: len(result),
+		Nodes:  result,
+		Count:  len(result),
+		Errors: errors,
 	})
 }
