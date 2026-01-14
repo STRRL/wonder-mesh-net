@@ -2,6 +2,7 @@ package coordinator
 
 import (
 	"context"
+	"crypto/subtle"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -297,6 +298,25 @@ func (s *Server) requireAuthOrAPIKey(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// requireAdminAuth wraps a handler with admin API authentication.
+// It validates the bearer token against the configured AdminAPIAuthToken using constant-time comparison.
+func (s *Server) requireAdminAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := extractBearerToken(r)
+		if token == "" {
+			http.Error(w, "authorization required", http.StatusUnauthorized)
+			return
+		}
+
+		if subtle.ConstantTimeCompare([]byte(token), []byte(s.config.AdminAPIAuthToken)) != 1 {
+			http.Error(w, "invalid admin token", http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	}
+}
+
 func extractBearerToken(r *http.Request) string {
 	auth := r.Header.Get("Authorization")
 	if auth == "" {
@@ -357,6 +377,15 @@ func (s *Server) Run() error {
 
 	// Deployer endpoints - API key auth only
 	mux.HandleFunc("POST /coordinator/api/v1/deployer/join", s.requireAPIKey(deployerController.HandleDeployerJoin))
+
+	// Admin API endpoints - only registered if enabled
+	if s.config.EnableAdminAPI {
+		adminController := controller.NewAdminController(s.wonderNetService, s.nodesService)
+		mux.HandleFunc("GET /coordinator/admin/api/v1/wonder-nets", s.requireAdminAuth(adminController.HandleListWonderNets))
+		mux.HandleFunc("GET /coordinator/admin/api/v1/wonder-nets/{id}/nodes", s.requireAdminAuth(adminController.HandleListWonderNetNodes))
+		mux.HandleFunc("GET /coordinator/admin/api/v1/nodes", s.requireAdminAuth(adminController.HandleListAllNodes))
+		slog.Info("admin API routes registered")
+	}
 
 	mux.HandleFunc("/coordinator/", func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
