@@ -383,6 +383,7 @@ func (s *Server) Run() error {
 		adminController := controller.NewAdminController(s.wonderNetService, s.nodesService)
 		mux.HandleFunc("GET /coordinator/admin/api/v1/wonder-nets", s.requireAdminAuth(adminController.HandleListWonderNets))
 		mux.HandleFunc("GET /coordinator/admin/api/v1/wonder-nets/{id}/nodes", s.requireAdminAuth(adminController.HandleListWonderNetNodes))
+		mux.HandleFunc("GET /coordinator/admin/api/v1/users/{user_id}/wonder-nets", s.requireAdminAuth(adminController.HandleListWonderNetsByUser))
 		mux.HandleFunc("GET /coordinator/admin/api/v1/nodes", s.requireAdminAuth(adminController.HandleListAllNodes))
 		slog.Info("admin API routes registered")
 	}

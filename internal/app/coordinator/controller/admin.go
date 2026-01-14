@@ -79,6 +79,39 @@ func (c *AdminController) HandleListWonderNets(w http.ResponseWriter, r *http.Re
 	})
 }
 
+// HandleListWonderNetsByUser handles GET /admin/api/v1/users/{user_id}/wonder-nets requests.
+func (c *AdminController) HandleListWonderNetsByUser(w http.ResponseWriter, r *http.Request) {
+	userID := r.PathValue("user_id")
+	if userID == "" {
+		http.Error(w, "user id required", http.StatusBadRequest)
+		return
+	}
+
+	wonderNets, err := c.wonderNetService.ListWonderNetsByOwner(r.Context(), userID)
+	if err != nil {
+		slog.Error("list wonder nets by user", "error", err, "user_id", userID)
+		http.Error(w, "list wonder nets", http.StatusInternalServerError)
+		return
+	}
+
+	result := make([]WonderNetResponse, len(wonderNets))
+	for i, wn := range wonderNets {
+		result[i] = WonderNetResponse{
+			ID:          wn.ID,
+			OwnerID:     wn.OwnerID,
+			DisplayName: wn.DisplayName,
+			MeshType:    wn.MeshType,
+			CreatedAt:   wn.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(WonderNetListResponse{
+		WonderNets: result,
+		Count:      len(result),
+	})
+}
+
 // HandleListWonderNetNodes handles GET /admin/api/v1/wonder-nets/{id}/nodes requests.
 func (c *AdminController) HandleListWonderNetNodes(w http.ResponseWriter, r *http.Request) {
 	wonderNetID := r.PathValue("id")

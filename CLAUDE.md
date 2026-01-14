@@ -84,6 +84,7 @@ pkg/
 - `/coordinator/health` - Health check (no auth required)
 - `/coordinator/admin/api/v1/wonder-nets` - List all wonder nets (admin only)
 - `/coordinator/admin/api/v1/wonder-nets/{id}/nodes` - List nodes for a wonder net (admin only)
+- `/coordinator/admin/api/v1/users/{user_id}/wonder-nets` - List wonder nets by user (admin only)
 - `/coordinator/admin/api/v1/nodes` - List all nodes across all wonder nets (admin only)
 
 **Authentication**: Protected endpoints use `Authorization: Bearer <token>` header. Auth requirements vary by endpoint:
