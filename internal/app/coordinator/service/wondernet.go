@@ -110,6 +110,23 @@ func (s *WonderNetService) GetWonderNetByOwner(ctx context.Context, userID strin
 	return wonderNets[0], nil
 }
 
+// ListAllWonderNets returns all wonder nets in the system.
+// This is intended for admin API use only.
+func (s *WonderNetService) ListAllWonderNets(ctx context.Context) ([]*repository.WonderNet, error) {
+	return s.wonderNetRepository.List(ctx)
+}
+
+// GetWonderNetByID returns a wonder net by its ID.
+func (s *WonderNetService) GetWonderNetByID(ctx context.Context, id string) (*repository.WonderNet, error) {
+	return s.wonderNetRepository.Get(ctx, id)
+}
+
+// ListWonderNetsByOwner returns all wonder nets owned by a specific user.
+// This is intended for admin API use only.
+func (s *WonderNetService) ListWonderNetsByOwner(ctx context.Context, ownerID string) ([]*repository.WonderNet, error) {
+	return s.wonderNetRepository.ListByOwner(ctx, ownerID)
+}
+
 // GetOrCreateWonderNet gets an existing wonder net for a user or creates a new one.
 // ownerID is the OIDC subject claim (user ID from IdP).
 // displayName is used for the wonder net display name when creating a new one.

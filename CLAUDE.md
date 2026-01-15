@@ -82,11 +82,16 @@ pkg/
 - `/coordinator/api/v1/api-keys` - Manage API keys (session only)
 - `/coordinator/api/v1/deployer/join` - Deployer joins mesh (API key only)
 - `/coordinator/health` - Health check (no auth required)
+- `/coordinator/admin/api/v1/wonder-nets` - List all wonder nets (admin only)
+- `/coordinator/admin/api/v1/wonder-nets/{id}/nodes` - List nodes for a wonder net (admin only)
+- `/coordinator/admin/api/v1/users/{user_id}/wonder-nets` - List wonder nets by user (admin only)
+- `/coordinator/admin/api/v1/nodes` - List all nodes across all wonder nets (admin only)
 
 **Authentication**: Protected endpoints use `Authorization: Bearer <token>` header. Auth requirements vary by endpoint:
 - **Session only**: Privileged endpoints (`/coordinator/api/v1/join-token`, `/coordinator/api/v1/api-keys`) - prevents API key privilege escalation
 - **Session or API key**: Read-only endpoints (`/coordinator/api/v1/nodes`) - safe for third-party integrations
 - **API key only**: Third-party integration endpoints (`/coordinator/api/v1/deployer/join`)
+- **Admin only**: Admin API endpoints (`/coordinator/admin/api/v1/*`) - requires `ADMIN_API_AUTH_TOKEN`, only registered if `--enable-admin-api` is set
 - Browser-based flows also support `wonder_session` cookie as fallback for session auth.
 
 ## Running Locally
@@ -97,6 +102,8 @@ HEADSCALE_API_KEY=xxx          # Required
 GITHUB_CLIENT_ID=xxx           # For GitHub OIDC
 GITHUB_CLIENT_SECRET=xxx
 JWT_SECRET=xxx                 # Required (generate with: openssl rand -hex 32)
+ENABLE_ADMIN_API=true          # Optional, enables admin API endpoints
+ADMIN_API_AUTH_TOKEN=xxx       # Required if ENABLE_ADMIN_API=true, min 32 chars
 ```
 
 ```bash

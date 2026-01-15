@@ -22,6 +22,12 @@ type Config struct {
 	KeycloakClientID string `mapstructure:"keycloak_client_id"`
 	// KeycloakClientSecret is the OIDC client secret for the coordinator (used for token exchange).
 	KeycloakClientSecret string `mapstructure:"keycloak_client_secret"`
+
+	// EnableAdminAPI enables the admin API endpoints (disabled by default).
+	EnableAdminAPI bool `mapstructure:"enable_admin_api"`
+	// AdminAPIAuthToken is the bearer token for admin API authentication.
+	// Required if EnableAdminAPI is true. Must be at least 32 characters.
+	AdminAPIAuthToken string `mapstructure:"admin_api_auth_token"`
 }
 
 const (
