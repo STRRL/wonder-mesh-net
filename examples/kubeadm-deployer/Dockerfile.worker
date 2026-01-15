@@ -60,6 +60,18 @@ RUN curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg \
     systemctl enable tailscaled && \
     rm -rf /var/lib/apt/lists/*
 
+# Install crictl (CRI CLI for debugging)
+ARG CRICTL_VERSION=v1.31.1
+RUN curl -fsSL "https://github.com/kubernetes-sigs/cri-tools/releases/download/${CRICTL_VERSION}/crictl-${CRICTL_VERSION}-linux-amd64.tar.gz" \
+    | tar -C /usr/local/bin -xzf - && \
+    chmod +x /usr/local/bin/crictl
+
+# Install nerdctl (containerd CLI for debugging)
+ARG NERDCTL_VERSION=2.0.3
+RUN curl -fsSL "https://github.com/containerd/nerdctl/releases/download/v${NERDCTL_VERSION}/nerdctl-${NERDCTL_VERSION}-linux-amd64.tar.gz" \
+    | tar -C /usr/local/bin -xzf - && \
+    chmod +x /usr/local/bin/nerdctl
+
 # Pre-configure kernel modules (loaded from host)
 RUN mkdir -p /etc/modules-load.d && \
     echo "br_netfilter" > /etc/modules-load.d/k8s.conf && \

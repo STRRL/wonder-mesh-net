@@ -14,7 +14,7 @@ import (
 
 const (
 	kubeVersion    = "1.31"
-	podNetworkCIDR = "10.233.233.0/24"
+	podNetworkCIDR = "10.244.0.0/16"
 )
 
 // Config holds the deployer configuration
@@ -28,12 +28,19 @@ type Config struct {
 
 // Deployer orchestrates Kubernetes cluster bootstrap
 type Deployer struct {
-	config         Config
-	sdkClient      *wondersdk.Client
-	executor       *Executor
-	controlPlaneIP string
-	workerIPs      []string
-	kubeconfig     string
+	config    Config
+	sdkClient *wondersdk.Client
+	executor  *Executor
+
+	// Tailscale IPs - used for SSH connectivity via SOCKS5 proxy
+	controlPlaneTailscaleIP string
+	workerTailscaleIPs      []string
+
+	// Internal IPs (Docker network) - used for kubeadm control plane
+	controlPlaneInternalIP string
+	workerInternalIPs      []string
+
+	kubeconfig string
 }
 
 // NewDeployer creates a new Deployer instance
@@ -91,6 +98,10 @@ func (d *Deployer) Run(ctx context.Context) error {
 		return fmt.Errorf("wait for SSH: %w", err)
 	}
 
+	if err := d.discoverInternalIPs(ctx); err != nil {
+		return fmt.Errorf("discover internal IPs: %w", err)
+	}
+
 	if err := d.installPrerequisites(ctx); err != nil {
 		return fmt.Errorf("install prerequisites: %w", err)
 	}
@@ -100,7 +111,7 @@ func (d *Deployer) Run(ctx context.Context) error {
 		return fmt.Errorf("init control plane: %w", err)
 	}
 
-	if err := d.installCilium(ctx); err != nil {
+	if err := d.installFlannel(ctx); err != nil {
 		return fmt.Errorf("install CNI: %w", err)
 	}
 
@@ -117,8 +128,8 @@ func (d *Deployer) Run(ctx context.Context) error {
 	}
 
 	fmt.Println("\n=== Deployment Complete ===")
-	fmt.Printf("Control Plane: %s\n", d.controlPlaneIP)
-	fmt.Printf("Workers: %v\n", d.workerIPs)
+	fmt.Printf("Control Plane: %s (internal), %s (tailscale)\n", d.controlPlaneInternalIP, d.controlPlaneTailscaleIP)
+	fmt.Printf("Workers: %v (internal)\n", d.workerInternalIPs)
 	fmt.Println("\nTo access the cluster from the deployer:")
 	fmt.Printf("  kubectl --kubeconfig /tmp/kubeconfig get nodes\n")
 
@@ -139,14 +150,14 @@ func (d *Deployer) SaveKubeconfig(path string) error {
 	return nil
 }
 
-// GetControlPlaneIP returns the control plane IP
+// GetControlPlaneIP returns the control plane internal IP
 func (d *Deployer) GetControlPlaneIP() string {
-	return d.controlPlaneIP
+	return d.controlPlaneInternalIP
 }
 
-// GetWorkerIPs returns the worker IPs
+// GetWorkerIPs returns the worker internal IPs
 func (d *Deployer) GetWorkerIPs() []string {
-	return d.workerIPs
+	return d.workerInternalIPs
 }
 
 // GetKubeconfig returns the admin kubeconfig
@@ -159,8 +170,9 @@ func (d *Deployer) GetKubeconfig() string {
 // active network connections. Only use in demo/test environments or when
 // intentionally tearing down a cluster.
 func (d *Deployer) Reset(ctx context.Context) error {
-	allIPs := append([]string{d.controlPlaneIP}, d.workerIPs...)
-	for _, ip := range allIPs {
+	// Use Tailscale IPs for SSH access
+	allTailscaleIPs := append([]string{d.controlPlaneTailscaleIP}, d.workerTailscaleIPs...)
+	for _, ip := range allTailscaleIPs {
 		if err := d.resetNode(ctx, ip); err != nil {
 			slog.Warn("reset node", "node", ip, "error", err)
 		}
@@ -200,24 +212,24 @@ func (d *Deployer) selectNodes(nodes []wondersdk.Node) error {
 		return fmt.Errorf("at least 1 node required, found %d", len(nodes))
 	}
 
-	d.controlPlaneIP = ""
+	d.controlPlaneTailscaleIP = ""
 	if len(nodes[0].Addresses) > 0 {
-		d.controlPlaneIP = nodes[0].Addresses[0]
+		d.controlPlaneTailscaleIP = nodes[0].Addresses[0]
 	}
-	if d.controlPlaneIP == "" {
+	if d.controlPlaneTailscaleIP == "" {
 		return fmt.Errorf("control plane node has no IP address")
 	}
 
-	d.workerIPs = make([]string, 0, len(nodes)-1)
+	d.workerTailscaleIPs = make([]string, 0, len(nodes)-1)
 	for i := 1; i < len(nodes); i++ {
 		if len(nodes[i].Addresses) > 0 {
-			d.workerIPs = append(d.workerIPs, nodes[i].Addresses[0])
+			d.workerTailscaleIPs = append(d.workerTailscaleIPs, nodes[i].Addresses[0])
 		}
 	}
 
-	slog.Info("node selection",
-		"control_plane", d.controlPlaneIP,
-		"workers", d.workerIPs,
+	slog.Info("node selection (Tailscale IPs for SSH)",
+		"control_plane", d.controlPlaneTailscaleIP,
+		"workers", d.workerTailscaleIPs,
 	)
 
 	return nil
@@ -226,16 +238,55 @@ func (d *Deployer) selectNodes(nodes []wondersdk.Node) error {
 func (d *Deployer) waitForSSH(ctx context.Context, timeout time.Duration) error {
 	slog.Info("waiting for SSH connectivity")
 
-	allIPs := append([]string{d.controlPlaneIP}, d.workerIPs...)
+	allIPs := append([]string{d.controlPlaneTailscaleIP}, d.workerTailscaleIPs...)
 	return d.executor.WaitForAllNodes(ctx, allIPs, timeout)
+}
+
+// discoverInternalIPs queries each node for its Docker network IP (eth0)
+func (d *Deployer) discoverInternalIPs(ctx context.Context) error {
+	slog.Info("discovering internal IPs for kubeadm")
+
+	// Get control plane internal IP
+	result, err := d.executor.RunOnNode(ctx, d.controlPlaneTailscaleIP,
+		"ip -4 addr show eth0 | grep -oP '(?<=inet\\s)\\d+(\\.\\d+){3}'")
+	if err != nil {
+		return fmt.Errorf("get control plane internal IP: %w", err)
+	}
+	d.controlPlaneInternalIP = strings.TrimSpace(result.Stdout)
+	if d.controlPlaneInternalIP == "" {
+		return fmt.Errorf("control plane has no eth0 IP")
+	}
+
+	// Get worker internal IPs
+	d.workerInternalIPs = make([]string, 0, len(d.workerTailscaleIPs))
+	for _, tailscaleIP := range d.workerTailscaleIPs {
+		result, err := d.executor.RunOnNode(ctx, tailscaleIP,
+			"ip -4 addr show eth0 | grep -oP '(?<=inet\\s)\\d+(\\.\\d+){3}'")
+		if err != nil {
+			return fmt.Errorf("get worker internal IP for %s: %w", tailscaleIP, err)
+		}
+		internalIP := strings.TrimSpace(result.Stdout)
+		if internalIP == "" {
+			return fmt.Errorf("worker %s has no eth0 IP", tailscaleIP)
+		}
+		d.workerInternalIPs = append(d.workerInternalIPs, internalIP)
+	}
+
+	slog.Info("discovered internal IPs (Docker network for kubeadm)",
+		"control_plane", d.controlPlaneInternalIP,
+		"workers", d.workerInternalIPs,
+	)
+
+	return nil
 }
 
 func (d *Deployer) installPrerequisites(ctx context.Context) error {
 	slog.Info("installing prerequisites on all nodes")
 
-	allIPs := append([]string{d.controlPlaneIP}, d.workerIPs...)
-	for idx, ip := range allIPs {
-		slog.Info("installing on node", "node", ip, "index", idx+1, "total", len(allIPs))
+	// Use Tailscale IPs for SSH access
+	allTailscaleIPs := append([]string{d.controlPlaneTailscaleIP}, d.workerTailscaleIPs...)
+	for idx, ip := range allTailscaleIPs {
+		slog.Info("installing on node", "node", ip, "index", idx+1, "total", len(allTailscaleIPs))
 		if err := d.installOnNode(ctx, ip); err != nil {
 			return fmt.Errorf("node %s: %w", ip, err)
 		}
@@ -410,17 +461,37 @@ echo "kubeadm installed successfully"
 }
 
 func (d *Deployer) initControlPlane(ctx context.Context) (string, error) {
-	slog.Info("initializing control plane", "node", d.controlPlaneIP)
+	slog.Info("initializing control plane",
+		"ssh", d.controlPlaneTailscaleIP,
+		"apiserver", d.controlPlaneInternalIP)
 
+	// Use internal IP for kubeadm (Docker network), SSH via Tailscale
+	// Use kubeadm config file to configure kube-proxy to skip conntrack settings
+	// (required for Docker Desktop where /proc/sys is read-only)
 	initCmd := fmt.Sprintf(`
 set -e
 
-kubeadm init \
-    --apiserver-advertise-address=%s \
-    --pod-network-cidr=%s \
-    --skip-phases=addon/kube-proxy \
-    --ignore-preflight-errors=all \
-    2>&1
+cat > /tmp/kubeadm-config.yaml << 'EOF'
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: %s
+nodeRegistration:
+  ignorePreflightErrors:
+    - all
+---
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+networking:
+  podSubnet: %s
+---
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+kind: KubeProxyConfiguration
+conntrack:
+  maxPerCore: 0
+EOF
+
+kubeadm init --config /tmp/kubeadm-config.yaml 2>&1
 
 mkdir -p /root/.kube
 cp /etc/kubernetes/admin.conf /root/.kube/config
@@ -433,9 +504,10 @@ echo "=== END KUBECONFIG ==="
 echo "=== JOIN COMMAND ==="
 kubeadm token create --print-join-command
 echo "=== END JOIN COMMAND ==="
-`, d.controlPlaneIP, podNetworkCIDR)
+`, d.controlPlaneInternalIP, podNetworkCIDR)
 
-	result, err := d.executor.RunOnNode(ctx, d.controlPlaneIP, initCmd)
+	// SSH via Tailscale IP
+	result, err := d.executor.RunOnNode(ctx, d.controlPlaneTailscaleIP, initCmd)
 	if err != nil {
 		return "", fmt.Errorf("kubeadm init: %w", err)
 	}
@@ -455,7 +527,7 @@ echo "=== END JOIN COMMAND ==="
 	}
 
 	slog.Info("control plane initialized",
-		"node", d.controlPlaneIP,
+		"node", d.controlPlaneInternalIP,
 		"has_kubeconfig", d.kubeconfig != "",
 		"has_join_command", joinCommand != "",
 	)
@@ -463,92 +535,82 @@ echo "=== END JOIN COMMAND ==="
 	return joinCommand, nil
 }
 
-// installCilium installs Cilium CNI.
-// KubeProxyFree is true because kubeadm init skips kube-proxy installation,
-// so Cilium must handle Service/ClusterIP load-balancing.
-func (d *Deployer) installCilium(ctx context.Context) error {
-	slog.Info("installing Cilium CNI", "node", d.controlPlaneIP)
+// installFlannel installs Flannel CNI.
+// Flannel is used because it works well in containerized environments
+// without requiring BPF filesystem access.
+func (d *Deployer) installFlannel(ctx context.Context) error {
+	slog.Info("installing Flannel CNI", "node", d.controlPlaneInternalIP)
 
+	// With internal Docker IPs, standard Flannel setup works without hacks
 	installCmd := `
 set -e
 
-if command -v cilium &>/dev/null; then
-    echo "Cilium CLI already installed"
-    cilium version --client
-else
-    CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
-    ARCH=$(dpkg --print-architecture 2>/dev/null || echo "amd64")
+kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
 
-    curl -L --fail --remote-name-all \
-        "https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-${ARCH}.tar.gz" \
-        "https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-${ARCH}.tar.gz.sha256sum"
+echo "Flannel installation initiated"
 
-    sha256sum -c "cilium-linux-${ARCH}.tar.gz.sha256sum"
+echo "Waiting for Flannel to be ready..."
+for i in $(seq 1 30); do
+    READY=$(kubectl -n kube-flannel get pods -l app=flannel --no-headers 2>/dev/null | grep -c Running || echo 0)
+    if [ "$READY" -ge 1 ]; then
+        echo "Flannel pod is running"
+        break
+    fi
+    echo "  Waiting for Flannel pod... ($i/30)"
+    sleep 10
+done
 
-    tar xzvf cilium-linux-${ARCH}.tar.gz -C /usr/local/bin
-    rm cilium-linux-${ARCH}.tar.gz cilium-linux-${ARCH}.tar.gz.sha256sum
-
-    echo "Cilium CLI installed"
-    cilium version --client
-fi
-
-cilium install \
-    --set tunnel=vxlan \
-    --set ipam.mode=cluster-pool \
-    --set kubeProxyReplacement=true \
-    --wait \
-    --wait-duration=10m0s \
-    2>&1
-
-echo "Cilium installation complete"
+echo "Flannel CNI installed"
 `
 
-	result, err := d.executor.RunOnNode(ctx, d.controlPlaneIP, installCmd)
+	// SSH via Tailscale IP
+	result, err := d.executor.RunOnNode(ctx, d.controlPlaneTailscaleIP, installCmd)
 	if err != nil {
-		return fmt.Errorf("cilium install: %w", err)
+		return fmt.Errorf("flannel install: %w", err)
 	}
 	if result.ExitCode != 0 {
-		return fmt.Errorf("cilium install: exit code %d, output: %s, stderr: %s",
+		return fmt.Errorf("flannel install: exit code %d, output: %s, stderr: %s",
 			result.ExitCode, result.Stdout, result.Stderr)
 	}
 
-	slog.Info("Cilium CNI installed", "node", d.controlPlaneIP)
+	slog.Info("Flannel CNI installed", "node", d.controlPlaneInternalIP)
 	return nil
 }
 
 func (d *Deployer) joinWorkers(ctx context.Context, joinCommand string) error {
-	if len(d.workerIPs) == 0 {
+	if len(d.workerTailscaleIPs) == 0 {
 		slog.Info("no worker nodes to join")
 		return nil
 	}
 
-	slog.Info("joining worker nodes", "count", len(d.workerIPs))
+	slog.Info("joining worker nodes", "count", len(d.workerTailscaleIPs))
 
-	for idx, ip := range d.workerIPs {
-		slog.Info("joining worker", "node", ip, "index", idx+1, "total", len(d.workerIPs))
+	// SSH via Tailscale IPs
+	for idx, tailscaleIP := range d.workerTailscaleIPs {
+		slog.Info("joining worker", "ssh", tailscaleIP, "index", idx+1, "total", len(d.workerTailscaleIPs))
 
 		joinCmd := fmt.Sprintf(`
 set -e
 %s --ignore-preflight-errors=all 2>&1
 `, joinCommand)
 
-		result, err := d.executor.RunOnNode(ctx, ip, joinCmd)
+		result, err := d.executor.RunOnNode(ctx, tailscaleIP, joinCmd)
 		if err != nil {
-			return fmt.Errorf("worker %s: %w", ip, err)
+			return fmt.Errorf("worker %s: %w", tailscaleIP, err)
 		}
 		if result.ExitCode != 0 {
 			return fmt.Errorf("worker %s: exit code %d, output: %s, stderr: %s",
-				ip, result.ExitCode, result.Stdout, result.Stderr)
+				tailscaleIP, result.ExitCode, result.Stdout, result.Stderr)
 		}
 
-		slog.Info("worker joined", "node", ip)
+		slog.Info("worker joined", "node", tailscaleIP)
 	}
 
 	return nil
 }
 
 func (d *Deployer) waitForCluster(ctx context.Context, timeout time.Duration) error {
-	expectedNodes := 1 + len(d.workerIPs)
+	expectedNodes := 1 + len(d.workerTailscaleIPs)
 	slog.Info("waiting for nodes", "expected", expectedNodes, "timeout", timeout)
 
 	deadline := time.Now().Add(timeout)
@@ -557,7 +619,8 @@ func (d *Deployer) waitForCluster(ctx context.Context, timeout time.Duration) er
 	for time.Now().Before(deadline) {
 		checkCmd := `kubectl get nodes --no-headers 2>/dev/null | grep -c " Ready " || echo 0`
 
-		result, err := d.executor.RunOnNode(ctx, d.controlPlaneIP, checkCmd)
+		// SSH via Tailscale IP
+		result, err := d.executor.RunOnNode(ctx, d.controlPlaneTailscaleIP, checkCmd)
 		if err == nil && result.ExitCode == 0 {
 			count := 0
 			fmt.Sscanf(strings.TrimSpace(result.Stdout), "%d", &count)
@@ -583,27 +646,28 @@ func (d *Deployer) waitForCluster(ctx context.Context, timeout time.Duration) er
 func (d *Deployer) verifyCluster(ctx context.Context) error {
 	slog.Info("verifying cluster")
 
-	nodesResult, err := d.executor.RunOnNode(ctx, d.controlPlaneIP, "kubectl get nodes -o wide")
+	// SSH via Tailscale IP
+	nodesResult, err := d.executor.RunOnNode(ctx, d.controlPlaneTailscaleIP, "kubectl get nodes -o wide")
 	if err != nil {
 		return fmt.Errorf("get nodes: %w", err)
 	}
 	fmt.Println("\n=== Kubernetes Nodes ===")
 	fmt.Println(nodesResult.Stdout)
 
-	podsResult, err := d.executor.RunOnNode(ctx, d.controlPlaneIP, "kubectl get pods -n kube-system -o wide")
+	podsResult, err := d.executor.RunOnNode(ctx, d.controlPlaneTailscaleIP, "kubectl get pods -n kube-system -o wide")
 	if err != nil {
 		return fmt.Errorf("get pods: %w", err)
 	}
 	fmt.Println("\n=== kube-system Pods ===")
 	fmt.Println(podsResult.Stdout)
 
-	ciliumResult, err := d.executor.RunOnNode(ctx, d.controlPlaneIP,
-		"kubectl get pods -n kube-system -l 'k8s-app in (cilium,cilium-operator)' -o wide")
+	flannelResult, err := d.executor.RunOnNode(ctx, d.controlPlaneTailscaleIP,
+		"kubectl get pods -n kube-flannel -o wide")
 	if err != nil {
-		slog.Warn("get cilium pods", "error", err)
+		slog.Warn("get flannel pods", "error", err)
 	} else {
-		fmt.Println("\n=== Cilium Pods ===")
-		fmt.Println(ciliumResult.Stdout)
+		fmt.Println("\n=== Flannel Pods ===")
+		fmt.Println(flannelResult.Stdout)
 	}
 
 	return nil

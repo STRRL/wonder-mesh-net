@@ -31,7 +31,7 @@ The deployer will:
 1. Discover online nodes via Wonder Mesh Net API
 2. Install containerd and kubeadm on all nodes
 3. Initialize the control plane on the first node
-4. Install Cilium CNI
+4. Install Flannel CNI
 5. Join remaining nodes as workers
 
 Prerequisites:

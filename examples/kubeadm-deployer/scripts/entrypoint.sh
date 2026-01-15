@@ -17,6 +17,8 @@ modprobe nf_conntrack 2>/dev/null || true
 sysctl -w net.bridge.bridge-nf-call-iptables=1 2>/dev/null || true
 sysctl -w net.bridge.bridge-nf-call-ip6tables=1 2>/dev/null || true
 sysctl -w net.ipv4.ip_forward=1 2>/dev/null || true
+# Pre-set conntrack_max to avoid kube-proxy permission issues in nested containers
+sysctl -w net.netfilter.nf_conntrack_max=262144 2>/dev/null || true
 
 # Generate machine-id if missing
 if [ ! -s /etc/machine-id ]; then

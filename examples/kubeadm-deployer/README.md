@@ -10,7 +10,7 @@ The kubeadm-deployer demonstrates the deployer integration pattern:
 2. **Deployer** joins the mesh network and discovers online worker nodes
 3. **Deployer** SSHs to each node over the mesh to install containerd and kubeadm
 4. **Deployer** runs `kubeadm init` on the first node (control plane)
-5. **Deployer** installs Cilium CNI
+5. **Deployer** installs Flannel CNI
 6. **Deployer** runs `kubeadm join` on remaining nodes (workers)
 
 Result: A working 3-node Kubernetes cluster accessible over the mesh network.
@@ -40,7 +40,7 @@ cd examples/kubeadm-deployer
 ./run-demo.sh
 
 # Keep containers running after demo completes
-NO_CLEANUP=1 ./run-demo.sh
+NO_CLEAN=1 ./run-demo.sh
 ```
 
 ## What the Demo Does
@@ -126,7 +126,7 @@ Flags:
 
 Default values are hardcoded for demo simplicity:
 - Kubernetes version: 1.31
-- Pod network CIDR: 10.233.233.0/24
+- Pod network CIDR: 10.244.0.0/16
 - SSH user/password: root/worker
 - SOCKS5 proxy: localhost:1080
 
@@ -169,12 +169,12 @@ docker exec k8s-node-1 systemctl status containerd
 docker exec k8s-node-1 journalctl -u kubelet
 ```
 
-### Cilium pods not starting
+### Flannel pods not starting
 
-Check Cilium status:
+Check Flannel status:
 ```bash
-docker exec kubeadm-deployer kubectl --kubeconfig /tmp/kubeconfig get pods -n kube-system
-docker exec k8s-node-1 cilium status
+docker exec kubeadm-deployer kubectl --kubeconfig /tmp/kubeconfig get pods -n kube-flannel
+docker exec k8s-node-1 kubectl logs -n kube-flannel -l app=flannel
 ```
 
 ### SSH connection fails

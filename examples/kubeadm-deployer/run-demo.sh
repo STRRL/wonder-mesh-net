@@ -19,8 +19,8 @@ log_error() {
 }
 
 cleanup() {
-    if [ "${NO_CLEANUP:-0}" = "1" ]; then
-        log_info "NO_CLEANUP=1, skipping cleanup. Containers are still running."
+    if [ "${NO_CLEAN:-0}" = "1" ]; then
+        log_info "NO_CLEAN=1, skipping cleanup. Containers are still running."
         log_info "To clean up manually: docker compose down -v"
         return
     fi
@@ -236,7 +236,7 @@ if [ $DEPLOY_EXIT -eq 0 ]; then
 
     echo ""
     log_info "To keep containers running for exploration:"
-    echo "  NO_CLEANUP=1 ./run-demo.sh"
+    echo "  NO_CLEAN=1 ./run-demo.sh"
 else
     log_error "Deployment failed with exit code $DEPLOY_EXIT"
     exit 1

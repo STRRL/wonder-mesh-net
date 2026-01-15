@@ -86,10 +86,9 @@ services:
       - /run
       - /run/lock
     volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
       - /dev/net/tun:/dev/net/tun
       - k8s-node-1-var:/var
-    cgroup: host
+    cgroup: private
     depends_on:
       - nginx
     networks:
@@ -107,10 +106,9 @@ services:
       - /run
       - /run/lock
     volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
       - /dev/net/tun:/dev/net/tun
       - k8s-node-2-var:/var
-    cgroup: host
+    cgroup: private
     depends_on:
       - nginx
     networks:
@@ -128,10 +126,9 @@ services:
       - /run
       - /run/lock
     volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
       - /dev/net/tun:/dev/net/tun
       - k8s-node-3-var:/var
-    cgroup: host
+    cgroup: private
     depends_on:
       - nginx
     networks:
