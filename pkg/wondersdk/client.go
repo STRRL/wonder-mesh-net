@@ -33,7 +33,7 @@ type Node struct {
 	Name      string   `json:"name"`
 	Addresses []string `json:"ip_addresses"`
 	Online    bool     `json:"online"`
-	LastSeen  string   `json:"lastSeen,omitempty"`
+	LastSeen  string   `json:"last_seen,omitempty"`
 }
 
 // ListNodes returns all nodes for a user session or API key.

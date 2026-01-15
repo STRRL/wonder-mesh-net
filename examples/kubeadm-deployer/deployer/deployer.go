@@ -115,6 +115,10 @@ func (d *Deployer) Run(ctx context.Context) error {
 		return fmt.Errorf("install CNI: %w", err)
 	}
 
+	if err := d.patchCoreDNS(ctx); err != nil {
+		return fmt.Errorf("patch CoreDNS: %w", err)
+	}
+
 	if err := d.joinWorkers(ctx, joinCommand); err != nil {
 		return fmt.Errorf("join workers: %w", err)
 	}
@@ -545,7 +549,9 @@ func (d *Deployer) installFlannel(ctx context.Context) error {
 	installCmd := `
 set -e
 
-kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
+# Flannel manifest URL is pinned to a specific version for reproducibility.
+# Update the version tag consciously after testing compatibility.
+kubectl apply -f https://github.com/flannel-io/flannel/releases/download/v0.26.7/kube-flannel.yml
 
 echo "Flannel installation initiated"
 
@@ -574,6 +580,47 @@ echo "Flannel CNI installed"
 	}
 
 	slog.Info("Flannel CNI installed", "node", d.controlPlaneInternalIP)
+	return nil
+}
+
+// patchCoreDNS patches the CoreDNS ConfigMap to use external DNS servers.
+// This fixes a loop detection issue in containerized environments where
+// /etc/resolv.conf points to localhost or creates a DNS loop.
+func (d *Deployer) patchCoreDNS(ctx context.Context) error {
+	slog.Info("patching CoreDNS to use external DNS", "node", d.controlPlaneInternalIP)
+
+	patchCmd := `
+set -e
+
+# Wait for CoreDNS ConfigMap to exist
+for i in $(seq 1 30); do
+    if kubectl get configmap coredns -n kube-system &>/dev/null; then
+        break
+    fi
+    echo "Waiting for CoreDNS ConfigMap... ($i/30)"
+    sleep 2
+done
+
+# Patch CoreDNS to use external DNS servers instead of /etc/resolv.conf
+# This prevents the "Loop detected" issue in containerized environments
+kubectl patch configmap coredns -n kube-system --type merge -p '{"data":{"Corefile":".:53 {\n    errors\n    health {\n       lameduck 5s\n    }\n    ready\n    kubernetes cluster.local in-addr.arpa ip6.arpa {\n       pods insecure\n       fallthrough in-addr.arpa ip6.arpa\n       ttl 30\n    }\n    prometheus :9153\n    forward . 8.8.8.8 8.8.4.4 {\n       max_concurrent 1000\n    }\n    cache 30\n    loop\n    reload\n    loadbalance\n}\n"}}'
+
+# Restart CoreDNS to pick up the new config
+kubectl rollout restart deployment coredns -n kube-system
+
+echo "CoreDNS patched successfully"
+`
+
+	result, err := d.executor.RunOnNode(ctx, d.controlPlaneTailscaleIP, patchCmd)
+	if err != nil {
+		return fmt.Errorf("patch CoreDNS: %w", err)
+	}
+	if result.ExitCode != 0 {
+		return fmt.Errorf("patch CoreDNS: exit code %d, output: %s, stderr: %s",
+			result.ExitCode, result.Stdout, result.Stderr)
+	}
+
+	slog.Info("CoreDNS patched", "node", d.controlPlaneInternalIP)
 	return nil
 }
 

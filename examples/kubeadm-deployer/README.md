@@ -4,21 +4,24 @@ This demo shows how to use Wonder Mesh Net to bootstrap a Kubernetes cluster acr
 
 ## Overview
 
-The kubeadm-deployer demonstrates the deployer integration pattern:
+The kubeadm-deployer demonstrates the deployer integration pattern using the **Admin API** for simplified authentication:
 
-1. **Deployer** authenticates with Wonder Mesh Net coordinator using an API key
-2. **Deployer** joins the mesh network and discovers online worker nodes
-3. **Deployer** SSHs to each node over the mesh to install containerd and kubeadm
-4. **Deployer** runs `kubeadm init` on the first node (control plane)
-5. **Deployer** installs Flannel CNI
-6. **Deployer** runs `kubeadm join` on remaining nodes (workers)
+1. **Admin** creates a wonder net via Admin API using `ADMIN_API_AUTH_TOKEN`
+2. **Admin** creates join tokens for worker nodes
+3. **Workers** join the mesh network using join tokens
+4. **Admin** creates an API key and deployer credentials for the deployer
+5. **Deployer** joins the mesh and discovers online worker nodes
+6. **Deployer** SSHs to each node over the mesh to install containerd and kubeadm
+7. **Deployer** runs `kubeadm init` on the first node (control plane)
+8. **Deployer** installs Flannel CNI
+9. **Deployer** runs `kubeadm join` on remaining nodes (workers)
 
 Result: A working 3-node Kubernetes cluster accessible over the mesh network.
 
 ## Prerequisites
 
 - Docker with Docker Compose v2
-- Go 1.23+ (for building)
+- Go (for building; use the version specified in go.mod)
 - ~8GB RAM available for containers
 - Linux host with kernel modules: `br_netfilter`, `overlay`
 
@@ -45,37 +48,56 @@ NO_CLEAN=1 ./run-demo.sh
 
 ## What the Demo Does
 
-1. **Starts infrastructure**: nginx, Keycloak, Headscale, Coordinator
+1. **Starts infrastructure**: nginx, Keycloak, Headscale, Coordinator (with Admin API enabled)
 2. **Starts 3 systemd-enabled workers**: k8s-node-1, k8s-node-2, k8s-node-3
-3. **Workers join mesh**: Each worker runs `wonder worker join`
-4. **Creates API key**: For deployer authentication
-5. **Deployer joins mesh**: Using userspace Tailscale with SOCKS5 proxy
-6. **Runs kubeadm-deployer**: Bootstraps the Kubernetes cluster
+3. **Creates wonder net**: Via Admin API using `ADMIN_API_AUTH_TOKEN`
+4. **Creates join token**: Via Admin API for worker authentication
+5. **Workers join mesh**: Each worker runs `wonder worker join`
+6. **Creates API key**: Via Admin API for deployer authentication
+7. **Deployer joins mesh**: Using userspace Tailscale with SOCKS5 proxy (credentials via Admin API)
+8. **Runs kubeadm-deployer**: Bootstraps the Kubernetes cluster
 
 ## Manual Execution
 
 If you want to run steps manually:
 
 ```bash
+# Admin API token (must match docker-compose.yaml)
+ADMIN_TOKEN="kubeadm-demo-admin-token-at-least-32-chars"
+
 # 1. Start services
 docker compose up -d --build
 
 # 2. Wait for services to be ready
 curl http://localhost:8080/coordinator/health
 
-# 3. Get access token (from inside deployer container)
-docker exec kubeadm-deployer curl -s -X POST \
-    "http://nginx/realms/wonder/protocol/openid-connect/token" \
-    -H "Content-Type: application/x-www-form-urlencoded" \
-    -d "grant_type=password&client_id=wonder-mesh-net&client_secret=wonder-secret&username=testuser&password=testpass"
+# 3. Create wonder net via Admin API
+WONDER_NET_RESPONSE=$(docker exec kubeadm-deployer curl -s -X POST \
+    -H "Authorization: Bearer $ADMIN_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"owner_id": "kubeadm-demo", "display_name": "Kubeadm Demo Wonder Net"}' \
+    "http://nginx/coordinator/admin/api/v1/wonder-nets")
+WONDER_NET_ID=$(echo "$WONDER_NET_RESPONSE" | jq -r '.id')
 
-# 4. Create join token and join workers
-# ... (see run-demo.sh for full flow)
+# 4. Create join token via Admin API
+JOIN_TOKEN=$(docker exec kubeadm-deployer curl -s -X POST \
+    -H "Authorization: Bearer $ADMIN_TOKEN" \
+    "http://nginx/coordinator/admin/api/v1/wonder-nets/$WONDER_NET_ID/join-token" | jq -r '.token')
 
-# 5. Run deployer
+# 5. Join workers (see run-demo.sh for full flow)
+# ...
+
+# 6. Create API key via Admin API
+API_KEY=$(docker exec kubeadm-deployer curl -s -X POST \
+    -H "Authorization: Bearer $ADMIN_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"name": "kubeadm-deployer", "expires_in": "24h"}' \
+    "http://nginx/coordinator/admin/api/v1/wonder-nets/$WONDER_NET_ID/api-keys" | jq -r '.key')
+
+# 7. Run deployer
 docker exec kubeadm-deployer kubeadm-deployer \
     --coordinator-url="http://nginx/coordinator" \
-    --api-key="<your-api-key>" \
+    --api-key="$API_KEY" \
     --verbose
 ```
 

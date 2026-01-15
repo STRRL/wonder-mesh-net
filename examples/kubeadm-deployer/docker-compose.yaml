@@ -61,6 +61,8 @@ services:
       KEYCLOAK_CLIENT_ID: wonder-mesh-net
       KEYCLOAK_CLIENT_SECRET: wonder-secret
       PUBLIC_URL: http://nginx
+      ENABLE_ADMIN_API: "true"
+      ADMIN_API_AUTH_TOKEN: kubeadm-demo-admin-token-at-least-32-chars
     volumes:
       - headscale-run:/var/run/headscale:ro
       - coordinator-data:/data/coordinator

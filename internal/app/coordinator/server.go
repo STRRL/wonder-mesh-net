@@ -380,11 +380,21 @@ func (s *Server) Run() error {
 
 	// Admin API endpoints - only registered if enabled
 	if s.config.EnableAdminAPI {
-		adminController := controller.NewAdminController(s.wonderNetService, s.nodesService)
+		adminController := controller.NewAdminController(
+			s.wonderNetService,
+			s.nodesService,
+			s.workerService,
+			s.apiKeyService,
+			s.meshBackend,
+		)
 		mux.HandleFunc("GET /coordinator/admin/api/v1/wonder-nets", s.requireAdminAuth(adminController.HandleListWonderNets))
+		mux.HandleFunc("POST /coordinator/admin/api/v1/wonder-nets", s.requireAdminAuth(adminController.HandleAdminCreateWonderNet))
 		mux.HandleFunc("GET /coordinator/admin/api/v1/wonder-nets/{id}/nodes", s.requireAdminAuth(adminController.HandleListWonderNetNodes))
 		mux.HandleFunc("GET /coordinator/admin/api/v1/users/{user_id}/wonder-nets", s.requireAdminAuth(adminController.HandleListWonderNetsByUser))
 		mux.HandleFunc("GET /coordinator/admin/api/v1/nodes", s.requireAdminAuth(adminController.HandleListAllNodes))
+		mux.HandleFunc("POST /coordinator/admin/api/v1/wonder-nets/{id}/join-token", s.requireAdminAuth(adminController.HandleAdminCreateJoinToken))
+		mux.HandleFunc("POST /coordinator/admin/api/v1/wonder-nets/{id}/api-keys", s.requireAdminAuth(adminController.HandleAdminCreateAPIKey))
+		mux.HandleFunc("POST /coordinator/admin/api/v1/wonder-nets/{id}/deployer/join", s.requireAdminAuth(adminController.HandleAdminDeployerJoin))
 		slog.Info("admin API routes registered")
 	}
 

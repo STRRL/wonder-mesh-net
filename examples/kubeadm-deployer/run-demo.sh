@@ -1,10 +1,14 @@
 #!/bin/bash
 # Kubeadm Deployer Demo Runner
 # Bootstraps a 3-node Kubernetes cluster using Wonder Mesh Net
+# This demo uses the Admin API for simplified authentication flow
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
+
+# Admin API token - must match docker-compose.yaml
+ADMIN_TOKEN="kubeadm-demo-admin-token-at-least-32-chars"
 
 log_info() {
     echo -e "\033[0;32m[INFO]\033[0m $1"
@@ -31,28 +35,13 @@ cleanup() {
 trap cleanup EXIT
 
 echo "==========================================="
-echo "  Kubeadm Deployer Demo"
+echo "  Kubeadm Deployer Demo (Admin API)"
 echo "  Wonder Mesh Net + Kubernetes"
 echo "==========================================="
 
 log_info "Starting all services..."
 docker compose up -d --build --force-recreate
 sleep 15
-
-log_info "Waiting for Keycloak to be ready..."
-for i in {1..60}; do
-    if curl -sf http://localhost:8080/realms/wonder/.well-known/openid-configuration >/dev/null 2>&1; then
-        break
-    fi
-    if [ $i -eq 60 ]; then
-        log_error "Keycloak did not start in time"
-        docker logs kubeadm-keycloak 2>&1 | tail -30
-        exit 1
-    fi
-    echo "  Waiting for Keycloak... ($i/60)"
-    sleep 2
-done
-log_info "Keycloak is ready"
 
 log_info "Waiting for Coordinator to be ready..."
 for i in {1..30}; do
@@ -69,33 +58,30 @@ for i in {1..30}; do
 done
 log_info "Coordinator is ready"
 
-# NOTE: These credentials are for DEMO USE ONLY. Do not use in production.
-# In production, use proper secret management and environment variables.
-log_info "Getting access token from Keycloak..."
-TOKEN_RESPONSE=$(docker exec kubeadm-deployer curl -s -X POST \
-    "http://nginx/realms/wonder/protocol/openid-connect/token" \
-    -H "Content-Type: application/x-www-form-urlencoded" \
-    -d "grant_type=password" \
-    -d "client_id=wonder-mesh-net" \
-    -d "client_secret=wonder-secret" \
-    -d "username=testuser" \
-    -d "password=testpass")
+log_info "Creating wonder net via Admin API..."
+WONDER_NET_RESPONSE=$(docker exec kubeadm-deployer curl -s -X POST \
+    -H "Authorization: Bearer $ADMIN_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"owner_id": "kubeadm-demo", "display_name": "Kubeadm Demo Wonder Net"}' \
+    "http://nginx/coordinator/admin/api/v1/wonder-nets")
 
-ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token // empty')
-if [ -z "$ACCESS_TOKEN" ]; then
-    log_error "Failed to get access token (check Keycloak logs for details)"
+WONDER_NET_ID=$(echo "$WONDER_NET_RESPONSE" | jq -r '.id // empty')
+if [ -z "$WONDER_NET_ID" ]; then
+    log_error "Failed to create wonder net"
+    echo "$WONDER_NET_RESPONSE"
     exit 1
 fi
-log_info "Access token obtained"
+log_info "Wonder net created: $WONDER_NET_ID"
 
-log_info "Creating join token..."
-JOIN_TOKEN_RESPONSE=$(docker exec kubeadm-deployer curl -s \
-    -H "Authorization: Bearer $ACCESS_TOKEN" \
-    "http://nginx/coordinator/api/v1/join-token")
+log_info "Creating join token via Admin API..."
+JOIN_TOKEN_RESPONSE=$(docker exec kubeadm-deployer curl -s -X POST \
+    -H "Authorization: Bearer $ADMIN_TOKEN" \
+    "http://nginx/coordinator/admin/api/v1/wonder-nets/$WONDER_NET_ID/join-token")
 
 JOIN_TOKEN=$(echo "$JOIN_TOKEN_RESPONSE" | jq -r '.token // empty')
 if [ -z "$JOIN_TOKEN" ]; then
-    log_error "Failed to create join token (check coordinator logs for details)"
+    log_error "Failed to create join token"
+    echo "$JOIN_TOKEN_RESPONSE"
     exit 1
 fi
 log_info "Join token created"
@@ -144,31 +130,33 @@ log_info "Testing mesh connectivity..."
 docker exec k8s-node-1 ping -c 2 "$NODE2_IP" >/dev/null && log_info "  k8s-node-1 -> k8s-node-2: OK"
 docker exec k8s-node-1 ping -c 2 "$NODE3_IP" >/dev/null && log_info "  k8s-node-1 -> k8s-node-3: OK"
 
-log_info "Creating API key for deployer..."
+log_info "Creating API key for deployer via Admin API..."
 API_KEY_RESPONSE=$(docker exec kubeadm-deployer curl -s -X POST \
-    -H "Authorization: Bearer $ACCESS_TOKEN" \
+    -H "Authorization: Bearer $ADMIN_TOKEN" \
     -H "Content-Type: application/json" \
     -d '{"name": "kubeadm-deployer", "expires_in": "24h"}' \
-    "http://nginx/coordinator/api/v1/api-keys")
+    "http://nginx/coordinator/admin/api/v1/wonder-nets/$WONDER_NET_ID/api-keys")
 
 API_KEY=$(echo "$API_KEY_RESPONSE" | jq -r '.key // empty')
 if [ -z "$API_KEY" ]; then
-    log_error "Failed to create API key (check coordinator logs for details)"
+    log_error "Failed to create API key"
+    echo "$API_KEY_RESPONSE"
     exit 1
 fi
 log_info "API key created"
 
-log_info "Deployer joining mesh..."
+log_info "Deployer joining mesh via Admin API..."
 DEPLOYER_JOIN_RESPONSE=$(docker exec kubeadm-deployer curl -s -X POST \
-    -H "Authorization: Bearer $API_KEY" \
+    -H "Authorization: Bearer $ADMIN_TOKEN" \
     -H "Content-Type: application/json" \
-    "http://nginx/coordinator/api/v1/deployer/join")
+    "http://nginx/coordinator/admin/api/v1/wonder-nets/$WONDER_NET_ID/deployer/join")
 
 DEPLOYER_AUTHKEY=$(echo "$DEPLOYER_JOIN_RESPONSE" | jq -r '.tailscale_connection_info.authkey // empty')
 DEPLOYER_LOGIN_SERVER=$(echo "$DEPLOYER_JOIN_RESPONSE" | jq -r '.tailscale_connection_info.login_server // empty')
 
 if [ -z "$DEPLOYER_AUTHKEY" ]; then
-    log_error "Failed to get authkey for deployer (check coordinator logs for details)"
+    log_error "Failed to get authkey for deployer"
+    echo "$DEPLOYER_JOIN_RESPONSE"
     exit 1
 fi
 
@@ -192,10 +180,10 @@ sleep 3
 log_info "Deployer tailscale status:"
 docker exec kubeadm-deployer tailscale --socket=/tmp/tailscaled.sock status || true
 
-log_info "Verifying nodes visible from coordinator..."
+log_info "Verifying nodes visible from coordinator (Admin API)..."
 NODES_RESPONSE=$(docker exec kubeadm-deployer curl -s \
-    -H "Authorization: Bearer $API_KEY" \
-    "http://nginx/coordinator/api/v1/nodes")
+    -H "Authorization: Bearer $ADMIN_TOKEN" \
+    "http://nginx/coordinator/admin/api/v1/wonder-nets/$WONDER_NET_ID/nodes")
 
 NODE_COUNT=$(echo "$NODES_RESPONSE" | jq -r '.count // 0' 2>/dev/null || echo 0)
 log_info "Nodes visible: $NODE_COUNT"
