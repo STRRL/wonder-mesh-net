@@ -87,7 +87,14 @@ fi
 log_info "Join token created"
 
 log_info "Building wonder binary for Linux..."
-(cd ../.. && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-s -w" -o bin/wonder-linux ./cmd/wonder)
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64) GOARCH=amd64 ;;
+    aarch64|arm64) GOARCH=arm64 ;;
+    *) log_error "Unsupported architecture: $ARCH"; exit 1 ;;
+esac
+log_info "  Detected architecture: $ARCH -> GOARCH=$GOARCH"
+(cd ../.. && GOOS=linux GOARCH=$GOARCH CGO_ENABLED=0 go build -ldflags "-s -w" -o bin/wonder-linux ./cmd/wonder)
 
 log_info "Copying wonder binary to workers..."
 docker cp ../../bin/wonder-linux k8s-node-1:/usr/local/bin/wonder

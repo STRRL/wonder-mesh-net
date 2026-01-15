@@ -30,9 +30,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Configure systemd for container environment
-# Mask units that don't work in containers
-RUN systemctl set-default multi-user.target && \
-    systemctl mask \
+# Use filesystem-level symlinks instead of systemctl to avoid requiring systemd at build time
+RUN ln -sf /lib/systemd/system/multi-user.target /etc/systemd/system/default.target && \
+    mkdir -p /etc/systemd/system && \
+    for unit in \
         dev-hugepages.mount \
         sys-fs-fuse-connections.mount \
         systemd-journald-audit.socket \
@@ -42,7 +43,9 @@ RUN systemctl set-default multi-user.target && \
         systemd-random-seed.service \
         systemd-firstboot.service \
         systemd-machine-id-commit.service \
-        systemd-binfmt.service
+        systemd-binfmt.service; do \
+        ln -sf /dev/null /etc/systemd/system/$unit; \
+    done
 
 # Configure SSH for root access
 # WARNING: Hard-coded password and root login are for DEMO USE ONLY.
@@ -52,7 +55,7 @@ RUN mkdir -p /run/sshd && \
     echo 'root:worker' | chpasswd && \
     sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config && \
     sed -i 's/#PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
-    systemctl enable ssh
+    ln -sf /lib/systemd/system/ssh.service /etc/systemd/system/multi-user.target.wants/ssh.service
 
 # Install Tailscale
 # Clean apt lists first to avoid stale cache issues during mirror sync
@@ -62,18 +65,19 @@ RUN curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg \
     | tee /etc/apt/sources.list.d/tailscale.list && \
     rm -rf /var/lib/apt/lists/* && \
     apt-get update && apt-get install -y tailscale && \
-    systemctl enable tailscaled && \
+    ln -sf /lib/systemd/system/tailscaled.service /etc/systemd/system/multi-user.target.wants/tailscaled.service && \
     rm -rf /var/lib/apt/lists/*
 
 # Install crictl (CRI CLI for debugging)
 ARG CRICTL_VERSION=v1.31.1
-RUN curl -fsSL "https://github.com/kubernetes-sigs/cri-tools/releases/download/${CRICTL_VERSION}/crictl-${CRICTL_VERSION}-linux-amd64.tar.gz" \
+ARG TARGETARCH
+RUN curl -fsSL "https://github.com/kubernetes-sigs/cri-tools/releases/download/${CRICTL_VERSION}/crictl-${CRICTL_VERSION}-linux-${TARGETARCH}.tar.gz" \
     | tar -C /usr/local/bin -xzf - && \
     chmod +x /usr/local/bin/crictl
 
 # Install nerdctl (containerd CLI for debugging)
 ARG NERDCTL_VERSION=2.0.3
-RUN curl -fsSL "https://github.com/containerd/nerdctl/releases/download/v${NERDCTL_VERSION}/nerdctl-${NERDCTL_VERSION}-linux-amd64.tar.gz" \
+RUN curl -fsSL "https://github.com/containerd/nerdctl/releases/download/v${NERDCTL_VERSION}/nerdctl-${NERDCTL_VERSION}-linux-${TARGETARCH}.tar.gz" \
     | tar -C /usr/local/bin -xzf - && \
     chmod +x /usr/local/bin/nerdctl
 
