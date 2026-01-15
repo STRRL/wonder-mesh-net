@@ -2,6 +2,9 @@ FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Configure apt to retry on transient failures
+RUN echo 'Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries
+
 RUN apt-get update && apt-get install -y \
     curl \
     iptables \
@@ -19,10 +22,12 @@ RUN mkdir /run/sshd \
     && sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
 
 # Install Tailscale (latest stable, compatible with Headscale 0.27.1)
+# Clean apt lists first to avoid stale cache issues during mirror sync
 RUN curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg \
     | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null \
     && curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list \
     | tee /etc/apt/sources.list.d/tailscale.list \
+    && rm -rf /var/lib/apt/lists/* \
     && apt-get update \
     && apt-get install -y tailscale \
     && rm -rf /var/lib/apt/lists/*
