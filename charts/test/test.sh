@@ -10,6 +10,7 @@ log_error() {
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 NAMESPACE="wonder"
+KEYCLOAK_SVC="wonder-mesh-net-keycloak"
 
 log_info "Cleaning up previous installation..."
 helm uninstall wonder-mesh-net -n ${NAMESPACE} 2>/dev/null || true
@@ -62,7 +63,6 @@ wait_for_keycloak() {
 
     kubectl wait --for=condition=ready pod -l app.kubernetes.io/component=keycloak -n ${NAMESPACE} --timeout=120s
 
-    KEYCLOAK_SVC="wonder-mesh-net-keycloak"
     for i in $(seq 1 30); do
         if kubectl run healthcheck -n ${NAMESPACE} --rm -i --restart=Never --image=alpine:3.19 -- wget -q -O- "http://${KEYCLOAK_SVC}:8080/realms/wonder/.well-known/openid-configuration" >/dev/null 2>&1; then
             log_info "Keycloak is ready!"
