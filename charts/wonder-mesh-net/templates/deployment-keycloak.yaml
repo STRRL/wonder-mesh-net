@@ -18,7 +18,7 @@ spec:
         {{- include "wonder-mesh-net.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: keycloak
     spec:
-      {{- with .Values.podSecurityContext }}
+      {{- with .Values.coordinator.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}

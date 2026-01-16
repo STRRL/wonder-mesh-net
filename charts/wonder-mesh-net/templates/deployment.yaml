@@ -24,7 +24,7 @@ spec:
     spec:
       serviceAccountName: {{ include "wonder-mesh-net.serviceAccountName" . }}
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- toYaml .Values.coordinator.podSecurityContext | nindent 8 }}
       containers:
         - name: coordinator
           securityContext:

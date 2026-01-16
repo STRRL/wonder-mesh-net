@@ -7,8 +7,8 @@ metadata:
     {{- include "wonder-mesh-net.labels" . | nindent 4 }}
 spec:
   accessModes:
-    - {{ .Values.postgres.persistence.accessMode }}
+    - {{ .Values.postgres.persistence.accessMode | quote }}
   resources:
     requests:
-      storage: {{ .Values.postgres.persistence.size }}
+      storage: {{ .Values.postgres.persistence.size | quote }}
 {{- end }}
