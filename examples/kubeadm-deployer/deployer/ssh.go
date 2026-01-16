@@ -22,9 +22,9 @@ type SSHConfig struct {
 
 // SSHClient wraps SSH functionality with SOCKS5 proxy support
 type SSHClient struct {
-	config     SSHConfig
-	sshConfig  *ssh.ClientConfig
-	dialer     proxy.Dialer
+	config    SSHConfig
+	sshConfig *ssh.ClientConfig
+	dialer    proxy.Dialer
 }
 
 // NewSSHClient creates a new SSH client configured for mesh access
@@ -217,22 +217,22 @@ func (c *SSHClient) WaitForSSH(ctx context.Context, host string, timeout time.Du
 	return fmt.Errorf("SSH not available on %s within %v", host, timeout)
 }
 
-// Executor provides high-level SSH operations for multiple nodes
-type Executor struct {
+// SSHExecutor provides high-level SSH operations for multiple nodes
+type SSHExecutor struct {
 	client *SSHClient
 }
 
-// NewExecutor creates a new SSH executor
-func NewExecutor(sshConfig SSHConfig) (*Executor, error) {
+// NewSSHExecutor creates a new SSH executor
+func NewSSHExecutor(sshConfig SSHConfig) (*SSHExecutor, error) {
 	client, err := NewSSHClient(sshConfig)
 	if err != nil {
 		return nil, err
 	}
-	return &Executor{client: client}, nil
+	return &SSHExecutor{client: client}, nil
 }
 
 // RunOnNode executes a command on a single node
-func (e *Executor) RunOnNode(ctx context.Context, nodeIP string, command string) (*CommandResult, error) {
+func (e *SSHExecutor) RunOnNode(ctx context.Context, nodeIP string, command string) (*CommandResult, error) {
 	slog.Info("executing on node", "node", nodeIP, "command", truncateCommand(command))
 	result, err := e.client.RunCommandWithRetry(ctx, nodeIP, command, 3, 5*time.Second)
 	if err != nil {
@@ -249,7 +249,7 @@ func (e *Executor) RunOnNode(ctx context.Context, nodeIP string, command string)
 }
 
 // RunOnAllNodes executes a command on multiple nodes sequentially
-func (e *Executor) RunOnAllNodes(ctx context.Context, nodeIPs []string, command string) error {
+func (e *SSHExecutor) RunOnAllNodes(ctx context.Context, nodeIPs []string, command string) error {
 	for _, ip := range nodeIPs {
 		result, err := e.RunOnNode(ctx, ip, command)
 		if err != nil {
@@ -264,7 +264,7 @@ func (e *Executor) RunOnAllNodes(ctx context.Context, nodeIPs []string, command 
 }
 
 // WaitForAllNodes waits until SSH is available on all nodes
-func (e *Executor) WaitForAllNodes(ctx context.Context, nodeIPs []string, timeout time.Duration) error {
+func (e *SSHExecutor) WaitForAllNodes(ctx context.Context, nodeIPs []string, timeout time.Duration) error {
 	for _, ip := range nodeIPs {
 		if err := e.client.WaitForSSH(ctx, ip, timeout); err != nil {
 			return fmt.Errorf("node %s: %w", ip, err)
@@ -275,7 +275,7 @@ func (e *Executor) WaitForAllNodes(ctx context.Context, nodeIPs []string, timeou
 }
 
 // GetClient returns the underlying SSH client
-func (e *Executor) GetClient() *SSHClient {
+func (e *SSHExecutor) GetClient() *SSHClient {
 	return e.client
 }
 

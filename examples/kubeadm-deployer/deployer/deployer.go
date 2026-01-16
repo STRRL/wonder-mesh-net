@@ -29,9 +29,9 @@ type Config struct {
 
 // Deployer orchestrates Kubernetes cluster bootstrap
 type Deployer struct {
-	config    Config
-	sdkClient *wondersdk.Client
-	executor  *Executor
+	config      Config
+	sdkClient   *wondersdk.Client
+	sshExecutor *SSHExecutor
 
 	// Tailscale IPs - used for SSH connectivity via SOCKS5 proxy
 	controlPlaneTailscaleIP string
@@ -65,15 +65,15 @@ func NewDeployer(config Config) (*Deployer, error) {
 		Timeout:    30 * time.Second,
 	}
 
-	executor, err := NewExecutor(sshConfig)
+	executor, err := NewSSHExecutor(sshConfig)
 	if err != nil {
 		return nil, fmt.Errorf("create SSH executor: %w", err)
 	}
 
 	return &Deployer{
-		config:    config,
-		sdkClient: sdkClient,
-		executor:  executor,
+		config:      config,
+		sdkClient:   sdkClient,
+		sshExecutor: executor,
 	}, nil
 }
 
@@ -229,6 +229,16 @@ func selectIPv4(addresses []string) string {
 	return ""
 }
 
+// selectNodes assigns roles to mesh nodes for Kubernetes cluster deployment.
+// The first node in the slice becomes the control plane; remaining nodes become workers.
+// It extracts IPv4 addresses from each node's Tailscale addresses for SSH connectivity.
+//
+// The function populates:
+//   - d.controlPlaneTailscaleIP: the control plane node's IPv4 address
+//   - d.workerTailscaleIPs: slice of worker nodes' IPv4 addresses
+//
+// Returns an error if fewer than 1 node is provided or if the control plane node
+// has no valid IPv4 address. Worker nodes without IPv4 addresses are silently skipped.
 func (d *Deployer) selectNodes(nodes []wondersdk.Node) error {
 	if len(nodes) < 1 {
 		return fmt.Errorf("at least 1 node required, found %d", len(nodes))
@@ -259,7 +269,7 @@ func (d *Deployer) waitForSSH(ctx context.Context, timeout time.Duration) error 
 	slog.Info("waiting for SSH connectivity")
 
 	allIPs := append([]string{d.controlPlaneTailscaleIP}, d.workerTailscaleIPs...)
-	return d.executor.WaitForAllNodes(ctx, allIPs, timeout)
+	return d.sshExecutor.WaitForAllNodes(ctx, allIPs, timeout)
 }
 
 // discoverInternalIPs queries each node for its Docker network IP (eth0)
@@ -267,7 +277,7 @@ func (d *Deployer) discoverInternalIPs(ctx context.Context) error {
 	slog.Info("discovering internal IPs for kubeadm")
 
 	// Get control plane internal IP
-	result, err := d.executor.RunOnNode(ctx, d.controlPlaneTailscaleIP,
+	result, err := d.sshExecutor.RunOnNode(ctx, d.controlPlaneTailscaleIP,
 		"ip -4 addr show eth0 | grep -oP '(?<=inet\\s)\\d+(\\.\\d+){3}'")
 	if err != nil {
 		return fmt.Errorf("get control plane internal IP: %w", err)
@@ -280,7 +290,7 @@ func (d *Deployer) discoverInternalIPs(ctx context.Context) error {
 	// Get worker internal IPs
 	d.workerInternalIPs = make([]string, 0, len(d.workerTailscaleIPs))
 	for _, tailscaleIP := range d.workerTailscaleIPs {
-		result, err := d.executor.RunOnNode(ctx, tailscaleIP,
+		result, err := d.sshExecutor.RunOnNode(ctx, tailscaleIP,
 			"ip -4 addr show eth0 | grep -oP '(?<=inet\\s)\\d+(\\.\\d+){3}'")
 		if err != nil {
 			return fmt.Errorf("get worker internal IP for %s: %w", tailscaleIP, err)
@@ -372,7 +382,7 @@ sed -i '/swap/d' /etc/fstab || true
 
 	for _, c := range commands {
 		slog.Debug("running", "step", c.name, "node", nodeIP)
-		result, err := d.executor.RunOnNode(ctx, nodeIP, c.cmd)
+		result, err := d.sshExecutor.RunOnNode(ctx, nodeIP, c.cmd)
 		if err != nil {
 			return fmt.Errorf("%s: %w", c.name, err)
 		}
@@ -426,7 +436,7 @@ systemctl enable containerd
 echo "containerd installed successfully"
 `
 
-	result, err := d.executor.RunOnNode(ctx, nodeIP, installCmd)
+	result, err := d.sshExecutor.RunOnNode(ctx, nodeIP, installCmd)
 	if err != nil {
 		return fmt.Errorf("install containerd: %w", err)
 	}
@@ -468,7 +478,7 @@ systemctl enable kubelet
 echo "kubeadm installed successfully"
 `, kubeVersion, kubeVersion)
 
-	result, err := d.executor.RunOnNode(ctx, nodeIP, installCmd)
+	result, err := d.sshExecutor.RunOnNode(ctx, nodeIP, installCmd)
 	if err != nil {
 		return fmt.Errorf("install kubeadm: %w", err)
 	}
@@ -527,7 +537,7 @@ echo "=== END JOIN COMMAND ==="
 `, d.controlPlaneInternalIP, podNetworkCIDR)
 
 	// SSH via Tailscale IP
-	result, err := d.executor.RunOnNode(ctx, d.controlPlaneTailscaleIP, initCmd)
+	result, err := d.sshExecutor.RunOnNode(ctx, d.controlPlaneTailscaleIP, initCmd)
 	if err != nil {
 		return "", fmt.Errorf("kubeadm init: %w", err)
 	}
@@ -586,7 +596,7 @@ echo "Flannel CNI installed"
 `
 
 	// SSH via Tailscale IP
-	result, err := d.executor.RunOnNode(ctx, d.controlPlaneTailscaleIP, installCmd)
+	result, err := d.sshExecutor.RunOnNode(ctx, d.controlPlaneTailscaleIP, installCmd)
 	if err != nil {
 		return fmt.Errorf("flannel install: %w", err)
 	}
@@ -627,7 +637,7 @@ kubectl rollout restart deployment coredns -n kube-system
 echo "CoreDNS patched successfully"
 `
 
-	result, err := d.executor.RunOnNode(ctx, d.controlPlaneTailscaleIP, patchCmd)
+	result, err := d.sshExecutor.RunOnNode(ctx, d.controlPlaneTailscaleIP, patchCmd)
 	if err != nil {
 		return fmt.Errorf("patch CoreDNS: %w", err)
 	}
@@ -657,7 +667,7 @@ set -e
 %s --ignore-preflight-errors=all 2>&1
 `, joinCommand)
 
-		result, err := d.executor.RunOnNode(ctx, tailscaleIP, joinCmd)
+		result, err := d.sshExecutor.RunOnNode(ctx, tailscaleIP, joinCmd)
 		if err != nil {
 			return fmt.Errorf("worker %s: %w", tailscaleIP, err)
 		}
@@ -683,7 +693,7 @@ func (d *Deployer) waitForCluster(ctx context.Context, timeout time.Duration) er
 		checkCmd := `kubectl get nodes --no-headers 2>/dev/null | grep -c " Ready " || echo 0`
 
 		// SSH via Tailscale IP
-		result, err := d.executor.RunOnNode(ctx, d.controlPlaneTailscaleIP, checkCmd)
+		result, err := d.sshExecutor.RunOnNode(ctx, d.controlPlaneTailscaleIP, checkCmd)
 		if err == nil && result.ExitCode == 0 {
 			count := 0
 			fmt.Sscanf(strings.TrimSpace(result.Stdout), "%d", &count)
@@ -710,21 +720,21 @@ func (d *Deployer) verifyCluster(ctx context.Context) error {
 	slog.Info("verifying cluster")
 
 	// SSH via Tailscale IP
-	nodesResult, err := d.executor.RunOnNode(ctx, d.controlPlaneTailscaleIP, "kubectl get nodes -o wide")
+	nodesResult, err := d.sshExecutor.RunOnNode(ctx, d.controlPlaneTailscaleIP, "kubectl get nodes -o wide")
 	if err != nil {
 		return fmt.Errorf("get nodes: %w", err)
 	}
 	fmt.Println("\n=== Kubernetes Nodes ===")
 	fmt.Println(nodesResult.Stdout)
 
-	podsResult, err := d.executor.RunOnNode(ctx, d.controlPlaneTailscaleIP, "kubectl get pods -n kube-system -o wide")
+	podsResult, err := d.sshExecutor.RunOnNode(ctx, d.controlPlaneTailscaleIP, "kubectl get pods -n kube-system -o wide")
 	if err != nil {
 		return fmt.Errorf("get pods: %w", err)
 	}
 	fmt.Println("\n=== kube-system Pods ===")
 	fmt.Println(podsResult.Stdout)
 
-	flannelResult, err := d.executor.RunOnNode(ctx, d.controlPlaneTailscaleIP,
+	flannelResult, err := d.sshExecutor.RunOnNode(ctx, d.controlPlaneTailscaleIP,
 		"kubectl get pods -n kube-flannel -o wide")
 	if err != nil {
 		slog.Warn("get flannel pods", "error", err)
@@ -749,7 +759,7 @@ rm -rf /root/.kube || true
 iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X || true
 `
 
-	result, err := d.executor.RunOnNode(ctx, nodeIP, resetCmd)
+	result, err := d.sshExecutor.RunOnNode(ctx, nodeIP, resetCmd)
 	if err != nil {
 		return fmt.Errorf("kubeadm reset: %w", err)
 	}
