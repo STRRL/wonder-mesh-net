@@ -41,9 +41,17 @@ func NewSSHClient(config SSHConfig) (*SSHClient, error) {
 		Auth: []ssh.AuthMethod{
 			ssh.Password(config.Password),
 		},
-		// NOTE: InsecureIgnoreHostKey disables host key verification.
-		// This is acceptable for demo/example purposes only. In production,
-		// use proper host key verification (e.g., known_hosts file).
+		// SECURITY CONSIDERATION:
+		// InsecureIgnoreHostKey disables SSH host key verification entirely.
+		// This makes the connection vulnerable to man-in-the-middle (MITM)
+		// attacks and MUST NOT be used in production or untrusted environments.
+		//
+		// This example uses InsecureIgnoreHostKey only to keep the sample
+		// code simple and focused on demonstrating connectivity. When using
+		// this code as a basis for real deployments, you MUST implement proper
+		// host key verification (for example, by using a known_hosts file or a
+		// custom ssh.HostKeyCallback) and document this choice as part of your
+		// deployment's security considerations.
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         config.Timeout,
 	}

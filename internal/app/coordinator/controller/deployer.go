@@ -49,12 +49,33 @@ func (c *DeployerController) HandleDeployerJoin(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	loginServer, ok := metadata["login_server"].(string)
+	if !ok {
+		slog.Error("invalid join credentials metadata: login_server missing or not a string")
+		http.Error(w, "invalid join credentials", http.StatusInternalServerError)
+		return
+	}
+
+	authkey, ok := metadata["authkey"].(string)
+	if !ok {
+		slog.Error("invalid join credentials metadata: authkey missing or not a string")
+		http.Error(w, "invalid join credentials", http.StatusInternalServerError)
+		return
+	}
+
+	headscaleUser, ok := metadata["headscale_user"].(string)
+	if !ok {
+		slog.Error("invalid join credentials metadata: headscale_user missing or not a string")
+		http.Error(w, "invalid join credentials", http.StatusInternalServerError)
+		return
+	}
+
 	resp := JoinCredentialsResponse{
 		MeshType: meshType,
 		TailscaleConnectionInfo: &TailscaleConnectionInfo{
-			LoginServer:   metadata["login_server"].(string),
-			Authkey:       metadata["authkey"].(string),
-			HeadscaleUser: metadata["headscale_user"].(string),
+			LoginServer:   loginServer,
+			Authkey:       authkey,
+			HeadscaleUser: headscaleUser,
 		},
 	}
 

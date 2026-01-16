@@ -51,8 +51,9 @@ RUN ln -sf /lib/systemd/system/multi-user.target /etc/systemd/system/default.tar
 # WARNING: Hard-coded password and root login are for DEMO USE ONLY.
 # Do NOT use this image in production or exposed environments.
 # For production: use SSH keys, disable password auth, disable root login.
+# If exposing this demo beyond localhost or a private mesh network, CHANGE the root password.
 RUN mkdir -p /run/sshd && \
-    echo 'root:worker' | chpasswd && \
+    echo 'root:KubeadmWorkerDemoOnly!123' | chpasswd && \
     sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config && \
     sed -i 's/#PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
     ln -sf /lib/systemd/system/ssh.service /etc/systemd/system/multi-user.target.wants/ssh.service

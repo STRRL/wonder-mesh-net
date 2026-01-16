@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"regexp"
 	"strings"
@@ -49,7 +50,7 @@ func NewDeployer(config Config) (*Deployer, error) {
 		config.SSHUser = "root"
 	}
 	if config.SSHPassword == "" {
-		config.SSHPassword = "worker"
+		config.SSHPassword = "KubeadmWorkerDemoOnly!123"
 	}
 	if config.SOCKS5Addr == "" {
 		config.SOCKS5Addr = "localhost:1080"
@@ -211,23 +212,38 @@ func (d *Deployer) discoverNodes(ctx context.Context) ([]wondersdk.Node, error) 
 	return nodes, nil
 }
 
+// selectIPv4 returns the first IPv4 address from the list.
+// Headscale/Tailscale may return both IPv4 and IPv6, and the ordering is not
+// guaranteed. IPv6 literals without brackets break SSH address formatting, so
+// we prefer IPv4. Falls back to the first address if no IPv4 is found.
+func selectIPv4(addresses []string) string {
+	for _, addr := range addresses {
+		ip := net.ParseIP(addr)
+		if ip != nil && ip.To4() != nil {
+			return addr
+		}
+	}
+	if len(addresses) > 0 {
+		return addresses[0]
+	}
+	return ""
+}
+
 func (d *Deployer) selectNodes(nodes []wondersdk.Node) error {
 	if len(nodes) < 1 {
 		return fmt.Errorf("at least 1 node required, found %d", len(nodes))
 	}
 
-	d.controlPlaneTailscaleIP = ""
-	if len(nodes[0].Addresses) > 0 {
-		d.controlPlaneTailscaleIP = nodes[0].Addresses[0]
-	}
+	d.controlPlaneTailscaleIP = selectIPv4(nodes[0].Addresses)
 	if d.controlPlaneTailscaleIP == "" {
 		return fmt.Errorf("control plane node has no IP address")
 	}
 
 	d.workerTailscaleIPs = make([]string, 0, len(nodes)-1)
 	for i := 1; i < len(nodes); i++ {
-		if len(nodes[i].Addresses) > 0 {
-			d.workerTailscaleIPs = append(d.workerTailscaleIPs, nodes[i].Addresses[0])
+		addr := selectIPv4(nodes[i].Addresses)
+		if addr != "" {
+			d.workerTailscaleIPs = append(d.workerTailscaleIPs, addr)
 		}
 	}
 
@@ -557,7 +573,7 @@ echo "Flannel installation initiated"
 
 echo "Waiting for Flannel to be ready..."
 for i in $(seq 1 30); do
-    READY=$(kubectl -n kube-flannel get pods -l app=flannel --no-headers 2>/dev/null | grep -c Running || echo 0)
+    READY=$(kubectl -n kube-flannel get pods -l app=flannel --no-headers 2>/dev/null | grep -c Running || true)
     if [ "$READY" -ge 1 ]; then
         echo "Flannel pod is running"
         break
@@ -729,6 +745,7 @@ rm -rf /etc/cni/net.d/* || true
 rm -rf /var/lib/etcd/* || true
 rm -rf /var/lib/kubelet/* || true
 rm -rf /root/.kube || true
+# WARNING: Flushing iptables will disrupt existing network connections on this node.
 iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X || true
 `
 

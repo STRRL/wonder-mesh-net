@@ -7,7 +7,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Admin API token - must match docker-compose.yaml
+# Admin API token - must match docker-compose.yaml (see ADMIN_API_AUTH_TOKEN around line 65).
+# If you change this value, update docker-compose.yaml accordingly, or vice versa.
 ADMIN_TOKEN="kubeadm-demo-admin-token-at-least-32-chars"
 
 log_info() {
