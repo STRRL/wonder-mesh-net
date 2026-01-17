@@ -128,9 +128,12 @@ coordinator:
   podAnnotations: {}
 
   publicUrl: "http://localhost:9080"
-  
+
+  # Secret key used to sign JWTs/sessions for the coordinator.
+  # When left empty, a new random secret will be generated on each Helm install/upgrade,
+  # which will invalidate existing sessions. For production, set this to a fixed, strong value.
   jwtSecret: ""
-  
+
   oidc:
     url: "https://auth.example.com"
     realm: "wonder"

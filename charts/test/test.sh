@@ -175,10 +175,6 @@ JOIN_TOKEN_RESPONSE=$(kubectl exec -n ${NAMESPACE} ${DEPLOYER_POD} -- curl -s \
     -H "Authorization: Bearer ${ACCESS_TOKEN}" \
     "http://${COORDINATOR_SVC}/coordinator/api/v1/join-token")
 
-echo kubectl exec -n ${NAMESPACE} ${DEPLOYER_POD} -- curl -s \
-    -H "Authorization: Bearer ${ACCESS_TOKEN}" \
-    "http://${COORDINATOR_SVC}/coordinator/api/v1/join-token"
-
 JOIN_TOKEN=$(echo "${JOIN_TOKEN_RESPONSE}" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
 log_info "Join Token: ${JOIN_TOKEN}"
 
