@@ -50,3 +50,5 @@ webui/dist/
 webui/tsconfig.tsbuildinfo
 internal/app/coordinator/webui/static/assets/
 !internal/app/coordinator/webui/static/index.html
+
+charts/test/wonder-linux
