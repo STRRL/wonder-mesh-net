@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      containers:
+        - name: worker
+          image: wonder-worker:test
+          imagePullPolicy: Never
+          securityContext:
+            privileged: true
+          command: ["/bin/sh", "-c", "sleep infinity"]

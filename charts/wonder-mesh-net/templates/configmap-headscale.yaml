@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wonder-mesh-net.fullname" . }}-headscale
+  labels:
+    {{- include "wonder-mesh-net.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    server_url: {{ .Values.coordinator.publicUrl }}
+    listen_addr: {{ .Values.headscale.config.listen_addr }}
+    metrics_listen_addr: {{ .Values.headscale.config.metrics_listen_addr }}
+    grpc_listen_addr: {{ .Values.headscale.config.grpc_listen_addr }}
+    grpc_allow_insecure: {{ .Values.headscale.config.grpc_allow_insecure }}
+    
+    # Unix socket path for local connection (shared with coordinator)
+    unix_socket: {{ .Values.headscale.config.unix_socket }}
+    unix_socket_permission: {{ .Values.headscale.config.unix_socket_permission | quote }}
+    
+    private_key_path: /var/lib/headscale/private.key
+    noise:
+      private_key_path: /var/lib/headscale/noise_private.key
+    
+    prefixes:
+      v4: {{ .Values.headscale.config.prefixes.v4 }}
+      v6: {{ .Values.headscale.config.prefixes.v6 }}
+    
+    database:
+      type: sqlite
+      sqlite:
+        path: /var/lib/headscale/db.sqlite
+    
+    derp:
+      server:
+        enabled: {{ .Values.headscale.config.derp.server.enabled }}
+      urls:
+        {{- range .Values.headscale.config.derp.urls }}
+        - {{ . }}
+        {{- end }}
+      auto_update_enabled: true
+      update_frequency: 24h
+    
+    disable_check_updates: {{ .Values.headscale.config.disable_check_updates }}
+    ephemeral_node_inactivity_timeout: {{ .Values.headscale.config.ephemeral_node_inactivity_timeout }}
+    node_pruning_enabled: {{ .Values.headscale.config.node_pruning_enabled }}
+    
+    dns:
+      magic_dns: false
+      base_domain: ""
+      override_local_dns: false
+    
+    log:
+      format: text
+      level: {{ .Values.headscale.config.log.level }}
+    
+    policy:
+      mode: database

@@ -1,0 +1,55 @@
+{{- if .Values.keycloak.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wonder-mesh-net.fullname" . }}-keycloak-realm
+  labels:
+    {{- include "wonder-mesh-net.labels" . | nindent 4 }}
+data:
+  realm.json: |
+    {
+      "realm": "{{ .Values.coordinator.oidc.realm }}",
+      "enabled": true,
+      "sslRequired": "none",
+      "registrationAllowed": false,
+      "loginWithEmailAllowed": true,
+      "duplicateEmailsAllowed": false,
+      "resetPasswordAllowed": false,
+      "editUsernameAllowed": false,
+      "bruteForceProtected": false,
+      "clients": [
+        {
+          "clientId": "{{ .Values.coordinator.oidc.clientId }}",
+          "name": "Wonder Mesh Net",
+          "enabled": true,
+          "publicClient": false,
+          "secret": "{{ .Values.coordinator.oidc.clientSecret }}",
+          "redirectUris": ["*"],
+          "webOrigins": ["*"],
+          "directAccessGrantsEnabled": true,
+          "standardFlowEnabled": true,
+          "protocol": "openid-connect",
+          "attributes": {
+            "post.logout.redirect.uris": "*"
+          }
+        }
+      ],
+      "users": [
+        {
+          "username": "testuser",
+          "enabled": true,
+          "emailVerified": true,
+          "email": "testuser@example.com",
+          "firstName": "Test",
+          "lastName": "User",
+          "credentials": [
+            {
+              "type": "password",
+              "value": "testpass",
+              "temporary": false
+            }
+          ]
+        }
+      ]
+    }
+{{- end }}

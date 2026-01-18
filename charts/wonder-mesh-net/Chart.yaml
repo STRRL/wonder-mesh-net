@@ -1,0 +1,17 @@
+apiVersion: v2
+name: wonder-mesh-net
+description: What a wonder, comrade.
+type: application
+version: 0.2.0
+appVersion: "v0.0.1"
+keywords:
+  - headscale
+  - tailscale
+  - mesh
+  - network
+  - NAT
+maintainers:
+  - name: strrl
+    email: me@strrl.dev
+sources:
+  - https://github.com/strrl/wonder-mesh-net

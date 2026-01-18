@@ -1,0 +1,8 @@
+FROM alpine:3.19
+
+RUN apk add --no-cache curl
+RUN curl https://pkgs.tailscale.com/stable/tailscale_1.92.5_amd64.tgz | tar xvz -C /
+RUN mv /tailscale_1.92.5_amd64/tailscaled /usr/bin/tailscaled
+RUN mv /tailscale_1.92.5_amd64/tailscale /usr/bin/tailscale
+
+COPY wonder-linux /usr/local/bin/wonder

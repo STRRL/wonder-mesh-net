@@ -1,0 +1,92 @@
+{{- if .Values.keycloak.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wonder-mesh-net.fullname" . }}-keycloak
+  labels:
+    {{- include "wonder-mesh-net.labels" . | nindent 4 }}
+    app.kubernetes.io/component: keycloak
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "wonder-mesh-net.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: keycloak
+  template:
+    metadata:
+      labels:
+        {{- include "wonder-mesh-net.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: keycloak
+    spec:
+      {{- with .Values.coordinator.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: keycloak
+          {{- with .Values.keycloak.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ .Values.keycloak.image.repository }}:{{ .Values.keycloak.image.tag }}"
+          imagePullPolicy: {{ .Values.keycloak.image.pullPolicy }}
+          # TODO: support HTTPS
+          command: ["/opt/keycloak/bin/kc.sh", "{{ if .Values.keycloak.production }}start{{ else }}start-dev{{ end }}", "--import-realm", "--http-enabled=true", "--hostname-strict=false"]
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          {{- if .Values.keycloak.probes }}
+          {{- toYaml .Values.keycloak.probes | nindent 10 }}
+          {{- end }}
+          {{- if .Values.keycloak.resources }}
+          resources:
+            {{- toYaml .Values.keycloak.resources | nindent 12 }}
+          {{- end }}
+          env:
+            - name: KEYCLOAK_ADMIN
+              value: {{ .Values.keycloak.adminUser | quote }}
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              value: {{ .Values.keycloak.adminPassword | quote }}
+            - name: KC_HTTP_RELATIVE_PATH
+              value: "/"
+            - name: KC_PROXY_HEADERS
+              value: "xforwarded"
+            {{- if .Values.postgres.enabled }}
+            - name: KC_DB
+              value: postgres
+            - name: KC_DB_URL
+              value: "jdbc:postgresql://{{ include "wonder-mesh-net.fullname" . }}-postgresql:{{ .Values.postgres.service.port }}/{{ .Values.postgres.auth.database }}"
+            - name: KC_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wonder-mesh-net.fullname" . }}-postgresql
+                  key: postgres-user
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wonder-mesh-net.fullname" . }}-postgresql
+                  key: postgres-password
+            {{- end }}
+            {{- with .Values.keycloak.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: realm-config
+              mountPath: /opt/keycloak/data/import/realm.json
+              subPath: realm.json
+              readOnly: true
+            - name: keycloak-data
+              mountPath: /opt/keycloak/data
+      volumes:
+        - name: realm-config
+          configMap:
+            name: {{ include "wonder-mesh-net.fullname" . }}-keycloak-realm
+        - name: keycloak-data
+          {{- if .Values.keycloak.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "wonder-mesh-net.fullname" . }}-keycloak
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+{{- end }}
