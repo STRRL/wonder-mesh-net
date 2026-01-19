@@ -17,10 +17,13 @@ jobs:
 
       - name: Extract version
         id: version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "app_version=${TAG}" >> $GITHUB_OUTPUT
+          echo "chart_version=${TAG#v}" >> $GITHUB_OUTPUT
 
       - name: Publish Helm chart
-        uses: stefanprodan/helm-gh-pages@master
+        uses: stefanprodan/helm-gh-pages@v1
         with:
           token: ${{ secrets.HELM_TOKEN }}
           charts_dir: charts
@@ -28,5 +31,5 @@ jobs:
           owner: strrl
           repository: helm.strrl.dev
           branch: gh-pages
-          app_version: ${{ steps.version.outputs.version }}
-          chart_version: ${{ steps.version.outputs.version }}
+          app_version: ${{ steps.version.outputs.app_version }}
+          chart_version: ${{ steps.version.outputs.chart_version }}
