@@ -1,0 +1,35 @@
+name: Release Helm Chart
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version
+        id: version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "app_version=${TAG}" >> $GITHUB_OUTPUT
+          echo "chart_version=${TAG#v}" >> $GITHUB_OUTPUT
+
+      - name: Publish Helm chart
+        uses: stefanprodan/helm-gh-pages@v1
+        with:
+          token: ${{ secrets.HELM_TOKEN }}
+          charts_dir: charts
+          charts_url: https://helm.strrl.dev
+          owner: strrl
+          repository: helm.strrl.dev
+          branch: gh-pages
+          app_version: ${{ steps.version.outputs.app_version }}
+          chart_version: ${{ steps.version.outputs.chart_version }}
