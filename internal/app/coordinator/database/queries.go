@@ -20,7 +20,7 @@ type WonderNet struct {
 	UpdatedAt     time.Time
 }
 
-type ApiKey struct {
+type APIKey struct {
 	ID          string
 	WonderNetID string
 	Name        string
@@ -62,10 +62,10 @@ type Queries interface {
 	DeleteWonderNet(ctx context.Context, id string) error
 	ListWonderNets(ctx context.Context) ([]WonderNet, error)
 
-	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
-	GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error)
-	GetAPIKeyByID(ctx context.Context, id string) (ApiKey, error)
-	ListAPIKeysByWonderNet(ctx context.Context, wonderNetID string) ([]ApiKey, error)
+	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (APIKey, error)
+	GetAPIKeyByHash(ctx context.Context, keyHash string) (APIKey, error)
+	GetAPIKeyByID(ctx context.Context, id string) (APIKey, error)
+	ListAPIKeysByWonderNet(ctx context.Context, wonderNetID string) ([]APIKey, error)
 	DeleteAPIKey(ctx context.Context, id string) error
 	UpdateAPIKeyLastUsed(ctx context.Context, id string) error
 }
@@ -146,7 +146,7 @@ func (s *sqliteQueries) ListWonderNets(ctx context.Context) ([]WonderNet, error)
 	return items, nil
 }
 
-func (s *sqliteQueries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error) {
+func (s *sqliteQueries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (APIKey, error) {
 	row, err := s.q.CreateAPIKey(ctx, sqlcsqlite.CreateAPIKeyParams{
 		ID:          arg.ID,
 		WonderNetID: arg.WonderNetID,
@@ -156,35 +156,35 @@ func (s *sqliteQueries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams
 		ExpiresAt:   arg.ExpiresAt,
 	})
 	if err != nil {
-		return ApiKey{}, err
+		return APIKey{}, err
 	}
-	return sqliteApiKey(row), nil
+	return sqliteAPIKey(row), nil
 }
 
-func (s *sqliteQueries) GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error) {
+func (s *sqliteQueries) GetAPIKeyByHash(ctx context.Context, keyHash string) (APIKey, error) {
 	row, err := s.q.GetAPIKeyByHash(ctx, keyHash)
 	if err != nil {
-		return ApiKey{}, err
+		return APIKey{}, err
 	}
-	return sqliteApiKey(row), nil
+	return sqliteAPIKey(row), nil
 }
 
-func (s *sqliteQueries) GetAPIKeyByID(ctx context.Context, id string) (ApiKey, error) {
+func (s *sqliteQueries) GetAPIKeyByID(ctx context.Context, id string) (APIKey, error) {
 	row, err := s.q.GetAPIKeyByID(ctx, id)
 	if err != nil {
-		return ApiKey{}, err
+		return APIKey{}, err
 	}
-	return sqliteApiKey(row), nil
+	return sqliteAPIKey(row), nil
 }
 
-func (s *sqliteQueries) ListAPIKeysByWonderNet(ctx context.Context, wonderNetID string) ([]ApiKey, error) {
+func (s *sqliteQueries) ListAPIKeysByWonderNet(ctx context.Context, wonderNetID string) ([]APIKey, error) {
 	rows, err := s.q.ListAPIKeysByWonderNet(ctx, wonderNetID)
 	if err != nil {
 		return nil, err
 	}
-	items := make([]ApiKey, len(rows))
+	items := make([]APIKey, len(rows))
 	for i, row := range rows {
-		items[i] = sqliteApiKey(row)
+		items[i] = sqliteAPIKey(row)
 	}
 	return items, nil
 }
@@ -209,8 +209,8 @@ func sqliteWonderNet(row sqlcsqlite.WonderNet) WonderNet {
 	}
 }
 
-func sqliteApiKey(row sqlcsqlite.ApiKey) ApiKey {
-	return ApiKey{
+func sqliteAPIKey(row sqlcsqlite.ApiKey) APIKey {
+	return APIKey{
 		ID:          row.ID,
 		WonderNetID: row.WonderNetID,
 		Name:        row.Name,
@@ -287,7 +287,7 @@ func (p *postgresQueries) ListWonderNets(ctx context.Context) ([]WonderNet, erro
 	return items, nil
 }
 
-func (p *postgresQueries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error) {
+func (p *postgresQueries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (APIKey, error) {
 	row, err := p.q.CreateAPIKey(ctx, sqlcpostgres.CreateAPIKeyParams{
 		ID:          arg.ID,
 		WonderNetID: arg.WonderNetID,
@@ -297,35 +297,35 @@ func (p *postgresQueries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyPara
 		ExpiresAt:   arg.ExpiresAt,
 	})
 	if err != nil {
-		return ApiKey{}, err
+		return APIKey{}, err
 	}
-	return postgresApiKey(row), nil
+	return postgresAPIKey(row), nil
 }
 
-func (p *postgresQueries) GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error) {
+func (p *postgresQueries) GetAPIKeyByHash(ctx context.Context, keyHash string) (APIKey, error) {
 	row, err := p.q.GetAPIKeyByHash(ctx, keyHash)
 	if err != nil {
-		return ApiKey{}, err
+		return APIKey{}, err
 	}
-	return postgresApiKey(row), nil
+	return postgresAPIKey(row), nil
 }
 
-func (p *postgresQueries) GetAPIKeyByID(ctx context.Context, id string) (ApiKey, error) {
+func (p *postgresQueries) GetAPIKeyByID(ctx context.Context, id string) (APIKey, error) {
 	row, err := p.q.GetAPIKeyByID(ctx, id)
 	if err != nil {
-		return ApiKey{}, err
+		return APIKey{}, err
 	}
-	return postgresApiKey(row), nil
+	return postgresAPIKey(row), nil
 }
 
-func (p *postgresQueries) ListAPIKeysByWonderNet(ctx context.Context, wonderNetID string) ([]ApiKey, error) {
+func (p *postgresQueries) ListAPIKeysByWonderNet(ctx context.Context, wonderNetID string) ([]APIKey, error) {
 	rows, err := p.q.ListAPIKeysByWonderNet(ctx, wonderNetID)
 	if err != nil {
 		return nil, err
 	}
-	items := make([]ApiKey, len(rows))
+	items := make([]APIKey, len(rows))
 	for i, row := range rows {
-		items[i] = postgresApiKey(row)
+		items[i] = postgresAPIKey(row)
 	}
 	return items, nil
 }
@@ -350,8 +350,8 @@ func postgresWonderNet(row sqlcpostgres.WonderNet) WonderNet {
 	}
 }
 
-func postgresApiKey(row sqlcpostgres.ApiKey) ApiKey {
-	return ApiKey{
+func postgresAPIKey(row sqlcpostgres.ApiKey) APIKey {
+	return APIKey{
 		ID:          row.ID,
 		WonderNetID: row.WonderNetID,
 		Name:        row.Name,

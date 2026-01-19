@@ -101,7 +101,7 @@ func (r *APIKeyRepository) UpdateLastUsed(ctx context.Context, id string) error 
 	return r.queries.UpdateAPIKeyLastUsed(ctx, id)
 }
 
-func apiKeyFromRow(row database.ApiKey) *APIKey {
+func apiKeyFromRow(row database.APIKey) *APIKey {
 	key := &APIKey{
 		ID:          row.ID,
 		WonderNetID: row.WonderNetID,
