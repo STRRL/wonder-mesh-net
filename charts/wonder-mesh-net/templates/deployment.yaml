@@ -55,11 +55,10 @@ spec:
               value: {{ .Values.coordinator.database.driver | quote }}
               {{- end }}
             - name: DB_DSN
-              {{- if .Values.postgres.enabled }}
-              value: {{ .Values.coordinator.database.dsn | default (printf "postgres://%s:%s@%s-postgresql:%d/%s?sslmode=disable" .Values.postgres.auth.username .Values.postgres.auth.password (include "wonder-mesh-net.fullname" .) (.Values.postgres.service.port | int) (.Values.coordinator.database.name | default "coordinator")) | quote }}
-              {{- else }}
-              value: {{ .Values.coordinator.database.dsn | quote }}
-              {{- end }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wonder-mesh-net.fullname" . }}-db
+                  key: db-dsn
             - name: HEADSCALE_URL
               value: {{ .Values.headscale.config.server_url | default "http://localhost:8080" | quote }}
             - name: HEADSCALE_UNIX_SOCKET

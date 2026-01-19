@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -82,7 +83,7 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("initialize database: %w", err)
 	}
-	slog.Info("database initialized", "driver", driver, "dsn", dsn)
+	slog.Info("database initialized", "driver", driver, "dsn", redactDSN(dsn))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -158,6 +159,16 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 		nodesService:        nodesService,
 		apiKeyService:       apiKeyService,
 	}, nil
+}
+
+func redactDSN(dsn string) string {
+	u, err := url.Parse(dsn)
+	if err != nil {
+		// 如果解析失败（例如格式不是 URL），回退到返回原始字符串或报错
+		return "invalid-dsn-format"
+	}
+	// Go 1.15+ 提供了 Redacted() 方法，它会自动隐藏密码
+	return u.Redacted()
 }
 
 // requireAuth wraps a handler with JWT authentication.

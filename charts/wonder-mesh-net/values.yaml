@@ -106,9 +106,9 @@ postgres:
     size: 1Gi
     accessMode: ReadWriteOnce
   auth:
-    database: keycloak
-    username: keycloak
-    password: keycloak
+    database: wonder
+    username: wonder
+    password: wonder
   resources: {}
   securityContext:
     runAsNonRoot: true
