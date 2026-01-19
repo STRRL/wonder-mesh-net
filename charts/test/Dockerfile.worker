@@ -1,8 +1,18 @@
 FROM alpine:3.19
 
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl openssh-server openssh-client python3 shadow
 RUN curl https://pkgs.tailscale.com/stable/tailscale_1.92.5_amd64.tgz | tar xvz -C /
 RUN mv /tailscale_1.92.5_amd64/tailscaled /usr/bin/tailscaled
 RUN mv /tailscale_1.92.5_amd64/tailscale /usr/bin/tailscale
+
+RUN mkdir -p /run/sshd \
+    && ssh-keygen -A \
+    && echo "root:worker" | chpasswd \
+    && sed -i 's/^#PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config \
+    && sed -i 's/^PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config \
+    && sed -i 's/^#PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config \
+    && sed -i 's/^PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config \
+    && if ! grep -q '^PermitRootLogin' /etc/ssh/sshd_config; then echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config; fi \
+    && if ! grep -q '^PasswordAuthentication' /etc/ssh/sshd_config; then echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config; fi
 
 COPY wonder-linux /usr/local/bin/wonder
