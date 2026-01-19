@@ -1,0 +1,23 @@
+name: Helm Lint
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Lint Helm chart
+        run: helm lint charts/wonder-mesh-net
+
+      - name: Test packaging
+        run: helm package charts/wonder-mesh-net
