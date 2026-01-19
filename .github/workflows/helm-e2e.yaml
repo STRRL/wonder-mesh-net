@@ -8,8 +8,13 @@ on:
 
 jobs:
   helm-e2e:
+    name: Helm Chart E2E (${{ matrix.db }})
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        db: [pgsql, sqlite]
 
     steps:
       - name: Checkout
@@ -37,7 +42,7 @@ jobs:
           kubectl get nodes -o wide
 
       - name: Run Helm chart E2E
-        run: ./charts/test/test.sh
+        run: ./charts/test/test.sh ${{ matrix.db }}
 
       - name: Dump cluster state on failure
         if: failure()

@@ -15,7 +15,32 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 NAMESPACE="wonder"
 KEYCLOAK_SVC="wonder-mesh-net-keycloak"
+DB_BACKEND="${1:-${DB_BACKEND:-postgres}}"
 
+case "${DB_BACKEND}" in
+    postgres|pgsql|postgresql)
+        DB_BACKEND="postgres"
+        ;;
+    sqlite|sqlite3)
+        DB_BACKEND="sqlite"
+        ;;
+    *)
+        log_error "Unsupported database backend: ${DB_BACKEND} (expected postgres or sqlite)"
+        exit 1
+        ;;
+esac
+
+KEYCLOAK_PRODUCTION="true"
+POSTGRES_ENABLED="true"
+COORDINATOR_DB_DRIVER="postgres"
+
+if [ "${DB_BACKEND}" = "sqlite" ]; then
+    KEYCLOAK_PRODUCTION="false"
+    POSTGRES_ENABLED="false"
+    COORDINATOR_DB_DRIVER="sqlite"
+fi
+
+log_info "Using database backend: ${DB_BACKEND}"
 log_info "Cleaning up previous installation..."
 helm uninstall wonder-mesh-net -n ${NAMESPACE} 2>/dev/null || true
 kubectl delete ns ${NAMESPACE} 2>/dev/null || true
@@ -35,6 +60,10 @@ docker pull headscale/headscale:0.27.1
 minikube image load headscale/headscale:0.27.1
 docker pull quay.io/keycloak/keycloak:26.0
 minikube image load quay.io/keycloak/keycloak:26.0
+if [ "${DB_BACKEND}" = "postgres" ]; then
+    docker pull postgres:16-alpine
+    minikube image load postgres:16-alpine
+fi
 log_info "Images already available in Minikube"
 
 log_info "Loading images into Minikube..."
@@ -55,8 +84,9 @@ helm install wonder-mesh-net ./charts/wonder-mesh-net \
     --set headscale.image.pullPolicy=IfNotPresent \
     --set keycloak.image.pullPolicy=IfNotPresent \
     --set keycloak.enabled=true \
-    --set keycloak.production=true \
-    --set postgres.enabled=true \
+    --set keycloak.production=${KEYCLOAK_PRODUCTION} \
+    --set coordinator.database.driver=${COORDINATOR_DB_DRIVER} \
+    --set postgres.enabled=${POSTGRES_ENABLED} \
     --set coordinator.publicUrl="http://wonder-mesh-net"
 
 log_info "Waiting for pods to be ready..."
