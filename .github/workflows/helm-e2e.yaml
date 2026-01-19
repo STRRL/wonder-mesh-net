@@ -1,0 +1,50 @@
+name: Helm Chart E2E
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  helm-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Start Minikube
+        uses: medyagh/setup-minikube@v0.0.16
+        with:
+          driver: docker
+
+      - name: Verify cluster
+        run: |
+          minikube status
+          kubectl get nodes -o wide
+
+      - name: Run Helm chart E2E
+        run: ./charts/test/test.sh
+
+      - name: Dump cluster state on failure
+        if: failure()
+        run: |
+          kubectl get pods -A -o wide || true
+          kubectl get svc -A || true
+          kubectl get events -A --sort-by=.lastTimestamp | tail -200 || true
+          kubectl describe pod -n wonder -l app.kubernetes.io/name=wonder-mesh-net || true
+          kubectl logs -n wonder -l app.kubernetes.io/name=wonder-mesh-net --all-containers=true --tail=200 || true
+          minikube logs --lines=200 || true
