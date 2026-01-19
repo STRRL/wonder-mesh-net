@@ -44,7 +44,7 @@ sqlc generate
    SELECT * FROM wonder_nets WHERE id = ?;
    ```
 3. Use `?` placeholders for SQLite queries and `$1`-style placeholders for PostgreSQL queries.
-3. Regenerate: `sqlc generate`
+4. Regenerate: `sqlc generate`
 
 ## Configuration
 
