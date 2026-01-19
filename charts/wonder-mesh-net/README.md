@@ -45,7 +45,11 @@ When enabled:
 | `keycloak.adminUser` | Keycloak admin username | `admin` |
 | `keycloak.adminPassword` | Keycloak admin password | `admin` |
 | `coordinator.publicUrl` | Public URL for the coordinator (must match Ingress) | `http://localhost:9080` |
+| `coordinator.database.driver` | Coordinator database driver (`sqlite` or `postgres`) | `sqlite` |
+| `coordinator.database.dsn` | Coordinator database DSN (required for postgres) | `""` |
 | ... (see values.yaml for full list) ...
+
+When `postgres.enabled=true`, the chart configures the coordinator to use the internal PostgreSQL service by default. To override, set `coordinator.database.dsn` explicitly.
 
 ## Headscale Configuration
 

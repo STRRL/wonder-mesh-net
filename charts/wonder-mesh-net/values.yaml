@@ -140,6 +140,10 @@ coordinator:
     clientId: "wonder-mesh-net"
     clientSecret: "wonder-secret"
 
+  database:
+    driver: "sqlite"
+    dsn: ""
+
   securityContext:
     runAsNonRoot: true
     runAsUser: 1000

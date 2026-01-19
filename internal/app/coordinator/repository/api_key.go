@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/database/sqlc"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/database"
 )
 
 // APIKey represents an API key for third-party integrations.
@@ -23,11 +23,11 @@ type APIKey struct {
 
 // APIKeyRepository handles API key persistence.
 type APIKeyRepository struct {
-	queries *sqlc.Queries
+	queries database.Queries
 }
 
 // NewAPIKeyRepository creates a new APIKeyRepository.
-func NewAPIKeyRepository(queries *sqlc.Queries) *APIKeyRepository {
+func NewAPIKeyRepository(queries database.Queries) *APIKeyRepository {
 	return &APIKeyRepository{queries: queries}
 }
 
@@ -38,7 +38,7 @@ func (r *APIKeyRepository) Create(ctx context.Context, id, wonderNetID, name, ke
 		expiresAtSQL = sql.NullTime{Time: *expiresAt, Valid: true}
 	}
 
-	row, err := r.queries.CreateAPIKey(ctx, sqlc.CreateAPIKeyParams{
+	row, err := r.queries.CreateAPIKey(ctx, database.CreateAPIKeyParams{
 		ID:          id,
 		WonderNetID: wonderNetID,
 		Name:        name,
@@ -101,7 +101,7 @@ func (r *APIKeyRepository) UpdateLastUsed(ctx context.Context, id string) error 
 	return r.queries.UpdateAPIKeyLastUsed(ctx, id)
 }
 
-func apiKeyFromRow(row sqlc.ApiKey) *APIKey {
+func apiKeyFromRow(row database.ApiKey) *APIKey {
 	key := &APIKey{
 		ID:          row.ID,
 		WonderNetID: row.WonderNetID,

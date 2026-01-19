@@ -3,7 +3,7 @@
 //   sqlc v1.30.0
 // source: api_keys.sql
 
-package sqlc
+package sqlcpostgres
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 
 const createAPIKey = `-- name: CreateAPIKey :one
 INSERT INTO api_keys (id, wonder_net_id, name, key_hash, key_prefix, expires_at)
-VALUES (?, ?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id, wonder_net_id, name, key_hash, key_prefix, created_at, last_used_at, expires_at
 `
 
@@ -49,7 +49,7 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Api
 }
 
 const deleteAPIKey = `-- name: DeleteAPIKey :exec
-DELETE FROM api_keys WHERE id = ?
+DELETE FROM api_keys WHERE id = $1
 `
 
 func (q *Queries) DeleteAPIKey(ctx context.Context, id string) error {
@@ -58,7 +58,7 @@ func (q *Queries) DeleteAPIKey(ctx context.Context, id string) error {
 }
 
 const getAPIKeyByHash = `-- name: GetAPIKeyByHash :one
-SELECT id, wonder_net_id, name, key_hash, key_prefix, created_at, last_used_at, expires_at FROM api_keys WHERE key_hash = ?
+SELECT id, wonder_net_id, name, key_hash, key_prefix, created_at, last_used_at, expires_at FROM api_keys WHERE key_hash = $1
 `
 
 func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error) {
@@ -78,7 +78,7 @@ func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, 
 }
 
 const getAPIKeyByID = `-- name: GetAPIKeyByID :one
-SELECT id, wonder_net_id, name, key_hash, key_prefix, created_at, last_used_at, expires_at FROM api_keys WHERE id = ?
+SELECT id, wonder_net_id, name, key_hash, key_prefix, created_at, last_used_at, expires_at FROM api_keys WHERE id = $1
 `
 
 func (q *Queries) GetAPIKeyByID(ctx context.Context, id string) (ApiKey, error) {
@@ -98,7 +98,7 @@ func (q *Queries) GetAPIKeyByID(ctx context.Context, id string) (ApiKey, error) 
 }
 
 const listAPIKeysByWonderNet = `-- name: ListAPIKeysByWonderNet :many
-SELECT id, wonder_net_id, name, key_hash, key_prefix, created_at, last_used_at, expires_at FROM api_keys WHERE wonder_net_id = ? ORDER BY created_at DESC
+SELECT id, wonder_net_id, name, key_hash, key_prefix, created_at, last_used_at, expires_at FROM api_keys WHERE wonder_net_id = $1 ORDER BY created_at DESC
 `
 
 func (q *Queries) ListAPIKeysByWonderNet(ctx context.Context, wonderNetID string) ([]ApiKey, error) {
@@ -134,7 +134,7 @@ func (q *Queries) ListAPIKeysByWonderNet(ctx context.Context, wonderNetID string
 }
 
 const updateAPIKeyLastUsed = `-- name: UpdateAPIKeyLastUsed :exec
-UPDATE api_keys SET last_used_at = CURRENT_TIMESTAMP WHERE id = ?
+UPDATE api_keys SET last_used_at = CURRENT_TIMESTAMP WHERE id = $1
 `
 
 func (q *Queries) UpdateAPIKeyLastUsed(ctx context.Context, id string) error {

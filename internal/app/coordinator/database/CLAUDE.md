@@ -9,11 +9,13 @@ This package manages database connections, migrations, and query generation for 
 ```
 database/
 ├── manager.go          # Database connection and migration management
+├── queries.go          # Driver-specific query adapters
 ├── goose/              # Migration files (goose format)
 │   └── 001_init.sql    # Initial schema (all tables)
 └── sqlc/               # Query definitions and generated code
-    ├── *.sql           # Query definitions
-    └── *.generated.go  # Generated Go code (do not edit)
+    ├── sqlite/         # SQLite query definitions + generated code
+    ├── postgres/       # PostgreSQL query definitions + generated code
+    └── */*.generated.go  # Generated Go code (do not edit)
 ```
 
 ## Tools
@@ -35,12 +37,13 @@ sqlc generate
 
 ### Adding Queries
 
-1. Create or edit a `.sql` file in `sqlc/` (e.g., `wonder_nets.sql`)
+1. Create or edit a `.sql` file in `sqlc/sqlite` and `sqlc/postgres` (e.g., `wonder_nets.sql`)
 2. Write queries using sqlc annotations:
    ```sql
    -- name: GetWonderNetByID :one
    SELECT * FROM wonder_nets WHERE id = ?;
    ```
+3. Use `?` placeholders for SQLite queries and `$1`-style placeholders for PostgreSQL queries.
 3. Regenerate: `sqlc generate`
 
 ## Configuration

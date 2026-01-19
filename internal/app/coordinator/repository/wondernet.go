@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/database/sqlc"
+	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/database"
 )
 
 // WonderNet represents a wonder net (project/namespace) in the coordinator.
@@ -22,17 +22,17 @@ type WonderNet struct {
 
 // WonderNetRepository provides wonder net storage operations.
 type WonderNetRepository struct {
-	queries *sqlc.Queries
+	queries database.Queries
 }
 
 // NewWonderNetRepository creates a new WonderNetRepository.
-func NewWonderNetRepository(queries *sqlc.Queries) *WonderNetRepository {
+func NewWonderNetRepository(queries database.Queries) *WonderNetRepository {
 	return &WonderNetRepository{queries: queries}
 }
 
 // Create creates a new wonder net.
 func (r *WonderNetRepository) Create(ctx context.Context, wn *WonderNet) error {
-	return r.queries.CreateWonderNet(ctx, sqlc.CreateWonderNetParams{
+	return r.queries.CreateWonderNet(ctx, database.CreateWonderNetParams{
 		ID:            wn.ID,
 		OwnerID:       wn.OwnerID,
 		HeadscaleUser: wn.HeadscaleUser,
@@ -80,7 +80,7 @@ func (r *WonderNetRepository) ListByOwner(ctx context.Context, ownerID string) (
 
 // Update updates a wonder net.
 func (r *WonderNetRepository) Update(ctx context.Context, wn *WonderNet) error {
-	return r.queries.UpdateWonderNet(ctx, sqlc.UpdateWonderNetParams{
+	return r.queries.UpdateWonderNet(ctx, database.UpdateWonderNetParams{
 		DisplayName: wn.DisplayName,
 		ID:          wn.ID,
 	})
@@ -104,7 +104,7 @@ func (r *WonderNetRepository) List(ctx context.Context) ([]*WonderNet, error) {
 	return wonderNets, nil
 }
 
-func dbWonderNetToWonderNet(row sqlc.WonderNet) *WonderNet {
+func dbWonderNetToWonderNet(row database.WonderNet) *WonderNet {
 	return &WonderNet{
 		ID:            row.ID,
 		OwnerID:       row.OwnerID,

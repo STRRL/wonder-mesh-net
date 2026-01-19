@@ -9,6 +9,11 @@ type Config struct {
 	// JWTSecret is the signing key for join tokens. If empty, a random one is generated.
 	JWTSecret string `mapstructure:"jwt_secret"`
 
+	// DatabaseDriver selects the storage backend (sqlite or postgres).
+	DatabaseDriver string `mapstructure:"database_driver"`
+	// DatabaseDSN is the database connection string.
+	DatabaseDSN string `mapstructure:"database_dsn"`
+
 	// HeadscaleURL is the HTTP URL of the Headscale server (e.g., "http://headscale:8080").
 	HeadscaleURL string `mapstructure:"headscale_url"`
 	// HeadscaleUnixSocket is the path to Headscale Unix socket (e.g., "/var/run/headscale/headscale.sock").

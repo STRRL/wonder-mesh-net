@@ -48,6 +48,14 @@ spec:
                 secretKeyRef:
                   name: {{ include "wonder-mesh-net.fullname" . }}-secret
                   key: jwt-secret
+            - name: DB_DRIVER
+              value: {{ ternary "postgres" .Values.coordinator.database.driver .Values.postgres.enabled | quote }}
+            - name: DB_DSN
+              {{- if .Values.postgres.enabled }}
+              value: {{ .Values.coordinator.database.dsn | default (printf "postgres://%s:%s@%s-postgresql:%d/%s?sslmode=disable" .Values.postgres.auth.username .Values.postgres.auth.password (include "wonder-mesh-net.fullname" .) (.Values.postgres.service.port | int) .Values.postgres.auth.database) | quote }}
+              {{- else }}
+              value: {{ .Values.coordinator.database.dsn | quote }}
+              {{- end }}
             - name: HEADSCALE_URL
               value: {{ .Values.headscale.config.server_url | default "http://localhost:8080" | quote }}
             - name: HEADSCALE_UNIX_SOCKET

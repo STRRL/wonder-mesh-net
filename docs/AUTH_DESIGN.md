@@ -434,6 +434,10 @@ KEYCLOAK_CLIENT_SECRET=xxx
 # JWT Secret for Join Tokens (internal, not OIDC)
 JWT_SECRET=xxx
 
+# Coordinator database
+DB_DRIVER=sqlite
+DB_DSN=file:/data/coordinator/coordinator.db?_journal_mode=WAL&_busy_timeout=5000
+
 # Headscale Connection
 HEADSCALE_URL=http://localhost:8080
 HEADSCALE_API_KEY=xxx
@@ -456,4 +460,3 @@ The Keycloak realm should be configured with:
 3. **Protocol Mappers** (optional, for debugging)
    - `identity_provider` - which IdP was used
    - `identity_provider_identity` - external user ID
-

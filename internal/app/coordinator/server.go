@@ -61,14 +61,28 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 		return nil, fmt.Errorf("create coordinator data dir: %w", err)
 	}
 
+	driver, err := database.ParseDriver(config.DatabaseDriver)
+	if err != nil {
+		return nil, fmt.Errorf("parse database driver: %w", err)
+	}
+
+	dsn := config.DatabaseDSN
+	if dsn == "" {
+		if driver == database.DriverSQLite {
+			dsn = DefaultDatabaseDSN
+		} else {
+			return nil, fmt.Errorf("database DSN is required for driver %s", driver)
+		}
+	}
+
 	db, err := database.NewManager(database.Config{
-		Driver: database.DriverSQLite,
-		DSN:    DefaultDatabaseDSN,
+		Driver: driver,
+		DSN:    dsn,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("initialize database: %w", err)
 	}
-	slog.Info("database initialized", "driver", database.DriverSQLite, "dsn", DefaultDatabaseDSN)
+	slog.Info("database initialized", "driver", driver, "dsn", dsn)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()

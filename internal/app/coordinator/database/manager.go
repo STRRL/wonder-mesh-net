@@ -9,7 +9,6 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pressly/goose/v3"
-	"github.com/strrl/wonder-mesh-net/internal/app/coordinator/database/sqlc"
 )
 
 //go:embed goose/*.sql
@@ -32,7 +31,7 @@ type Config struct {
 // Manager handles database connections and migrations
 type Manager struct {
 	db      *sql.DB
-	queries *sqlc.Queries
+	queries Queries
 }
 
 // NewManager creates a new database manager and runs migrations.
@@ -49,9 +48,15 @@ func NewManager(cfg Config) (*Manager, error) {
 		return nil, fmt.Errorf("run migrations: %w", err)
 	}
 
+	queries, err := newQueries(cfg.Driver, db)
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("initialize queries: %w", err)
+	}
+
 	return &Manager{
 		db:      db,
-		queries: sqlc.New(db),
+		queries: queries,
 	}, nil
 }
 
@@ -95,7 +100,7 @@ func gooseDialect(driver Driver) string {
 }
 
 // Queries returns the sqlc queries instance
-func (m *Manager) Queries() *sqlc.Queries {
+func (m *Manager) Queries() Queries {
 	return m.queries
 }
 

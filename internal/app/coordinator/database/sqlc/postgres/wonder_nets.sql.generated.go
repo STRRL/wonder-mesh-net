@@ -3,7 +3,7 @@
 //   sqlc v1.30.0
 // source: wonder_nets.sql
 
-package sqlc
+package sqlcpostgres
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 
 const createWonderNet = `-- name: CreateWonderNet :exec
 INSERT INTO wonder_nets (id, owner_id, headscale_user, display_name, mesh_type, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 `
 
 type CreateWonderNetParams struct {
@@ -34,7 +34,7 @@ func (q *Queries) CreateWonderNet(ctx context.Context, arg CreateWonderNetParams
 }
 
 const deleteWonderNet = `-- name: DeleteWonderNet :exec
-DELETE FROM wonder_nets WHERE id = ?
+DELETE FROM wonder_nets WHERE id = $1
 `
 
 func (q *Queries) DeleteWonderNet(ctx context.Context, id string) error {
@@ -43,7 +43,7 @@ func (q *Queries) DeleteWonderNet(ctx context.Context, id string) error {
 }
 
 const getWonderNet = `-- name: GetWonderNet :one
-SELECT id, owner_id, headscale_user, display_name, mesh_type, created_at, updated_at FROM wonder_nets WHERE id = ?
+SELECT id, owner_id, headscale_user, display_name, mesh_type, created_at, updated_at FROM wonder_nets WHERE id = $1
 `
 
 func (q *Queries) GetWonderNet(ctx context.Context, id string) (WonderNet, error) {
@@ -62,7 +62,7 @@ func (q *Queries) GetWonderNet(ctx context.Context, id string) (WonderNet, error
 }
 
 const getWonderNetByHeadscaleUser = `-- name: GetWonderNetByHeadscaleUser :one
-SELECT id, owner_id, headscale_user, display_name, mesh_type, created_at, updated_at FROM wonder_nets WHERE headscale_user = ?
+SELECT id, owner_id, headscale_user, display_name, mesh_type, created_at, updated_at FROM wonder_nets WHERE headscale_user = $1
 `
 
 func (q *Queries) GetWonderNetByHeadscaleUser(ctx context.Context, headscaleUser string) (WonderNet, error) {
@@ -116,7 +116,7 @@ func (q *Queries) ListWonderNets(ctx context.Context) ([]WonderNet, error) {
 }
 
 const listWonderNetsByOwner = `-- name: ListWonderNetsByOwner :many
-SELECT id, owner_id, headscale_user, display_name, mesh_type, created_at, updated_at FROM wonder_nets WHERE owner_id = ? ORDER BY created_at DESC
+SELECT id, owner_id, headscale_user, display_name, mesh_type, created_at, updated_at FROM wonder_nets WHERE owner_id = $1 ORDER BY created_at DESC
 `
 
 func (q *Queries) ListWonderNetsByOwner(ctx context.Context, ownerID string) ([]WonderNet, error) {
@@ -152,8 +152,8 @@ func (q *Queries) ListWonderNetsByOwner(ctx context.Context, ownerID string) ([]
 
 const updateWonderNet = `-- name: UpdateWonderNet :exec
 UPDATE wonder_nets
-SET display_name = ?, updated_at = CURRENT_TIMESTAMP
-WHERE id = ?
+SET display_name = $1, updated_at = CURRENT_TIMESTAMP
+WHERE id = $2
 `
 
 type UpdateWonderNetParams struct {

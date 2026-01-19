@@ -1,12 +1,24 @@
 version: "2"
 sql:
   - engine: "sqlite"
-    queries: "internal/app/coordinator/database/sqlc"
+    queries: "internal/app/coordinator/database/sqlc/sqlite"
     schema: "internal/app/coordinator/database/goose"
     gen:
       go:
-        package: "sqlc"
-        out: "internal/app/coordinator/database/sqlc"
+        package: "sqlcsqlite"
+        out: "internal/app/coordinator/database/sqlc/sqlite"
+        emit_json_tags: true
+        emit_empty_slices: true
+        output_db_file_name: "db.generated.go"
+        output_models_file_name: "models.generated.go"
+        output_files_suffix: ".generated"
+  - engine: "postgresql"
+    queries: "internal/app/coordinator/database/sqlc/postgres"
+    schema: "internal/app/coordinator/database/goose"
+    gen:
+      go:
+        package: "sqlcpostgres"
+        out: "internal/app/coordinator/database/sqlc/postgres"
         emit_json_tags: true
         emit_empty_slices: true
         output_db_file_name: "db.generated.go"
