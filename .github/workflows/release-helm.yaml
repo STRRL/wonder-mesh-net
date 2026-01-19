@@ -20,7 +20,17 @@ jobs:
         run: |
           TAG=${GITHUB_REF#refs/tags/}
           echo "app_version=${TAG}" >> $GITHUB_OUTPUT
-          echo "chart_version=${TAG#v}" >> $GITHUB_OUTPUT
+
+          # Transform vYYYY.MM.DD.revN to semver YYYY.MDD.N
+          # e.g., v2026.01.19.rev1 -> 2026.119.1
+          VERSION=${TAG#v}
+          YEAR=$(echo "$VERSION" | cut -d. -f1)
+          MONTH=$(echo "$VERSION" | cut -d. -f2 | sed 's/^0*//')
+          DAY=$(echo "$VERSION" | cut -d. -f3 | sed 's/^0*//')
+          REV=$(echo "$VERSION" | cut -d. -f4 | sed 's/rev//')
+          MDD=$((MONTH * 100 + DAY))
+          CHART_VERSION="${YEAR}.${MDD}.${REV}"
+          echo "chart_version=${CHART_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Publish Helm chart
         uses: stefanprodan/helm-gh-pages@v1.7.0
