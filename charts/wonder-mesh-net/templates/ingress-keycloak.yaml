@@ -1,0 +1,36 @@
+{{- if and .Values.keycloak.enabled .Values.keycloak.ingress.enabled -}}
+{{- $fullName := include "wonder-mesh-net.fullname" . -}}
+{{- $svcPort := .Values.keycloak.service.port -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullName }}-keycloak
+  labels:
+    {{- include "wonder-mesh-net.labels" . | nindent 4 }}
+    app.kubernetes.io/component: keycloak
+  {{- with .Values.keycloak.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.keycloak.ingress.className }}
+  ingressClassName: {{ .Values.keycloak.ingress.className }}
+  {{- end }}
+  {{- if .Values.keycloak.ingress.tls }}
+  tls:
+    - hosts:
+        - {{ .Values.keycloak.ingress.host | quote }}
+      secretName: {{ .Values.keycloak.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.keycloak.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $fullName }}-keycloak
+                port:
+                  number: {{ $svcPort }}
+{{- end }}

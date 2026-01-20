@@ -123,6 +123,26 @@
             "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
           }
         },
+        "ingress": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "className": { "type": "string" },
+            "annotations": {
+              "type": "object",
+              "additionalProperties": { "type": "string" }
+            },
+            "host": { "type": "string" },
+            "tls": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "secretName": { "type": "string" }
+              }
+            }
+          }
+        },
         "persistence": {
           "type": "object",
           "additionalProperties": false,

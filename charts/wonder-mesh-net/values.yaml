@@ -62,6 +62,12 @@ keycloak:
   service:
     type: ClusterIP
     port: 8080
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    host: auth.example.com
+    tls: {}
   persistence:
     enabled: false
     size: 1Gi
