@@ -49,11 +49,7 @@ spec:
                   name: {{ include "wonder-mesh-net.fullname" . }}-secret
                   key: jwt-secret
             - name: DB_DRIVER
-              {{- if .Values.postgres.enabled }}
-              value: {{ default "postgres" .Values.coordinator.database.driver | quote }}
-              {{- else }}
               value: {{ .Values.coordinator.database.driver | quote }}
-              {{- end }}
             - name: DB_DSN
               valueFrom:
                 secretKeyRef:

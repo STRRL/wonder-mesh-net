@@ -7,7 +7,6 @@
 This chart bootstraps a Wonder Mesh Net deployment on a Kubernetes cluster using the Helm package manager. It includes:
 - Coordinator service
 - Embedded Headscale instance
-- PostgreSQL (optional, default uses SQLite)
 - Keycloak (optional, for development/testing)
 
 ## Prerequisites
@@ -46,10 +45,8 @@ When enabled:
 | `keycloak.adminPassword` | Keycloak admin password | `admin` |
 | `coordinator.publicUrl` | Public URL for the coordinator (must match Ingress) | `http://localhost:9080` |
 | `coordinator.database.driver` | Coordinator database driver (`sqlite` or `postgres`) | `sqlite` |
-| `coordinator.database.dsn` | Coordinator database DSN (required for postgres) | `""` |
+| `coordinator.database.dsn` | Coordinator database DSN (required for external postgres) | `""` |
 | ... (see values.yaml for full list) ...
-
-When `postgres.enabled=true`, the chart configures the coordinator to use the internal PostgreSQL service by default. To override, set `coordinator.database.dsn` explicitly.
 
 ## Headscale Configuration
 
@@ -60,17 +57,14 @@ The embedded Headscale instance is enabled by default. It shares the pod network
 If `keycloak.enabled` is `false` (default), you must provide external OIDC details in `coordinator.oidc.*`.
 If `keycloak.enabled` is `true`, these values are automatically set to the internal Keycloak instance, but can still be overridden.
 
-### Enabling Production Mode with PostgreSQL
+### Enabling Production Mode
 
-For production deployments, use production mode with persistent PostgreSQL:
+For production deployments, use production mode:
 
 ```console
 helm install my-release ./charts/wonder-mesh-net \
   --set keycloak.enabled=true \
-  --set keycloak.production=true \
-  --set postgres.enabled=true \
-  --set postgres.persistence.enabled=true \
-  --set postgres.auth.password=your-secure-password
+  --set keycloak.production=true
 ```
 
 #### Keycloak Configuration Parameters
@@ -78,14 +72,5 @@ helm install my-release ./charts/wonder-mesh-net \
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `keycloak.production` | Use production mode (`start`) instead of dev mode (`start-dev`) | `false` |
-| `postgres.enabled` | Enable integrated PostgreSQL for Keycloak | `false` |
-| `postgres.auth.database` | PostgreSQL database name | `keycloak` |
-| `postgres.auth.username` | PostgreSQL username | `keycloak` |
-| `postgres.auth.password` | PostgreSQL password | `keycloak` |
-| `postgres.persistence.enabled` | Enable PostgreSQL persistence | `false` |
-| `postgres.persistence.size` | PVC size | `1Gi` |
 
-**Security note:** For production, always:
-- Set strong passwords via `postgres.auth.password`
-- Enable persistence via `postgres.persistence.enabled=true`
-- Enable persistence for Keycloak data as well
+**Note:** For production Keycloak with external database, configure via `keycloak.extraEnv`.
