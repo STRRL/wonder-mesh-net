@@ -15,10 +15,18 @@ Wonder Mesh Net is a PaaS bootstrapper that turns homelab/edge machines (behind 
 ## Build Commands
 
 ```bash
-make build          # Build wonder binary to bin/
+make build          # Build wonder binary with web UI to bin/
+make build-go       # Build Go binary only (skip web UI build)
 make build-all      # Cross-compile for linux/darwin, amd64/arm64
 make test           # Run tests with race detector
+make check          # Run gofmt, go vet, golangci-lint
+make generate       # Regenerate sqlc code after schema changes
 make clean          # Remove build artifacts
+```
+
+Run a single test:
+```bash
+go test -v -run TestFunctionName ./path/to/package
 ```
 
 Build artifacts go to `bin/` (gitignored).
@@ -33,44 +41,114 @@ IMAGE_TAG=v2025.12.07.rev1 ./hack/build-image.sh
 
 The script uses `docker buildx` to build for both architectures and pushes to `ghcr.io/strrl/wonder-mesh-net`.
 
+## Web UI
+
+The web UI is a React/TypeScript SPA in `webui/`:
+
+```bash
+cd webui && npm ci && npm run build    # Build UI (copied to internal/app/coordinator/webui/static/)
+cd webui && npm run dev                # Development server with hot reload
+```
+
+## Helm Chart
+
+The Helm chart is in `charts/wonder-mesh-net/`. It deploys coordinator + Headscale (sidecar) + optional Keycloak/PostgreSQL.
+
+### Local Development
+
+```bash
+helm lint charts/wonder-mesh-net                    # Lint chart
+helm template charts/wonder-mesh-net                # Render templates locally
+helm install wonder ./charts/wonder-mesh-net -n wonder --create-namespace
+```
+
+### Key Values
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `headscale.enabled` | Enable embedded Headscale sidecar | `true` |
+| `keycloak.enabled` | Enable embedded Keycloak (dev/test) | `true` |
+| `keycloak.production` | Keycloak production mode (uses PostgreSQL) | `false` |
+| `postgres.enabled` | Enable PostgreSQL for Keycloak | `false` |
+| `coordinator.publicUrl` | Public URL (must match Ingress) | `http://localhost:9080` |
+| `coordinator.database.driver` | Database driver (`sqlite` or `postgres`) | `sqlite` |
+| `coordinator.jwtSecret` | JWT signing secret (auto-generated if empty) | `""` |
+
+### E2E Testing
+
+The Helm E2E test (`charts/test/test.sh`) runs on Minikube and tests both SQLite and PostgreSQL backends:
+
+```bash
+./charts/test/test.sh sqlite    # Test with SQLite backend
+./charts/test/test.sh pgsql     # Test with PostgreSQL backend
+```
+
+The test:
+1. Builds coordinator image and loads into Minikube
+2. Installs Helm chart with Keycloak enabled
+3. Deploys worker pods that join the mesh
+4. Creates API key, deploys app via SSH over mesh
+5. Verifies app is accessible through the mesh
+
+### Chart Structure
+
+```
+charts/wonder-mesh-net/
+├── Chart.yaml                    # Chart metadata
+├── values.yaml                   # Default values
+├── templates/
+│   ├── deployment.yaml           # Coordinator + Headscale pod
+│   ├── deployment-keycloak.yaml  # Optional Keycloak
+│   ├── deployment-postgresql.yaml # Optional PostgreSQL
+│   ├── configmap-headscale.yaml  # Headscale config
+│   ├── configmap-keycloak.yaml   # Keycloak realm import
+│   ├── secret.yaml               # JWT secret, API key
+│   ├── ingress.yaml              # Optional Ingress
+│   └── ...
+```
+
 ## Architecture
 
 ```
 cmd/wonder/
-├── main.go           # CLI entry point (cobra/viper)
-├── coordinator.go    # Multi-tenant coordinator server
-└── worker.go         # Worker node join/status/leave commands
+├── main.go              # CLI entry point (cobra/viper)
+├── commands/
+│   ├── coordinator.go   # Coordinator server command
+│   └── worker/          # Worker CLI (join/status/leave)
+
+internal/app/coordinator/
+├── server.go            # HTTP server bootstrap and middleware
+├── controller/          # HTTP handlers (thin layer)
+├── service/             # Business logic
+├── repository/          # Data access (uses sqlc queries)
+├── database/            # DB connection, migrations (goose), sqlc queries
+│   ├── goose/           # Migration files (modify 001_init.sql during dev)
+│   └── sqlc/            # Query definitions + generated code
+└── webui/               # Embedded static assets for React UI
 
 pkg/
-├── headscale/        # Headscale API client
-│   ├── client.go     # HTTP client for Headscale REST API
-│   ├── realm.go      # Realm management (user = realm isolation)
-│   └── acl.go        # ACL policy generation per realm
-├── jointoken/        # JWT-based join tokens for workers
-├── oidc/             # Multi-provider OIDC authentication
-└── wondersdk/        # Client SDK for external integrations
+├── meshbackend/         # Backend interface + Tailscale implementation
+│   └── tailscale/       # Headscale-based mesh backend
+├── headscale/           # Headscale API client (wondernet, ACL)
+├── jointoken/           # JWT-based join tokens for workers
+├── jwtauth/             # JWT validation middleware
+├── apikey/              # API key generation/validation
+└── wondersdk/           # Client SDK for external integrations
+
+webui/                   # React/TypeScript SPA (Vite)
+charts/wonder-mesh-net/  # Helm chart for Kubernetes deployment
+e2e/                     # End-to-end tests (docker-compose)
 ```
 
 ### Key Concepts
 
-**Multi-tenancy**: Each user gets an isolated Headscale "user" (namespace). The wonder net ID is a random UUID, and the Headscale username is the same UUID (no derivation or truncation).
-
-**TODO: User / Org / Realm hierarchy**
-- Current: 1 OIDC identity = 1 realm (1:1 mapping via `users` table)
-- Future: Support organizations with multiple users sharing a realm
-- Will need: `realms` table, `orgs` table, `oidc_identities` table with roles
-
-**TODO: OAuth 2.0 for third-party integrations**
-- Current: API keys for third-party access (Zeabur, etc.)
-- Future: OAuth 2.0 authorization flow for more granular, revocable access
-- Will enable: "Login with Wonder Mesh" for PaaS platforms
-
-**TODO: API Key security hardening**
-- Current: Plaintext storage (for dev convenience, keys retrievable via list API)
-- Future: Consider hashed storage (SHA256) or encrypted storage (AES-256)
-- Trade-off: Security vs. dev experience (retrievable keys)
+**Multi-tenancy**: Each user gets an isolated Headscale "user" (namespace). The wonder net ID is a random UUID, and the Headscale username is the same UUID.
 
 **Auth flow**: User logs in via OIDC -> coordinator creates Headscale user -> generates session token -> user creates join token -> worker exchanges token for PreAuthKey -> runs `tailscale up` with authkey.
+
+**Mesh backend abstraction**: `pkg/meshbackend` defines an interface for mesh implementations. Currently only Tailscale/Headscale is implemented, but the design supports future backends (Netbird, ZeroTier).
+
+**Database**: Supports SQLite (default, single-file) and PostgreSQL. Schema in `goose/001_init.sql`, queries via sqlc.
 
 **Coordinator endpoints**:
 - `/coordinator/oidc/login` - Start OIDC flow, redirect to Keycloak (no auth required)

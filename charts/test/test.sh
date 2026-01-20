@@ -31,13 +31,13 @@ case "${DB_BACKEND}" in
 esac
 
 KEYCLOAK_PRODUCTION="true"
-POSTGRES_ENABLED="true"
 COORDINATOR_DB_DRIVER="postgres"
+COORDINATOR_DB_DSN="postgres://wonder:wonderpass@postgres:5432/wonder?sslmode=disable"
 
 if [ "${DB_BACKEND}" = "sqlite" ]; then
     KEYCLOAK_PRODUCTION="false"
-    POSTGRES_ENABLED="false"
     COORDINATOR_DB_DRIVER="sqlite"
+    COORDINATOR_DB_DSN=""
 fi
 
 log_info "Using database backend: ${DB_BACKEND}"
@@ -45,6 +45,60 @@ log_info "Cleaning up previous installation..."
 helm uninstall wonder-mesh-net -n ${NAMESPACE} 2>/dev/null || true
 kubectl delete ns ${NAMESPACE} 2>/dev/null || true
 kubectl create ns ${NAMESPACE}
+
+if [ "${DB_BACKEND}" = "postgres" ]; then
+    log_info "Deploying external PostgreSQL for postgres backend..."
+    cat <<EOF | kubectl apply -n ${NAMESPACE} -f -
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+stringData:
+  POSTGRES_USER: wonder
+  POSTGRES_PASSWORD: wonderpass
+  POSTGRES_DB: wonder
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:16-alpine
+        envFrom:
+        - secretRef:
+            name: postgres-secret
+        ports:
+        - containerPort: 5432
+        readinessProbe:
+          exec:
+            command: ["pg_isready", "-U", "wonder", "-d", "wonder"]
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+EOF
+    log_info "Waiting for PostgreSQL to be ready..."
+    kubectl wait --for=condition=ready pod -l app=postgres -n ${NAMESPACE} --timeout=120s
+fi
 
 log_info "Building Wonder Linux binary..."
 cd "${PROJECT_ROOT}"
@@ -76,18 +130,40 @@ docker build --network=host -t wonder-mesh-net:${TEST_IMAGE_TAG} .
 minikube image load wonder-mesh-net:${TEST_IMAGE_TAG}
 
 log_info "Installing Helm chart..."
-helm install wonder-mesh-net ./charts/wonder-mesh-net \
-    --namespace ${NAMESPACE} \
-    --set coordinator.image.repository=wonder-mesh-net \
-    --set coordinator.image.tag=${TEST_IMAGE_TAG} \
-    --set coordinator.image.pullPolicy=Never \
-    --set headscale.image.pullPolicy=IfNotPresent \
-    --set keycloak.image.pullPolicy=IfNotPresent \
-    --set keycloak.enabled=true \
-    --set keycloak.production=${KEYCLOAK_PRODUCTION} \
-    --set coordinator.database.driver=${COORDINATOR_DB_DRIVER} \
-    --set postgres.enabled=${POSTGRES_ENABLED} \
-    --set coordinator.publicUrl="http://wonder-mesh-net"
+if [ "${DB_BACKEND}" = "postgres" ]; then
+    helm install wonder-mesh-net ./charts/wonder-mesh-net \
+        --namespace ${NAMESPACE} \
+        --set coordinator.image.repository=wonder-mesh-net \
+        --set coordinator.image.tag=${TEST_IMAGE_TAG} \
+        --set coordinator.image.pullPolicy=Never \
+        --set headscale.image.pullPolicy=IfNotPresent \
+        --set keycloak.image.pullPolicy=IfNotPresent \
+        --set keycloak.enabled=true \
+        --set keycloak.production=${KEYCLOAK_PRODUCTION} \
+        --set 'keycloak.extraEnv[0].name=KC_DB' \
+        --set 'keycloak.extraEnv[0].value=postgres' \
+        --set 'keycloak.extraEnv[1].name=KC_DB_URL' \
+        --set 'keycloak.extraEnv[1].value=jdbc:postgresql://postgres:5432/wonder' \
+        --set 'keycloak.extraEnv[2].name=KC_DB_USERNAME' \
+        --set 'keycloak.extraEnv[2].value=wonder' \
+        --set 'keycloak.extraEnv[3].name=KC_DB_PASSWORD' \
+        --set 'keycloak.extraEnv[3].value=wonderpass' \
+        --set coordinator.database.driver=${COORDINATOR_DB_DRIVER} \
+        --set coordinator.database.dsn="${COORDINATOR_DB_DSN}" \
+        --set coordinator.publicUrl="http://wonder-mesh-net"
+else
+    helm install wonder-mesh-net ./charts/wonder-mesh-net \
+        --namespace ${NAMESPACE} \
+        --set coordinator.image.repository=wonder-mesh-net \
+        --set coordinator.image.tag=${TEST_IMAGE_TAG} \
+        --set coordinator.image.pullPolicy=Never \
+        --set headscale.image.pullPolicy=IfNotPresent \
+        --set keycloak.image.pullPolicy=IfNotPresent \
+        --set keycloak.enabled=true \
+        --set keycloak.production=${KEYCLOAK_PRODUCTION} \
+        --set coordinator.database.driver=${COORDINATOR_DB_DRIVER} \
+        --set coordinator.publicUrl="http://wonder-mesh-net"
+fi
 
 log_info "Waiting for pods to be ready..."
 kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=wonder-mesh-net -n ${NAMESPACE} --timeout=300s

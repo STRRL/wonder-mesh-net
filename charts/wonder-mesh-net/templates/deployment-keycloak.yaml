@@ -52,22 +52,6 @@ spec:
               value: "/"
             - name: KC_PROXY_HEADERS
               value: "xforwarded"
-            {{- if .Values.postgres.enabled }}
-            - name: KC_DB
-              value: postgres
-            - name: KC_DB_URL
-              value: "jdbc:postgresql://{{ include "wonder-mesh-net.fullname" . }}-postgresql:{{ .Values.postgres.service.port }}/{{ .Values.postgres.auth.database }}"
-            - name: KC_DB_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "wonder-mesh-net.fullname" . }}-postgresql
-                  key: postgres-user
-            - name: KC_DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "wonder-mesh-net.fullname" . }}-postgresql
-                  key: postgres-password
-            {{- end }}
             {{- with .Values.keycloak.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
