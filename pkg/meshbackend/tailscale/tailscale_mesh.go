@@ -144,6 +144,55 @@ func (m *TailscaleMesh) ListNodes(ctx context.Context, realmName string) ([]*mes
 	return nodes, nil
 }
 
+// GetNode retrieves a single node by its ID.
+func (m *TailscaleMesh) GetNode(ctx context.Context, nodeID string) (*meshbackend.Node, error) {
+	var id uint64
+	if _, err := fmt.Sscanf(nodeID, "%d", &id); err != nil {
+		return nil, fmt.Errorf("parse node ID: %w", err)
+	}
+
+	resp, err := m.client.GetNode(ctx, &v1.GetNodeRequest{NodeId: id})
+	if err != nil {
+		return nil, fmt.Errorf("get node: %w", err)
+	}
+
+	hsNode := resp.GetNode()
+	node := &meshbackend.Node{
+		ID:        fmt.Sprintf("%d", hsNode.GetId()),
+		Name:      hsNode.GetName(),
+		Addresses: hsNode.GetIpAddresses(),
+		Online:    hsNode.GetOnline(),
+	}
+
+	if hsNode.GetLastSeen() != nil {
+		t := hsNode.GetLastSeen().AsTime()
+		node.LastSeen = &t
+	}
+
+	// Store the realm (Headscale user) in a custom field
+	// This is needed for verification in DeleteNode
+	if hsNode.GetUser() != nil {
+		node.Realm = hsNode.GetUser().GetName()
+	}
+
+	return node, nil
+}
+
+// DeleteNode removes a node from the mesh network.
+func (m *TailscaleMesh) DeleteNode(ctx context.Context, nodeID string) error {
+	// Convert nodeID from string to uint64
+	var id uint64
+	if _, err := fmt.Sscanf(nodeID, "%d", &id); err != nil {
+		return fmt.Errorf("parse node ID: %w", err)
+	}
+
+	_, err := m.client.DeleteNode(ctx, &v1.DeleteNodeRequest{NodeId: id})
+	if err != nil {
+		return fmt.Errorf("delete node: %w", err)
+	}
+	return nil
+}
+
 // Healthy checks if the Headscale server is reachable.
 func (m *TailscaleMesh) Healthy(ctx context.Context) error {
 	_, err := m.client.ListUsers(ctx, &v1.ListUsersRequest{})

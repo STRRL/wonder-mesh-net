@@ -421,3 +421,84 @@ func (c *AdminController) HandleAdminDeployerJoin(w http.ResponseWriter, r *http
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
 }
+
+// HandleGetNode handles GET /admin/api/v1/wonder-nets/{id}/nodes/{node_id} requests.
+func (c *AdminController) HandleGetNode(w http.ResponseWriter, r *http.Request) {
+	wonderNetID := r.PathValue("id")
+	if wonderNetID == "" {
+		http.Error(w, "wonder net id required", http.StatusBadRequest)
+		return
+	}
+
+	nodeID := r.PathValue("node_id")
+	if nodeID == "" {
+		http.Error(w, "node id required", http.StatusBadRequest)
+		return
+	}
+
+	wonderNet, err := c.wonderNetService.GetWonderNetByID(r.Context(), wonderNetID)
+	if err != nil {
+		slog.Error("get wonder net", "error", err, "id", wonderNetID)
+		http.Error(w, "get wonder net", http.StatusInternalServerError)
+		return
+	}
+	if wonderNet == nil {
+		http.Error(w, "wonder net not found", http.StatusNotFound)
+		return
+	}
+
+	node, err := c.nodesService.GetNode(r.Context(), wonderNet.HeadscaleUser, nodeID)
+	if err != nil {
+		slog.Error("get node", "error", err, "wonder_net_id", wonderNetID, "node_id", nodeID)
+		http.Error(w, "get node", http.StatusInternalServerError)
+		return
+	}
+
+	resp := NodeResponse{
+		ID:      node.ID,
+		Name:    node.Name,
+		IPAddrs: node.IPAddrs,
+		Online:  node.Online,
+	}
+	if node.LastSeen != nil {
+		resp.LastSeen = node.LastSeen.Format("2006-01-02T15:04:05Z")
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// HandleDeleteNode handles DELETE /admin/api/v1/wonder-nets/{id}/nodes/{node_id} requests.
+func (c *AdminController) HandleDeleteNode(w http.ResponseWriter, r *http.Request) {
+	wonderNetID := r.PathValue("id")
+	if wonderNetID == "" {
+		http.Error(w, "wonder net id required", http.StatusBadRequest)
+		return
+	}
+
+	nodeID := r.PathValue("node_id")
+	if nodeID == "" {
+		http.Error(w, "node id required", http.StatusBadRequest)
+		return
+	}
+
+	wonderNet, err := c.wonderNetService.GetWonderNetByID(r.Context(), wonderNetID)
+	if err != nil {
+		slog.Error("get wonder net", "error", err, "id", wonderNetID)
+		http.Error(w, "get wonder net", http.StatusInternalServerError)
+		return
+	}
+	if wonderNet == nil {
+		http.Error(w, "wonder net not found", http.StatusNotFound)
+		return
+	}
+
+	err = c.nodesService.DeleteNode(r.Context(), wonderNet.HeadscaleUser, nodeID)
+	if err != nil {
+		slog.Error("delete node", "error", err, "wonder_net_id", wonderNetID, "node_id", nodeID)
+		http.Error(w, "delete node", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
