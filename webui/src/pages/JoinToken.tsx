@@ -55,9 +55,12 @@ export default function JoinToken() {
             </div>
 
             <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
-              <p style={{ marginBottom: '0.5rem', fontWeight: 500 }}>Usage:</p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <p style={{ fontWeight: 500, margin: 0 }}>Usage:</p>
+                <CopyButton text={`wonder worker join --coordinator-url ${window.location.origin} ${token.token}`} />
+              </div>
               <code style={{ display: 'block', wordBreak: 'break-all' }}>
-                wonder worker join --coordinator-url {window.location.origin} {'<token>'}
+                wonder worker join --coordinator-url {window.location.origin} {token.token}
               </code>
             </div>
           </div>
