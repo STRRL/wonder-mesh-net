@@ -59,6 +59,14 @@ type MeshBackend interface {
 	// ListNodes returns all nodes in a realm.
 	ListNodes(ctx context.Context, realmName string) ([]*Node, error)
 
+	// GetNode retrieves a single node by its ID.
+	// Returns the node if found, or an error if not found or on failure.
+	GetNode(ctx context.Context, nodeID string) (*Node, error)
+
+	// DeleteNode removes a node from the mesh network.
+	// nodeID is the backend-specific node identifier.
+	DeleteNode(ctx context.Context, nodeID string) error
+
 	// Healthy performs a health check on the backend.
 	Healthy(ctx context.Context) error
 }
@@ -94,4 +102,8 @@ type Node struct {
 	// LastSeen is when the node was last seen online.
 	// May be nil if the node has never been seen or the backend doesn't track this.
 	LastSeen *time.Time
+
+	// Realm is the realm/namespace this node belongs to (e.g., Headscale user).
+	// This is populated by GetNode and used for ownership verification.
+	Realm string
 }

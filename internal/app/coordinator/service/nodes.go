@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"time"
@@ -60,4 +61,47 @@ func (s *NodesService) ListNodes(ctx context.Context, wonderNet *repository.Wond
 	}
 
 	return result, nil
+}
+
+// GetNode returns a single node from a wonder net.
+// It verifies that the node belongs to the specified wonder net.
+// headscaleUser is the Headscale user/namespace from the wonder net record.
+func (s *NodesService) GetNode(ctx context.Context, headscaleUser string, nodeID string) (*Node, error) {
+	node, err := s.meshBackend.GetNode(ctx, nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("get node: %w", err)
+	}
+
+	if node.Realm != headscaleUser {
+		return nil, fmt.Errorf("node does not belong to this wonder net")
+	}
+
+	n := &Node{
+		Name:     node.Name,
+		IPAddrs:  node.Addresses,
+		Online:   node.Online,
+		LastSeen: node.LastSeen,
+	}
+
+	if id, err := strconv.ParseUint(node.ID, 10, 64); err == nil {
+		n.ID = id
+	}
+
+	return n, nil
+}
+
+// DeleteNode deletes a node from a wonder net.
+// It verifies that the node belongs to the specified wonder net before deletion.
+// headscaleUser is the Headscale user/namespace from the wonder net record.
+func (s *NodesService) DeleteNode(ctx context.Context, headscaleUser string, nodeID string) error {
+	node, err := s.meshBackend.GetNode(ctx, nodeID)
+	if err != nil {
+		return fmt.Errorf("get node: %w", err)
+	}
+
+	if node.Realm != headscaleUser {
+		return fmt.Errorf("node does not belong to this wonder net")
+	}
+
+	return s.meshBackend.DeleteNode(ctx, nodeID)
 }

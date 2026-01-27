@@ -425,6 +425,8 @@ func (s *Server) Run() error {
 		mux.HandleFunc("POST /coordinator/admin/api/v1/wonder-nets/{id}/join-token", s.requireAdminAuth(adminController.HandleAdminCreateJoinToken))
 		mux.HandleFunc("POST /coordinator/admin/api/v1/wonder-nets/{id}/api-keys", s.requireAdminAuth(adminController.HandleAdminCreateAPIKey))
 		mux.HandleFunc("POST /coordinator/admin/api/v1/wonder-nets/{id}/deployer/join", s.requireAdminAuth(adminController.HandleAdminDeployerJoin))
+		mux.HandleFunc("GET /coordinator/admin/api/v1/wonder-nets/{id}/nodes/{node_id}", s.requireAdminAuth(adminController.HandleGetNode))
+		mux.HandleFunc("DELETE /coordinator/admin/api/v1/wonder-nets/{id}/nodes/{node_id}", s.requireAdminAuth(adminController.HandleDeleteNode))
 		slog.Info("admin API routes registered")
 	}
 
