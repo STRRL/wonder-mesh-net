@@ -29,14 +29,17 @@ COPY --from=frontend /app/webui/dist/ ./internal/app/coordinator/webui/static/
 RUN CGO_ENABLED=1 go build -ldflags "-s -w -X github.com/strrl/wonder-mesh-net/cmd/wonder/commands.version=${VERSION} -X github.com/strrl/wonder-mesh-net/cmd/wonder/commands.gitSHA=${GIT_SHA}" -o /wonder ./cmd/wonder
 
 # Stage 3: Runtime
-FROM alpine:3.20
+FROM debian:bookworm
 
 LABEL org.opencontainers.image.source="https://github.com/STRRL/wonder-mesh-net" \
       org.opencontainers.image.url="https://github.com/STRRL/wonder-mesh-net" \
       org.opencontainers.image.title="wonder-mesh-net" \
       org.opencontainers.image.description="PaaS bootstrapper turning homelab/edge machines into BYO compute"
 
-RUN apk add --no-cache ca-certificates tzdata
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    tzdata \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /wonder /wonder
 

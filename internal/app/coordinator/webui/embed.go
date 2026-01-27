@@ -3,10 +3,8 @@ package webui
 import (
 	"embed"
 	"fmt"
-	"io"
 	"io/fs"
 	"net/http"
-	"path"
 	"strings"
 )
 
@@ -21,70 +19,21 @@ func Handler() (http.Handler, error) {
 	if err != nil {
 		return nil, fmt.Errorf("embed static fs: %w", err)
 	}
+	fileServer := http.FileServer(http.FS(subFS))
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		urlPath := r.URL.Path
-		if urlPath == "" || urlPath == "/" {
-			urlPath = "/index.html"
+		path := r.URL.Path
+		if path == "" || path == "/" {
+			path = "/index.html"
 		}
 
-		cleanPath := strings.TrimPrefix(urlPath, "/")
+		cleanPath := strings.TrimPrefix(path, "/")
 		if _, err := fs.Stat(subFS, cleanPath); err != nil {
-			cleanPath = "index.html"
+			path = "/index.html"
 		}
 
-		f, err := subFS.Open(cleanPath)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		defer f.Close()
-
-		stat, err := f.Stat()
-		if err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-
-		if stat.IsDir() {
-			cleanPath = path.Join(cleanPath, "index.html")
-			f.Close()
-			f, err = subFS.Open(cleanPath)
-			if err != nil {
-				http.NotFound(w, r)
-				return
-			}
-			defer f.Close()
-			stat, _ = f.Stat()
-		}
-
-		w.Header().Set("Content-Type", contentType(cleanPath))
-		if rs, ok := f.(io.ReadSeeker); ok {
-			http.ServeContent(w, r, cleanPath, stat.ModTime(), rs)
-		} else {
-			w.WriteHeader(http.StatusOK)
-			io.Copy(w, f)
-		}
+		req := r.Clone(r.Context())
+		req.URL.Path = path
+		fileServer.ServeHTTP(w, req)
 	}), nil
-}
-
-func contentType(name string) string {
-	switch {
-	case strings.HasSuffix(name, ".html"):
-		return "text/html; charset=utf-8"
-	case strings.HasSuffix(name, ".css"):
-		return "text/css; charset=utf-8"
-	case strings.HasSuffix(name, ".js"):
-		return "application/javascript"
-	case strings.HasSuffix(name, ".json"):
-		return "application/json"
-	case strings.HasSuffix(name, ".svg"):
-		return "image/svg+xml"
-	case strings.HasSuffix(name, ".png"):
-		return "image/png"
-	case strings.HasSuffix(name, ".ico"):
-		return "image/x-icon"
-	default:
-		return "application/octet-stream"
-	}
 }
