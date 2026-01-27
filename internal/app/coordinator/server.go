@@ -443,10 +443,20 @@ func (s *Server) Run() error {
 
 	slog.Info("initializing ACL policy")
 	ctx := context.Background()
-	if err := s.wonderNetService.InitializeACLPolicy(ctx); err != nil {
-		slog.Warn("initialize ACL policy", "error", err)
-	} else {
+	var aclErr error
+	for i := 0; i < 10; i++ {
+		if err := s.wonderNetService.InitializeACLPolicy(ctx); err != nil {
+			aclErr = err
+			slog.Warn("initialize ACL policy, retrying", "error", err, "attempt", i+1)
+			time.Sleep(time.Duration(i+1) * time.Second)
+			continue
+		}
 		slog.Info("ACL policy initialized successfully")
+		aclErr = nil
+		break
+	}
+	if aclErr != nil {
+		slog.Error("initialize ACL policy, giving up after retries", "error", aclErr)
 	}
 
 	httpServer := &http.Server{

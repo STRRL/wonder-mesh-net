@@ -181,6 +181,54 @@
             },
             { "type": "null" }
           ]
+        },
+        "identityProviders": {
+          "type": "array",
+          "description": "Identity providers for social login (GitHub, Google, etc.)",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["alias", "providerId", "config"],
+            "properties": {
+              "alias": {
+                "type": "string",
+                "description": "Unique identifier for this identity provider (e.g., 'github', 'google')"
+              },
+              "providerId": {
+                "type": "string",
+                "description": "The provider type (e.g., 'github', 'google', 'oidc')"
+              },
+              "enabled": {
+                "type": "boolean",
+                "default": true,
+                "description": "Whether this identity provider is enabled"
+              },
+              "trustEmail": {
+                "type": "boolean",
+                "default": false,
+                "description": "Whether to trust email addresses from this provider"
+              },
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["clientId", "clientSecret"],
+                "properties": {
+                  "clientId": {
+                    "type": "string",
+                    "description": "OAuth client ID"
+                  },
+                  "clientSecret": {
+                    "type": "string",
+                    "description": "OAuth client secret"
+                  },
+                  "defaultScope": {
+                    "type": "string",
+                    "description": "Default OAuth scopes to request"
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },

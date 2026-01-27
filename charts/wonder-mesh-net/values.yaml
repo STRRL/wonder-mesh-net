@@ -99,6 +99,26 @@ keycloak:
     #   periodSeconds: 10
     #   timeoutSeconds: 5
 
+  # Identity providers for social login (GitHub, Google, etc.)
+  # These are imported into the Keycloak realm on startup
+  identityProviders: []
+  # Example:
+  # identityProviders:
+  #   - alias: github
+  #     providerId: github
+  #     enabled: true
+  #     trustEmail: true
+  #     config:
+  #       clientId: "your-github-client-id"
+  #       clientSecret: "your-github-client-secret"
+  #   - alias: google
+  #     providerId: google
+  #     enabled: true
+  #     trustEmail: true
+  #     config:
+  #       clientId: "your-google-client-id"
+  #       clientSecret: "your-google-client-secret"
+
 serviceAccount:
   create: true
   annotations: {}

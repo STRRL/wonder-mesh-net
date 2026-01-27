@@ -26,7 +26,7 @@ func isSafeRedirectPath(path string) bool {
 }
 
 const (
-	defaultPostLoginRedirect = "/"
+	defaultPostLoginRedirect = "/ui/"
 )
 
 // OIDCController handles OIDC authentication endpoints.
