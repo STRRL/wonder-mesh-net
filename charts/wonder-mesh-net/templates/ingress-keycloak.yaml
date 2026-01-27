@@ -16,7 +16,7 @@ spec:
   {{- if .Values.keycloak.ingress.className }}
   ingressClassName: {{ .Values.keycloak.ingress.className }}
   {{- end }}
-  {{- if .Values.keycloak.ingress.tls }}
+  {{- if .Values.keycloak.ingress.tls.secretName }}
   tls:
     - hosts:
         - {{ .Values.keycloak.ingress.host | quote }}

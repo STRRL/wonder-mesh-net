@@ -57,7 +57,7 @@ export default function JoinToken() {
             <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
               <p style={{ marginBottom: '0.5rem', fontWeight: 500 }}>Usage:</p>
               <code style={{ display: 'block', wordBreak: 'break-all' }}>
-                wonder worker join --coordinator-url https://wonder-net.strrl.dev {'<token>'}
+                wonder worker join --coordinator-url {window.location.origin} {'<token>'}
               </code>
             </div>
           </div>

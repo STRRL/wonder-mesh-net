@@ -62,7 +62,7 @@ spec:
             {{- if .Values.keycloak.enabled }}
             - name: KEYCLOAK_URL
               {{- if .Values.keycloak.ingress.enabled }}
-              {{- if .Values.keycloak.ingress.tls }}
+              {{- if .Values.keycloak.ingress.tls.secretName }}
               value: "https://{{ .Values.keycloak.ingress.host }}"
               {{- else }}
               value: "http://{{ .Values.keycloak.ingress.host }}"
