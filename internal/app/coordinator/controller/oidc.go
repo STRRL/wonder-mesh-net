@@ -170,7 +170,7 @@ func (c *OIDCController) HandleLogout(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, expiredCookie)
 
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, defaultPostLoginRedirect, http.StatusFound)
 }
 
 func (c *OIDCController) determinePostLoginRedirect(r *http.Request) string {

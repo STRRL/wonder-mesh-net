@@ -164,8 +164,8 @@ func TestOIDCController_HandleLogout(t *testing.T) {
 	}
 
 	location := rec.Header().Get("Location")
-	if location != "/" {
-		t.Errorf("Location = %q, want %q", location, "/")
+	if location != "/ui/" {
+		t.Errorf("Location = %q, want %q", location, "/ui/")
 	}
 
 	cookies := rec.Result().Cookies()
@@ -203,16 +203,16 @@ func TestOIDCController_DeterminePostLoginRedirect(t *testing.T) {
 		query string
 		want  string
 	}{
-		{"no redirect_to", "", "/"},
+		{"no redirect_to", "", "/ui/"},
 		{"valid path", "?redirect_to=/dashboard", "/dashboard"},
 		{"valid nested path", "?redirect_to=/api/v1/nodes", "/api/v1/nodes"},
 		{"valid path with query", "?redirect_to=/dashboard?tab=settings", "/dashboard?tab=settings"},
-		{"absolute URL same host", "?redirect_to=https://coordinator.example.com/settings", "/"},
-		{"absolute URL different host", "?redirect_to=https://evil.com/phish", "/"},
-		{"protocol-relative URL", "?redirect_to=//evil.com/phish", "/"},
-		{"javascript scheme", "?redirect_to=javascript:alert(1)", "/"},
-		{"data scheme", "?redirect_to=data:text/html,<script>alert(1)</script>", "/"},
-		{"empty path", "?redirect_to=", "/"},
+		{"absolute URL same host", "?redirect_to=https://coordinator.example.com/settings", "/ui/"},
+		{"absolute URL different host", "?redirect_to=https://evil.com/phish", "/ui/"},
+		{"protocol-relative URL", "?redirect_to=//evil.com/phish", "/ui/"},
+		{"javascript scheme", "?redirect_to=javascript:alert(1)", "/ui/"},
+		{"data scheme", "?redirect_to=data:text/html,<script>alert(1)</script>", "/ui/"},
+		{"empty path", "?redirect_to=", "/ui/"},
 		{"just slash", "?redirect_to=/", "/"},
 	}
 
