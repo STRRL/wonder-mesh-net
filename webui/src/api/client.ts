@@ -42,7 +42,7 @@ class ApiClient {
   }
 
   async createJoinToken(): Promise<JoinTokenResponse> {
-    return this.fetch('/coordinator/api/v1/join-token', { method: 'POST' })
+    return this.fetch('/coordinator/api/v1/join-token')
   }
 
   async getApiKeys(): Promise<ApiKeyInfo[]> {

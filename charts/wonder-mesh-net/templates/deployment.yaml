@@ -61,11 +61,17 @@ spec:
               value: {{ .Values.headscale.config.unix_socket | quote }}
             {{- if .Values.keycloak.enabled }}
             - name: KEYCLOAK_URL
-              # If Keycloak is enabled in chart, point to the internal service.
-              # Note: For OIDC browser flow to work, this internal URL must be reachable by browser too (e.g. tunneling/VPN),
-              # OR the user must manually set coordinator.oidc.url to a public URL and keycloak.service.type/Ingress accordingly.
-              # Here we default to the service DNS for backend communication.
+              {{- if .Values.keycloak.ingress.enabled }}
+              {{- if .Values.keycloak.ingress.tls.secretName }}
+              value: "https://{{ .Values.keycloak.ingress.host }}"
+              {{- else }}
+              value: "http://{{ .Values.keycloak.ingress.host }}"
+              {{- end }}
+              {{- else }}
+              # Keycloak ingress not enabled, using internal service URL.
+              # Note: For OIDC browser flow to work, enable keycloak.ingress or use port-forwarding/VPN.
               value: "http://{{ include "wonder-mesh-net.fullname" . }}-keycloak:{{ .Values.keycloak.service.port }}"
+              {{- end }}
             - name: KEYCLOAK_REALM
               value: {{ .Values.coordinator.oidc.realm | quote }}
             - name: KEYCLOAK_CLIENT_ID

@@ -50,6 +50,24 @@ data:
             }
           ]
         }
+      ],
+      "identityProviders": [
+        {{- range $index, $idp := .Values.keycloak.identityProviders }}
+        {{- if $index }},{{ end }}
+        {
+          "alias": {{ $idp.alias | quote }},
+          "providerId": {{ $idp.providerId | quote }},
+          "enabled": {{ $idp.enabled | default true }},
+          "trustEmail": {{ $idp.trustEmail | default false }},
+          "config": {
+            "clientId": {{ $idp.config.clientId | quote }},
+            "clientSecret": {{ $idp.config.clientSecret | quote }}
+            {{- if $idp.config.defaultScope }},
+            "defaultScope": {{ $idp.config.defaultScope | quote }}
+            {{- end }}
+          }
+        }
+        {{- end }}
       ]
     }
 {{- end }}
