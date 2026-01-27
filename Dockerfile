@@ -10,12 +10,15 @@ COPY webui/ ./
 RUN npm run build
 
 # Stage 2: Build Go binary
-FROM golang:1.25-alpine AS builder
+FROM golang:1.25-bookworm AS builder
 
 ARG VERSION=dev
 ARG GIT_SHA=unknown
 
-RUN apk add --no-cache gcc musl-dev
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
