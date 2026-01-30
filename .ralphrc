@@ -1,0 +1,25 @@
+# Ralph Configuration for wonder-mesh-net
+
+# Project Identity
+PROJECT_NAME="wonder-mesh-net"
+PROJECT_TYPE="go"
+
+# Loop Settings
+MAX_CALLS_PER_HOUR=100
+CLAUDE_TIMEOUT_MINUTES=15
+CLAUDE_OUTPUT_FORMAT="json"
+
+# Tool Permissions
+ALLOWED_TOOLS="Write,Read,Edit,Bash(git *),Bash(go *),Bash(make *)"
+
+# Session Management
+SESSION_CONTINUITY=true
+SESSION_EXPIRY_HOURS=24
+
+# Task Sources
+TASK_SOURCES="local"
+
+# Circuit Breaker Thresholds
+CB_NO_PROGRESS_THRESHOLD=3
+CB_SAME_ERROR_THRESHOLD=5
+CB_OUTPUT_DECLINE_THRESHOLD=70

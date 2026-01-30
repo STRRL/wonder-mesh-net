@@ -12,7 +12,8 @@
       "WebFetch(domain:deepwiki.com)",
       "WebFetch(domain:tailscale.com)",
       "Bash(cat:*)",
-      "Bash(git clone:*)"
+      "Bash(git clone:*)",
+      "Skill(ralph-setup)"
     ],
     "deny": [],
     "ask": []

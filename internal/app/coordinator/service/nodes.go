@@ -33,21 +33,33 @@ func NewNodesService(meshBackend meshbackend.MeshBackend) *NodesService {
 }
 
 // ListNodes returns all nodes in the given wonder net.
+// It applies defense-in-depth filtering by verifying each node's Realm matches
+// the expected HeadscaleUser, in case the backend returns unexpected nodes.
 func (s *NodesService) ListNodes(ctx context.Context, wonderNet *repository.WonderNet) ([]*Node, error) {
 	nodes, err := s.meshBackend.ListNodes(ctx, wonderNet.HeadscaleUser)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make([]*Node, len(nodes))
-	for i, node := range nodes {
+	result := make([]*Node, 0, len(nodes))
+	for _, node := range nodes {
+		// Defense-in-depth: verify node belongs to the expected realm
+		if node.Realm != wonderNet.HeadscaleUser {
+			slog.Warn("node realm mismatch in ListNodes",
+				"node_id", node.ID,
+				"node_name", node.Name,
+				"expected_realm", wonderNet.HeadscaleUser,
+				"actual_realm", node.Realm,
+			)
+			continue
+		}
+
 		n := &Node{
 			Name:    node.Name,
 			IPAddrs: node.Addresses,
 			Online:  node.Online,
 		}
 
-		// Parse ID from string to uint64
 		if id, err := strconv.ParseUint(node.ID, 10, 64); err == nil {
 			n.ID = id
 		} else {
@@ -57,7 +69,7 @@ func (s *NodesService) ListNodes(ctx context.Context, wonderNet *repository.Wond
 		if node.LastSeen != nil {
 			n.LastSeen = node.LastSeen
 		}
-		result[i] = n
+		result = append(result, n)
 	}
 
 	return result, nil

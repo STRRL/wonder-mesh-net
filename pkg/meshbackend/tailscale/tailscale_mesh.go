@@ -138,6 +138,9 @@ func (m *TailscaleMesh) ListNodes(ctx context.Context, realmName string) ([]*mes
 			t := n.GetLastSeen().AsTime()
 			node.LastSeen = &t
 		}
+		if n.GetUser() != nil {
+			node.Realm = n.GetUser().GetName()
+		}
 		nodes = append(nodes, node)
 	}
 
