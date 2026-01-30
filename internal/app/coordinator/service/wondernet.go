@@ -93,9 +93,9 @@ func (s *WonderNetService) GetPublicURL() string {
 	return s.publicURL
 }
 
-// InitializeACLPolicy sets up the autogroup self policy for ACL.
+// InitializeACLPolicy sets up an empty ACL policy to enforce isolation by default.
 func (s *WonderNetService) InitializeACLPolicy(ctx context.Context) error {
-	return s.aclManager.SetAutogroupSelfPolicy(ctx)
+	return s.aclManager.SetEmptyPolicy(ctx)
 }
 
 // GetWonderNetByOwner returns the first wonder net owned by a user.

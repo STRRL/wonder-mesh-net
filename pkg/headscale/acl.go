@@ -41,16 +41,10 @@ func GenerateWonderNetIsolationPolicy(usernames []string) *ACLPolicy {
 	}
 }
 
-// GenerateAutogroupSelfPolicy generates a policy using autogroup:self
-func GenerateAutogroupSelfPolicy() *ACLPolicy {
+// GenerateEmptyPolicy generates an empty policy with no rules (deny all by default)
+func GenerateEmptyPolicy() *ACLPolicy {
 	return &ACLPolicy{
-		ACLs: []ACLRule{
-			{
-				Action:       "accept",
-				Sources:      []string{"*"},
-				Destinations: []string{"*:*"},
-			},
-		},
+		ACLs: []ACLRule{},
 	}
 }
 
@@ -91,12 +85,12 @@ func (am *ACLManager) SetWonderNetIsolationPolicy(ctx context.Context) error {
 	return err
 }
 
-// SetAutogroupSelfPolicy sets the autogroup:self policy (simpler but less scalable)
-func (am *ACLManager) SetAutogroupSelfPolicy(ctx context.Context) error {
+// SetEmptyPolicy sets an empty ACL policy (deny all by default, isolation enforced)
+func (am *ACLManager) SetEmptyPolicy(ctx context.Context) error {
 	am.mu.Lock()
 	defer am.mu.Unlock()
 
-	policy := GenerateAutogroupSelfPolicy()
+	policy := GenerateEmptyPolicy()
 	policyJSON, err := json.Marshal(policy)
 	if err != nil {
 		return fmt.Errorf("marshal policy: %w", err)

@@ -92,6 +92,30 @@ services:
     depends_on:
       - nginx
 
+  worker-4:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: worker-4
+    hostname: worker-4
+    privileged: true
+    volumes:
+      - /dev/net/tun:/dev/net/tun
+    depends_on:
+      - nginx
+
+  worker-5:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: worker-5
+    hostname: worker-5
+    privileged: true
+    volumes:
+      - /dev/net/tun:/dev/net/tun
+    depends_on:
+      - nginx
+
   deployer:
     build:
       context: .
