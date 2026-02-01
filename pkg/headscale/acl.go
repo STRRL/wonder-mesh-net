@@ -41,13 +41,6 @@ func GenerateWonderNetIsolationPolicy(usernames []string) *ACLPolicy {
 	}
 }
 
-// GenerateEmptyPolicy generates an empty policy with no rules (deny all by default)
-func GenerateEmptyPolicy() *ACLPolicy {
-	return &ACLPolicy{
-		ACLs: []ACLRule{},
-	}
-}
-
 // ACLManager manages ACL policies in Headscale
 type ACLManager struct {
 	client v1.HeadscaleServiceClient
@@ -76,21 +69,6 @@ func (am *ACLManager) SetWonderNetIsolationPolicy(ctx context.Context) error {
 	}
 
 	policy := GenerateWonderNetIsolationPolicy(usernames)
-	policyJSON, err := json.Marshal(policy)
-	if err != nil {
-		return fmt.Errorf("marshal policy: %w", err)
-	}
-
-	_, err = am.client.SetPolicy(ctx, &v1.SetPolicyRequest{Policy: string(policyJSON)})
-	return err
-}
-
-// SetEmptyPolicy sets an empty ACL policy (deny all by default, isolation enforced)
-func (am *ACLManager) SetEmptyPolicy(ctx context.Context) error {
-	am.mu.Lock()
-	defer am.mu.Unlock()
-
-	policy := GenerateEmptyPolicy()
 	policyJSON, err := json.Marshal(policy)
 	if err != nil {
 		return fmt.Errorf("marshal policy: %w", err)
