@@ -78,31 +78,3 @@ func (m *WonderNetManager) CreateAuthKeyByName(ctx context.Context, username str
 
 	return m.CreateAuthKey(ctx, headscaleUser.GetId(), ttl, reusable)
 }
-
-// GetWonderNetNodes gets all nodes for a wonder net
-func (m *WonderNetManager) GetWonderNetNodes(ctx context.Context, username string) ([]*v1.Node, error) {
-	resp, err := m.headscaleClient.ListNodes(ctx, &v1.ListNodesRequest{User: username})
-	if err != nil {
-		return nil, fmt.Errorf("list nodes: %w", err)
-	}
-
-	return resp.GetNodes(), nil
-}
-
-// GetNode gets a node by ID from Headscale
-func (m *WonderNetManager) GetNode(ctx context.Context, nodeID uint64) (*v1.Node, error) {
-	resp, err := m.headscaleClient.GetNode(ctx, &v1.GetNodeRequest{NodeId: nodeID})
-	if err != nil {
-		return nil, fmt.Errorf("get node: %w", err)
-	}
-	return resp.GetNode(), nil
-}
-
-// DeleteNode deletes a node from Headscale by node ID
-func (m *WonderNetManager) DeleteNode(ctx context.Context, nodeID uint64) error {
-	_, err := m.headscaleClient.DeleteNode(ctx, &v1.DeleteNodeRequest{NodeId: nodeID})
-	if err != nil {
-		return fmt.Errorf("delete node: %w", err)
-	}
-	return nil
-}

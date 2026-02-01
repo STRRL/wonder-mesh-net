@@ -41,19 +41,6 @@ func GenerateWonderNetIsolationPolicy(usernames []string) *ACLPolicy {
 	}
 }
 
-// GenerateAutogroupSelfPolicy generates a policy using autogroup:self
-func GenerateAutogroupSelfPolicy() *ACLPolicy {
-	return &ACLPolicy{
-		ACLs: []ACLRule{
-			{
-				Action:       "accept",
-				Sources:      []string{"*"},
-				Destinations: []string{"*:*"},
-			},
-		},
-	}
-}
-
 // ACLManager manages ACL policies in Headscale
 type ACLManager struct {
 	client v1.HeadscaleServiceClient
@@ -82,21 +69,6 @@ func (am *ACLManager) SetWonderNetIsolationPolicy(ctx context.Context) error {
 	}
 
 	policy := GenerateWonderNetIsolationPolicy(usernames)
-	policyJSON, err := json.Marshal(policy)
-	if err != nil {
-		return fmt.Errorf("marshal policy: %w", err)
-	}
-
-	_, err = am.client.SetPolicy(ctx, &v1.SetPolicyRequest{Policy: string(policyJSON)})
-	return err
-}
-
-// SetAutogroupSelfPolicy sets the autogroup:self policy (simpler but less scalable)
-func (am *ACLManager) SetAutogroupSelfPolicy(ctx context.Context) error {
-	am.mu.Lock()
-	defer am.mu.Unlock()
-
-	policy := GenerateAutogroupSelfPolicy()
 	policyJSON, err := json.Marshal(policy)
 	if err != nil {
 		return fmt.Errorf("marshal policy: %w", err)

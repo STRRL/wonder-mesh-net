@@ -40,6 +40,21 @@
           "temporary": false
         }
       ]
+    },
+    {
+      "username": "testuser2",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "testuser2@example.com",
+      "firstName": "Test",
+      "lastName": "User2",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "testpass2",
+          "temporary": false
+        }
+      ]
     }
   ]
 }
