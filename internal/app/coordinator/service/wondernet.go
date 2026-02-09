@@ -23,6 +23,7 @@ type WonderNetService struct {
 	wonderNetManager    *headscale.WonderNetManager
 	aclManager          *headscale.ACLManager
 	publicURL           string
+	privilegedNetworks  []string
 }
 
 // NewWonderNetService creates a new WonderNetService.
@@ -31,12 +32,14 @@ func NewWonderNetService(
 	wonderNetManager *headscale.WonderNetManager,
 	aclManager *headscale.ACLManager,
 	publicURL string,
+	privilegedNetworks []string,
 ) *WonderNetService {
 	return &WonderNetService{
 		wonderNetRepository: wonderNetRepository,
 		wonderNetManager:    wonderNetManager,
 		aclManager:          aclManager,
 		publicURL:           publicURL,
+		privilegedNetworks:  privilegedNetworks,
 	}
 }
 
@@ -93,8 +96,13 @@ func (s *WonderNetService) GetPublicURL() string {
 	return s.publicURL
 }
 
-// InitializeACLPolicy rebuilds the ACL policy from all existing WonderNets to enforce isolation.
+// InitializeACLPolicy rebuilds the full ACL policy from all existing Headscale users.
+// When a privileged network is configured, a hub-spoke policy is used;
+// otherwise, pure isolation policy is applied.
 func (s *WonderNetService) InitializeACLPolicy(ctx context.Context) error {
+	if len(s.privilegedNetworks) > 0 {
+		return s.aclManager.SetHubSpokePolicy(ctx, s.privilegedNetworks)
+	}
 	return s.aclManager.SetWonderNetIsolationPolicy(ctx)
 }
 

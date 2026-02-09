@@ -3,6 +3,7 @@ package commands
 import (
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -44,6 +45,7 @@ func NewCoordinatorCmd() *cobra.Command {
 	_ = viper.BindEnv("coordinator.keycloak_client_secret", "KEYCLOAK_CLIENT_SECRET")
 	_ = viper.BindEnv("coordinator.enable_admin_api", "ENABLE_ADMIN_API")
 	_ = viper.BindEnv("coordinator.admin_api_auth_token", "ADMIN_API_AUTH_TOKEN")
+	_ = viper.BindEnv("coordinator.privileged_networks", "PRIVILEGED_NETWORKS")
 
 	return cmd
 }
@@ -65,6 +67,15 @@ func runCoordinator(cmd *cobra.Command, args []string) {
 	cfg.KeycloakClientSecret = viper.GetString("coordinator.keycloak_client_secret")
 	cfg.EnableAdminAPI = viper.GetBool("coordinator.enable_admin_api")
 	cfg.AdminAPIAuthToken = viper.GetString("coordinator.admin_api_auth_token")
+
+	if networks := viper.GetString("coordinator.privileged_networks"); networks != "" {
+		for _, n := range strings.Split(networks, ",") {
+			n = strings.TrimSpace(n)
+			if n != "" {
+				cfg.PrivilegedNetworks = append(cfg.PrivilegedNetworks, n)
+			}
+		}
+	}
 
 	if cfg.HeadscaleURL == "" {
 		cfg.HeadscaleURL = coordinator.DefaultHeadscaleURL
@@ -99,6 +110,10 @@ func runCoordinator(cmd *cobra.Command, args []string) {
 			os.Exit(1)
 		}
 		slog.Info("admin API enabled")
+	}
+
+	if len(cfg.PrivilegedNetworks) > 0 {
+		slog.Info("privileged networks configured", "networks", cfg.PrivilegedNetworks)
 	}
 
 	server, err := coordinator.BootstrapNewServer(&cfg)

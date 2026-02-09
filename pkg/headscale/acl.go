@@ -41,6 +41,38 @@ func GenerateWonderNetIsolationPolicy(usernames []string) *ACLPolicy {
 	}
 }
 
+// GenerateHubSpokePolicy generates an ACL policy where privileged namespaces
+// can access all nodes, and all nodes can reply to them, while normal namespaces
+// are isolated from each other.
+func GenerateHubSpokePolicy(privilegedUsers []string, normalUsers []string) *ACLPolicy {
+	rules := make([]ACLRule, 0, 2*len(privilegedUsers)+len(normalUsers))
+
+	for _, user := range privilegedUsers {
+		rules = append(rules,
+			ACLRule{
+				Action:       "accept",
+				Sources:      []string{user + "@"},
+				Destinations: []string{"*:*"},
+			},
+			ACLRule{
+				Action:       "accept",
+				Sources:      []string{"*"},
+				Destinations: []string{user + "@:*"},
+			},
+		)
+	}
+
+	for _, username := range normalUsers {
+		rules = append(rules, ACLRule{
+			Action:       "accept",
+			Sources:      []string{username + "@"},
+			Destinations: []string{username + "@:*"},
+		})
+	}
+
+	return &ACLPolicy{ACLs: rules}
+}
+
 // ACLManager manages ACL policies in Headscale
 type ACLManager struct {
 	client v1.HeadscaleServiceClient
@@ -69,6 +101,40 @@ func (am *ACLManager) SetWonderNetIsolationPolicy(ctx context.Context) error {
 	}
 
 	policy := GenerateWonderNetIsolationPolicy(usernames)
+	policyJSON, err := json.Marshal(policy)
+	if err != nil {
+		return fmt.Errorf("marshal policy: %w", err)
+	}
+
+	_, err = am.client.SetPolicy(ctx, &v1.SetPolicyRequest{Policy: string(policyJSON)})
+	return err
+}
+
+// SetHubSpokePolicy sets an ACL policy where privileged namespaces can access
+// all nodes while normal namespaces are isolated from each other.
+func (am *ACLManager) SetHubSpokePolicy(ctx context.Context, privilegedUsers []string) error {
+	am.mu.Lock()
+	defer am.mu.Unlock()
+
+	resp, err := am.client.ListUsers(ctx, &v1.ListUsersRequest{})
+	if err != nil {
+		return fmt.Errorf("list users: %w", err)
+	}
+
+	privilegedSet := make(map[string]struct{}, len(privilegedUsers))
+	for _, u := range privilegedUsers {
+		privilegedSet[u] = struct{}{}
+	}
+
+	var normalUsers []string
+	for _, u := range resp.GetUsers() {
+		name := u.GetName()
+		if _, ok := privilegedSet[name]; !ok {
+			normalUsers = append(normalUsers, name)
+		}
+	}
+
+	policy := GenerateHubSpokePolicy(privilegedUsers, normalUsers)
 	policyJSON, err := json.Marshal(policy)
 	if err != nil {
 		return fmt.Errorf("marshal policy: %w", err)
