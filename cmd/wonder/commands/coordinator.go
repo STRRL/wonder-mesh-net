@@ -25,12 +25,14 @@ func NewCoordinatorCmd() *cobra.Command {
 	cmd.Flags().String("db-driver", "sqlite", "Database driver (sqlite or postgres)")
 	cmd.Flags().String("db-dsn", "", "Database connection string")
 	cmd.Flags().Bool("enable-admin-api", false, "Enable admin API endpoints")
+	cmd.Flags().StringArray("privileged-networks", nil, "Headscale usernames with hub-spoke access to all WonderNets (repeatable)")
 
 	_ = viper.BindPFlag("coordinator.listen", cmd.Flags().Lookup("listen"))
 	_ = viper.BindPFlag("coordinator.public_url", cmd.Flags().Lookup("public-url"))
 	_ = viper.BindPFlag("coordinator.database_driver", cmd.Flags().Lookup("db-driver"))
 	_ = viper.BindPFlag("coordinator.database_dsn", cmd.Flags().Lookup("db-dsn"))
 	_ = viper.BindPFlag("coordinator.enable_admin_api", cmd.Flags().Lookup("enable-admin-api"))
+	_ = viper.BindPFlag("coordinator.privileged_networks", cmd.Flags().Lookup("privileged-networks"))
 
 	_ = viper.BindEnv("coordinator.listen", "LISTEN")
 	_ = viper.BindEnv("coordinator.public_url", "PUBLIC_URL")
@@ -68,14 +70,7 @@ func runCoordinator(cmd *cobra.Command, args []string) {
 	cfg.EnableAdminAPI = viper.GetBool("coordinator.enable_admin_api")
 	cfg.AdminAPIAuthToken = viper.GetString("coordinator.admin_api_auth_token")
 
-	if networks := viper.GetString("coordinator.privileged_networks"); networks != "" {
-		for _, n := range strings.Split(networks, ",") {
-			n = strings.TrimSpace(n)
-			if n != "" {
-				cfg.PrivilegedNetworks = append(cfg.PrivilegedNetworks, n)
-			}
-		}
-	}
+	cfg.PrivilegedNetworks = parseStringSlice(viper.Get("coordinator.privileged_networks"))
 
 	if cfg.HeadscaleURL == "" {
 		cfg.HeadscaleURL = coordinator.DefaultHeadscaleURL
@@ -124,5 +119,25 @@ func runCoordinator(cmd *cobra.Command, args []string) {
 
 	if err := server.Run(); err != nil {
 		slog.Error("shutdown error", "error", err)
+	}
+}
+
+// parseStringSlice converts a viper value to []string.
+// Handles []string from cobra StringArray flags and comma-separated string from env vars.
+func parseStringSlice(val any) []string {
+	switch v := val.(type) {
+	case []string:
+		return v
+	case string:
+		var result []string
+		for _, n := range strings.Split(v, ",") {
+			n = strings.TrimSpace(n)
+			if n != "" {
+				result = append(result, n)
+			}
+		}
+		return result
+	default:
+		return nil
 	}
 }

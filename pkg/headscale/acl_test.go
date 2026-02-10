@@ -18,41 +18,37 @@ func TestGenerateWonderNetIsolationPolicy(t *testing.T) {
 func TestGenerateHubSpokePolicy(t *testing.T) {
 	policy := GenerateHubSpokePolicy([]string{"zeabur"}, []string{"uuid1", "uuid2"})
 
-	// 2 rules for privileged (outbound + inbound) + 2 rules for normal users
-	if len(policy.ACLs) != 4 {
-		t.Fatalf("expected 4 rules, got %d", len(policy.ACLs))
+	// 1 rule for privileged (outbound only) + 2 rules for normal users
+	if len(policy.ACLs) != 3 {
+		t.Fatalf("expected 3 rules, got %d", len(policy.ACLs))
 	}
 
 	assertRule(t, policy.ACLs[0], "accept", []string{"zeabur@"}, []string{"*:*"})
-	assertRule(t, policy.ACLs[1], "accept", []string{"*"}, []string{"zeabur@:*"})
-	assertRule(t, policy.ACLs[2], "accept", []string{"uuid1@"}, []string{"uuid1@:*"})
-	assertRule(t, policy.ACLs[3], "accept", []string{"uuid2@"}, []string{"uuid2@:*"})
+	assertRule(t, policy.ACLs[1], "accept", []string{"uuid1@"}, []string{"uuid1@:*"})
+	assertRule(t, policy.ACLs[2], "accept", []string{"uuid2@"}, []string{"uuid2@:*"})
 }
 
 func TestGenerateHubSpokePolicy_MultiplePrivileged(t *testing.T) {
 	policy := GenerateHubSpokePolicy([]string{"zeabur", "admin"}, []string{"uuid1"})
 
-	// 2 rules per privileged user (2*2=4) + 1 normal user
-	if len(policy.ACLs) != 5 {
-		t.Fatalf("expected 5 rules, got %d", len(policy.ACLs))
+	// 1 rule per privileged user (2) + 1 normal user
+	if len(policy.ACLs) != 3 {
+		t.Fatalf("expected 3 rules, got %d", len(policy.ACLs))
 	}
 
 	assertRule(t, policy.ACLs[0], "accept", []string{"zeabur@"}, []string{"*:*"})
-	assertRule(t, policy.ACLs[1], "accept", []string{"*"}, []string{"zeabur@:*"})
-	assertRule(t, policy.ACLs[2], "accept", []string{"admin@"}, []string{"*:*"})
-	assertRule(t, policy.ACLs[3], "accept", []string{"*"}, []string{"admin@:*"})
-	assertRule(t, policy.ACLs[4], "accept", []string{"uuid1@"}, []string{"uuid1@:*"})
+	assertRule(t, policy.ACLs[1], "accept", []string{"admin@"}, []string{"*:*"})
+	assertRule(t, policy.ACLs[2], "accept", []string{"uuid1@"}, []string{"uuid1@:*"})
 }
 
 func TestGenerateHubSpokePolicy_NoNormalUsers(t *testing.T) {
 	policy := GenerateHubSpokePolicy([]string{"zeabur"}, nil)
 
-	if len(policy.ACLs) != 2 {
-		t.Fatalf("expected 2 rules, got %d", len(policy.ACLs))
+	if len(policy.ACLs) != 1 {
+		t.Fatalf("expected 1 rule, got %d", len(policy.ACLs))
 	}
 
 	assertRule(t, policy.ACLs[0], "accept", []string{"zeabur@"}, []string{"*:*"})
-	assertRule(t, policy.ACLs[1], "accept", []string{"*"}, []string{"zeabur@:*"})
 }
 
 func assertRule(t *testing.T, rule ACLRule, action string, src, dst []string) {

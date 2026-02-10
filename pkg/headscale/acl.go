@@ -42,24 +42,19 @@ func GenerateWonderNetIsolationPolicy(usernames []string) *ACLPolicy {
 }
 
 // GenerateHubSpokePolicy generates an ACL policy where privileged namespaces
-// can access all nodes, and all nodes can reply to them, while normal namespaces
-// are isolated from each other.
+// can initiate connections to all nodes, while normal namespaces are isolated
+// from each other. Tailscale ACLs are directional and control connection
+// initiation only; reply traffic flows back over established connections
+// without needing a separate rule.
 func GenerateHubSpokePolicy(privilegedUsers []string, normalUsers []string) *ACLPolicy {
-	rules := make([]ACLRule, 0, 2*len(privilegedUsers)+len(normalUsers))
+	rules := make([]ACLRule, 0, len(privilegedUsers)+len(normalUsers))
 
 	for _, user := range privilegedUsers {
-		rules = append(rules,
-			ACLRule{
-				Action:       "accept",
-				Sources:      []string{user + "@"},
-				Destinations: []string{"*:*"},
-			},
-			ACLRule{
-				Action:       "accept",
-				Sources:      []string{"*"},
-				Destinations: []string{user + "@:*"},
-			},
-		)
+		rules = append(rules, ACLRule{
+			Action:       "accept",
+			Sources:      []string{user + "@"},
+			Destinations: []string{"*:*"},
+		})
 	}
 
 	for _, username := range normalUsers {
