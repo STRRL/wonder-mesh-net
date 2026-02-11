@@ -3,6 +3,7 @@ package commands
 import (
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -24,12 +25,14 @@ func NewCoordinatorCmd() *cobra.Command {
 	cmd.Flags().String("db-driver", "sqlite", "Database driver (sqlite or postgres)")
 	cmd.Flags().String("db-dsn", "", "Database connection string")
 	cmd.Flags().Bool("enable-admin-api", false, "Enable admin API endpoints")
+	cmd.Flags().StringArray("privileged-networks", nil, "Headscale usernames with hub-spoke access to all WonderNets (repeatable)")
 
 	_ = viper.BindPFlag("coordinator.listen", cmd.Flags().Lookup("listen"))
 	_ = viper.BindPFlag("coordinator.public_url", cmd.Flags().Lookup("public-url"))
 	_ = viper.BindPFlag("coordinator.database_driver", cmd.Flags().Lookup("db-driver"))
 	_ = viper.BindPFlag("coordinator.database_dsn", cmd.Flags().Lookup("db-dsn"))
 	_ = viper.BindPFlag("coordinator.enable_admin_api", cmd.Flags().Lookup("enable-admin-api"))
+	_ = viper.BindPFlag("coordinator.privileged_networks", cmd.Flags().Lookup("privileged-networks"))
 
 	_ = viper.BindEnv("coordinator.listen", "LISTEN")
 	_ = viper.BindEnv("coordinator.public_url", "PUBLIC_URL")
@@ -44,6 +47,7 @@ func NewCoordinatorCmd() *cobra.Command {
 	_ = viper.BindEnv("coordinator.keycloak_client_secret", "KEYCLOAK_CLIENT_SECRET")
 	_ = viper.BindEnv("coordinator.enable_admin_api", "ENABLE_ADMIN_API")
 	_ = viper.BindEnv("coordinator.admin_api_auth_token", "ADMIN_API_AUTH_TOKEN")
+	_ = viper.BindEnv("coordinator.privileged_networks", "PRIVILEGED_NETWORKS")
 
 	return cmd
 }
@@ -65,6 +69,8 @@ func runCoordinator(cmd *cobra.Command, args []string) {
 	cfg.KeycloakClientSecret = viper.GetString("coordinator.keycloak_client_secret")
 	cfg.EnableAdminAPI = viper.GetBool("coordinator.enable_admin_api")
 	cfg.AdminAPIAuthToken = viper.GetString("coordinator.admin_api_auth_token")
+
+	cfg.PrivilegedNetworks = parseStringSlice(viper.Get("coordinator.privileged_networks"))
 
 	if cfg.HeadscaleURL == "" {
 		cfg.HeadscaleURL = coordinator.DefaultHeadscaleURL
@@ -101,6 +107,10 @@ func runCoordinator(cmd *cobra.Command, args []string) {
 		slog.Info("admin API enabled")
 	}
 
+	if len(cfg.PrivilegedNetworks) > 0 {
+		slog.Info("privileged networks configured", "networks", cfg.PrivilegedNetworks)
+	}
+
 	server, err := coordinator.BootstrapNewServer(&cfg)
 	if err != nil {
 		slog.Error("create server", "error", err)
@@ -109,5 +119,25 @@ func runCoordinator(cmd *cobra.Command, args []string) {
 
 	if err := server.Run(); err != nil {
 		slog.Error("shutdown error", "error", err)
+	}
+}
+
+// parseStringSlice converts a viper value to []string.
+// Handles []string from cobra StringArray flags and comma-separated string from env vars.
+func parseStringSlice(val any) []string {
+	switch v := val.(type) {
+	case []string:
+		return v
+	case string:
+		var result []string
+		for _, n := range strings.Split(v, ",") {
+			n = strings.TrimSpace(n)
+			if n != "" {
+				result = append(result, n)
+			}
+		}
+		return result
+	default:
+		return nil
 	}
 }

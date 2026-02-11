@@ -114,7 +114,7 @@ func BootstrapNewServer(config *Config) (*Server, error) {
 	meshBackend := tailscale.NewTailscaleMesh(headscaleClient, config.PublicURL)
 
 	// Create services
-	wonderNetService := service.NewWonderNetService(wonderNetRepository, wonderNetManager, aclManager, config.PublicURL)
+	wonderNetService := service.NewWonderNetService(wonderNetRepository, wonderNetManager, aclManager, config.PublicURL, config.PrivilegedNetworks)
 	workerService := service.NewWorkerService(tokenGenerator, config.JWTSecret, wonderNetRepository, meshBackend)
 	nodesService := service.NewNodesService(meshBackend)
 	apiKeyService := service.NewAPIKeyService(apiKeyRepository, wonderNetRepository)

@@ -33,6 +33,10 @@ type Config struct {
 	// AdminAPIAuthToken is the bearer token for admin API authentication.
 	// Required if EnableAdminAPI is true. Must be at least 32 characters.
 	AdminAPIAuthToken string `mapstructure:"admin_api_auth_token"`
+
+	// PrivilegedNetworks is the list of Headscale usernames that have access to all
+	// WonderNets (hub-spoke ACL model). When empty, pure isolation policy is used.
+	PrivilegedNetworks []string
 }
 
 const (
