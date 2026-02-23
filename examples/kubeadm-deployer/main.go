@@ -14,7 +14,8 @@ import (
 
 var (
 	coordinatorURL string
-	apiKey         string
+	adminToken     string
+	wonderNetID    string
 	verbose        bool
 )
 
@@ -35,18 +36,20 @@ The deployer will:
 5. Join remaining nodes as workers
 
 Prerequisites:
-- Wonder Mesh Net coordinator running with workers joined
-- API key created for the deployer
+- Wonder Mesh Net coordinator running with admin API enabled and workers joined
+- Admin API auth token and wonder net ID
 - Tailscale SOCKS5 proxy running (userspace networking)`,
 		RunE: runDeploy,
 	}
 
 	rootCmd.Flags().StringVar(&coordinatorURL, "coordinator-url", "", "Wonder Mesh Net coordinator URL (required)")
-	rootCmd.Flags().StringVar(&apiKey, "api-key", "", "API key for authentication (required)")
+	rootCmd.Flags().StringVar(&adminToken, "admin-token", "", "Admin API auth token (required)")
+	rootCmd.Flags().StringVar(&wonderNetID, "wonder-net-id", "", "Wonder net ID to deploy into (required)")
 	rootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose logging")
 
 	rootCmd.MarkFlagRequired("coordinator-url")
-	rootCmd.MarkFlagRequired("api-key")
+	rootCmd.MarkFlagRequired("admin-token")
+	rootCmd.MarkFlagRequired("wonder-net-id")
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -75,7 +78,8 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 
 	d, err := deployer.NewDeployer(deployer.Config{
 		CoordinatorURL: coordinatorURL,
-		APIKey:         apiKey,
+		AdminToken:     adminToken,
+		WonderNetID:    wonderNetID,
 	})
 	if err != nil {
 		return fmt.Errorf("create deployer: %w", err)
