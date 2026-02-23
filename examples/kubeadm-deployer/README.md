@@ -9,8 +9,8 @@ The kubeadm-deployer demonstrates the deployer integration pattern using the **A
 1. **Admin** creates a wonder net via Admin API using `ADMIN_API_AUTH_TOKEN`
 2. **Admin** creates join tokens for worker nodes
 3. **Workers** join the mesh network using join tokens
-4. **Admin** creates an API key and deployer credentials for the deployer
-5. **Deployer** joins the mesh and discovers online worker nodes
+4. **Admin** creates deployer mesh credentials via Admin API
+5. **Deployer** joins the mesh and discovers online worker nodes via Admin API
 6. **Deployer** SSHs to each node over the mesh to install containerd and kubeadm
 7. **Deployer** runs `kubeadm init` on the first node (control plane)
 8. **Deployer** installs Flannel CNI
@@ -53,9 +53,8 @@ NO_CLEAN=1 ./run-demo.sh
 3. **Creates wonder net**: Via Admin API using `ADMIN_API_AUTH_TOKEN`
 4. **Creates join token**: Via Admin API for worker authentication
 5. **Workers join mesh**: Each worker runs `wonder worker join`
-6. **Creates API key**: Via Admin API for deployer authentication
-7. **Deployer joins mesh**: Using userspace Tailscale with SOCKS5 proxy (credentials via Admin API)
-8. **Runs kubeadm-deployer**: Bootstraps the Kubernetes cluster
+6. **Deployer joins mesh**: Using userspace Tailscale with SOCKS5 proxy (credentials via Admin API)
+7. **Runs kubeadm-deployer**: Discovers nodes via Admin API, bootstraps the Kubernetes cluster
 
 ## Manual Execution
 
@@ -87,17 +86,11 @@ JOIN_TOKEN=$(docker exec kubeadm-deployer curl -s -X POST \
 # 5. Join workers (see run-demo.sh for full flow)
 # ...
 
-# 6. Create API key via Admin API
-API_KEY=$(docker exec kubeadm-deployer curl -s -X POST \
-    -H "Authorization: Bearer $ADMIN_TOKEN" \
-    -H "Content-Type: application/json" \
-    -d '{"name": "kubeadm-deployer", "expires_in": "24h"}' \
-    "http://nginx/coordinator/admin/api/v1/wonder-nets/$WONDER_NET_ID/api-keys" | jq -r '.key')
-
-# 7. Run deployer
+# 6. Run deployer (uses Admin API directly for node discovery)
 docker exec kubeadm-deployer kubeadm-deployer \
     --coordinator-url="http://nginx/coordinator" \
-    --api-key="$API_KEY" \
+    --admin-token="$ADMIN_TOKEN" \
+    --wonder-net-id="$WONDER_NET_ID" \
     --verbose
 ```
 
@@ -140,8 +133,9 @@ Usage:
   kubeadm-deployer [flags]
 
 Flags:
-      --api-key string           API key for authentication (required)
+      --admin-token string       Admin API auth token (required)
       --coordinator-url string   Wonder Mesh Net coordinator URL (required)
+      --wonder-net-id string     Wonder net ID to deploy into (required)
   -h, --help                     help for kubeadm-deployer
   -v, --verbose                  Enable verbose logging
 ```
@@ -152,26 +146,16 @@ Default values are hardcoded for demo simplicity:
 - SSH user/password: root/worker
 - SOCKS5 proxy: localhost:1080
 
-## SDK Usage Example
+## Admin API Usage
 
-The deployer demonstrates how to use `wondersdk`:
+The deployer uses the Admin API to discover nodes in a wonder net:
 
-```go
-import "github.com/strrl/wonder-mesh-net/pkg/wondersdk"
-
-// Create client
-client := wondersdk.NewClient(coordinatorURL, apiKey)
-
-// Discover online nodes
-nodes, err := client.GetOnlineNodes(ctx, "")
-if err != nil {
-    log.Fatal(err)
-}
-
-for _, node := range nodes {
-    fmt.Printf("Node: %s, IPs: %v\n", node.Name, node.Addresses)
-}
 ```
+GET /coordinator/admin/api/v1/wonder-nets/{id}/nodes
+Authorization: Bearer <admin-token>
+```
+
+This returns all nodes (online and offline) in the specified wonder net. The deployer filters to online nodes and uses their Tailscale IPs for SSH connectivity via SOCKS5 proxy.
 
 ## Troubleshooting
 

@@ -138,21 +138,6 @@ log_info "Testing mesh connectivity..."
 docker exec k8s-node-1 ping -c 2 "$NODE2_IP" >/dev/null && log_info "  k8s-node-1 -> k8s-node-2: OK"
 docker exec k8s-node-1 ping -c 2 "$NODE3_IP" >/dev/null && log_info "  k8s-node-1 -> k8s-node-3: OK"
 
-log_info "Creating API key for deployer via Admin API..."
-API_KEY_RESPONSE=$(docker exec kubeadm-deployer curl -s -X POST \
-    -H "Authorization: Bearer $ADMIN_TOKEN" \
-    -H "Content-Type: application/json" \
-    -d '{"name": "kubeadm-deployer", "expires_in": "24h"}' \
-    "http://nginx/coordinator/admin/api/v1/wonder-nets/$WONDER_NET_ID/api-keys")
-
-API_KEY=$(echo "$API_KEY_RESPONSE" | jq -r '.key // empty')
-if [ -z "$API_KEY" ]; then
-    log_error "Failed to create API key"
-    echo "$API_KEY_RESPONSE"
-    exit 1
-fi
-log_info "API key created"
-
 log_info "Deployer joining mesh via Admin API..."
 DEPLOYER_JOIN_RESPONSE=$(docker exec kubeadm-deployer curl -s -X POST \
     -H "Authorization: Bearer $ADMIN_TOKEN" \
@@ -209,7 +194,8 @@ echo "==========================================="
 log_info "Starting kubeadm-deployer..."
 docker exec kubeadm-deployer kubeadm-deployer \
     --coordinator-url="http://nginx/coordinator" \
-    --api-key="$API_KEY" \
+    --admin-token="$ADMIN_TOKEN" \
+    --wonder-net-id="$WONDER_NET_ID" \
     --verbose
 
 DEPLOY_EXIT=$?

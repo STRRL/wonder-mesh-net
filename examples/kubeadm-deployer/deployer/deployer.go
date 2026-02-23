@@ -2,15 +2,16 @@ package deployer
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"regexp"
 	"strings"
 	"time"
-
-	"github.com/strrl/wonder-mesh-net/pkg/wondersdk"
 )
 
 const (
@@ -21,16 +22,26 @@ const (
 // Config holds the deployer configuration
 type Config struct {
 	CoordinatorURL string
-	APIKey         string
+	AdminToken     string
+	WonderNetID    string
 	SSHUser        string
 	SSHPassword    string
 	SOCKS5Addr     string
 }
 
+// Node represents a node in the mesh
+type Node struct {
+	ID        uint64   `json:"id"`
+	Name      string   `json:"name"`
+	Addresses []string `json:"ip_addresses"`
+	Online    bool     `json:"online"`
+	LastSeen  string   `json:"last_seen,omitempty"`
+}
+
 // Deployer orchestrates Kubernetes cluster bootstrap
 type Deployer struct {
 	config      Config
-	sdkClient   *wondersdk.Client
+	httpClient  *http.Client
 	sshExecutor *SSHExecutor
 
 	// Tailscale IPs - used for SSH connectivity via SOCKS5 proxy
@@ -56,8 +67,6 @@ func NewDeployer(config Config) (*Deployer, error) {
 		config.SOCKS5Addr = "localhost:1080"
 	}
 
-	sdkClient := wondersdk.NewClient(config.CoordinatorURL, config.APIKey)
-
 	sshConfig := SSHConfig{
 		User:       config.SSHUser,
 		Password:   config.SSHPassword,
@@ -72,7 +81,7 @@ func NewDeployer(config Config) (*Deployer, error) {
 
 	return &Deployer{
 		config:      config,
-		sdkClient:   sdkClient,
+		httpClient:  &http.Client{Timeout: 30 * time.Second},
 		sshExecutor: executor,
 	}, nil
 }
@@ -81,7 +90,7 @@ func NewDeployer(config Config) (*Deployer, error) {
 func (d *Deployer) Run(ctx context.Context) error {
 	slog.Info("starting Kubernetes cluster deployment")
 
-	if err := d.sdkClient.Health(ctx); err != nil {
+	if err := d.healthCheck(ctx); err != nil {
 		return fmt.Errorf("coordinator health check: %w", err)
 	}
 	slog.Info("coordinator is healthy")
@@ -185,31 +194,82 @@ func (d *Deployer) Reset(ctx context.Context) error {
 	return nil
 }
 
-func (d *Deployer) discoverNodes(ctx context.Context) ([]wondersdk.Node, error) {
-	slog.Info("discovering nodes from coordinator")
-
-	allNodes, err := d.sdkClient.GetOnlineNodes(ctx, "")
+// healthCheck verifies the coordinator is reachable.
+func (d *Deployer) healthCheck(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, d.config.CoordinatorURL+"/health", nil)
 	if err != nil {
-		return nil, fmt.Errorf("get online nodes: %w", err)
+		return fmt.Errorf("create request: %w", err)
+	}
+
+	resp, err := d.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("send request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("health check: status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// listNodes calls the admin API to list nodes for the configured wonder net.
+func (d *Deployer) listNodes(ctx context.Context) ([]Node, error) {
+	url := fmt.Sprintf("%s/admin/api/v1/wonder-nets/%s/nodes", d.config.CoordinatorURL, d.config.WonderNetID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+d.config.AdminToken)
+
+	resp, err := d.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("send request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("list nodes: status %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		Nodes []Node `json:"nodes"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	return result.Nodes, nil
+}
+
+func (d *Deployer) discoverNodes(ctx context.Context) ([]Node, error) {
+	slog.Info("discovering nodes from coordinator via admin API")
+
+	allNodes, err := d.listNodes(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list nodes: %w", err)
 	}
 
 	hostname, _ := os.Hostname()
 
-	nodes := make([]wondersdk.Node, 0, len(allNodes))
+	var online []Node
 	for _, node := range allNodes {
+		if !node.Online {
+			continue
+		}
 		if node.Name == hostname {
 			slog.Debug("skipping self", "name", node.Name)
 			continue
 		}
-		nodes = append(nodes, node)
+		online = append(online, node)
 	}
 
-	slog.Info("discovered nodes", "count", len(nodes), "excluded_self", hostname)
-	for _, node := range nodes {
+	slog.Info("discovered nodes", "total", len(allNodes), "online", len(online), "excluded_self", hostname)
+	for _, node := range online {
 		slog.Debug("node", "name", node.Name, "addresses", node.Addresses, "online", node.Online)
 	}
 
-	return nodes, nil
+	return online, nil
 }
 
 // selectIPv4 returns the first IPv4 address from the list.
@@ -239,7 +299,7 @@ func selectIPv4(addresses []string) string {
 //
 // Returns an error if fewer than 1 node is provided or if the control plane node
 // has no valid IPv4 address. Worker nodes without IPv4 addresses are silently skipped.
-func (d *Deployer) selectNodes(nodes []wondersdk.Node) error {
+func (d *Deployer) selectNodes(nodes []Node) error {
 	if len(nodes) < 1 {
 		return fmt.Errorf("at least 1 node required, found %d", len(nodes))
 	}
