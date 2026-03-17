@@ -91,6 +91,9 @@ spec:
                   name: {{ include "wonder-mesh-net.fullname" . }}-secret
                   key: keycloak-client-secret
             {{- end }}
+            {{- with .Values.coordinator.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           volumeMounts:
             - name: headscale-socket
               mountPath: /var/run/headscale
