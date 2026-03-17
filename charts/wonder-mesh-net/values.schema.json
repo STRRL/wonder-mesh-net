@@ -279,6 +279,10 @@
             "clientSecret": { "type": "string" }
           }
         },
+        "extraEnv": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/envVar" }
+        },
         "database": {
           "type": "object",
           "additionalProperties": false,
