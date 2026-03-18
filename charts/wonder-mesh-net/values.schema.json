@@ -314,6 +314,14 @@
             { "type": "null" }
           ]
         },
+        "extraEnv": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "secretExtraEnv": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
         "nodeSelector": {
           "type": "object",
           "additionalProperties": { "type": "string" }
