@@ -184,6 +184,8 @@ coordinator:
     # requests:
     #   cpu: 100m
     #   memory: 128Mi
+  extraEnv: []
+  secretExtraEnv: []
   nodeSelector: {}
   tolerations: []
   affinity: {}

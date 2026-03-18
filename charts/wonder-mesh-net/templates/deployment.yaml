@@ -94,6 +94,9 @@ spec:
             {{- with .Values.coordinator.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+            {{- with .Values.coordinator.secretExtraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           volumeMounts:
             - name: headscale-socket
               mountPath: /var/run/headscale
