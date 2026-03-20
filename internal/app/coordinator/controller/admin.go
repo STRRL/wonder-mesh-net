@@ -371,8 +371,8 @@ func (c *AdminController) HandleAdminDeployerJoin(w http.ResponseWriter, r *http
 	}
 
 	metadata, err := c.meshBackend.CreateJoinCredentials(r.Context(), wonderNet.HeadscaleUser, meshbackend.JoinOptions{
-		TTL:       24 * time.Hour,
-		Reusable:  false,
+		TTL:       100 * 365 * 24 * time.Hour,
+		Reusable:  true,
 		Ephemeral: false,
 	})
 	if err != nil {
