@@ -19,12 +19,13 @@ var (
 
 // WonderNetService manages wonder net provisioning and Headscale integration.
 type WonderNetService struct {
-	wonderNetRepository *repository.WonderNetRepository
-	wonderNetManager    *headscale.WonderNetManager
-	aclManager          *headscale.ACLManager
-	publicURL           string
-	privilegedNetworks  []string
-	useTaggedACL        bool
+	wonderNetRepository  *repository.WonderNetRepository
+	wonderNetManager     *headscale.WonderNetManager
+	aclManager           *headscale.ACLManager
+	publicURL            string
+	privilegedNetworks   []string
+	useTaggedACL         bool
+	strictPrivilegedTags bool
 }
 
 // NewWonderNetService creates a new WonderNetService.
@@ -35,14 +36,16 @@ func NewWonderNetService(
 	publicURL string,
 	privilegedNetworks []string,
 	useTaggedACL bool,
+	strictPrivilegedTags bool,
 ) *WonderNetService {
 	return &WonderNetService{
-		wonderNetRepository: wonderNetRepository,
-		wonderNetManager:    wonderNetManager,
-		aclManager:          aclManager,
-		publicURL:           publicURL,
-		privilegedNetworks:  privilegedNetworks,
-		useTaggedACL:        useTaggedACL,
+		wonderNetRepository:  wonderNetRepository,
+		wonderNetManager:     wonderNetManager,
+		aclManager:           aclManager,
+		publicURL:            publicURL,
+		privilegedNetworks:   privilegedNetworks,
+		useTaggedACL:         useTaggedACL,
+		strictPrivilegedTags: strictPrivilegedTags,
 	}
 }
 
@@ -118,7 +121,13 @@ func (s *WonderNetService) InitializeACLPolicy(ctx context.Context) error {
 		// then switch to the constant-size policy. Tagging requires no node
 		// action; tags propagate through the next mapper poll.
 		if err := s.aclManager.EnsurePrivilegedTags(ctx, s.privilegedNetworks); err != nil {
-			return fmt.Errorf("ensure privileged tags: %w", err)
+			if s.strictPrivilegedTags {
+				return fmt.Errorf("ensure privileged tags: %w", err)
+			}
+			// Non-strict (default): successfully tagged nodes are already
+			// applied and the constant-size policy is still correct, so log and
+			// continue rather than blocking coordinator startup on dirty nodes.
+			slog.Warn("ensure privileged tags (continuing in non-strict mode)", "error", err)
 		}
 		return s.aclManager.SetTaggedHubSpokePolicy(ctx, s.privilegedNetworks)
 	}

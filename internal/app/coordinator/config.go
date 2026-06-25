@@ -43,6 +43,13 @@ type Config struct {
 	// WonderNets, where the per-user policy grows O(users) and slows down
 	// Headscale's RegisterReq / peer-map rebuild. Default off until verified.
 	UseTaggedACL bool `mapstructure:"use_tagged_acl"`
+
+	// StrictPrivilegedTags makes coordinator startup fail when any privileged
+	// node cannot be tagged during the tagged-ACL migration. When false
+	// (default), failures are logged and startup continues — successfully
+	// tagged nodes are still applied, and the constant-size policy remains
+	// correct. Only relevant when UseTaggedACL is true.
+	StrictPrivilegedTags bool `mapstructure:"strict_privileged_tags"`
 }
 
 const (

@@ -250,7 +250,12 @@ func (am *ACLManager) EnsurePrivilegedTags(ctx context.Context, privilegedUsers 
 	return nil
 }
 
-// AddWonderNetToPolicy adds a wonder net to the isolation policy
+// AddWonderNetToPolicy adds a wonder net to the isolation policy.
+//
+// Only the legacy per-user policy path calls this. When UseTaggedACL is
+// enabled the constant-size policy covers every WonderNet via autogroup:self,
+// so this is intentionally not invoked. Kept for the non-tagged (default) path
+// and for rollback; do not remove until the legacy path is retired.
 func (am *ACLManager) AddWonderNetToPolicy(ctx context.Context, username string) error {
 	am.mu.Lock()
 	defer am.mu.Unlock()
