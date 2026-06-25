@@ -1,6 +1,7 @@
 package headscale
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -49,6 +50,51 @@ func TestGenerateHubSpokePolicy_NoNormalUsers(t *testing.T) {
 	}
 
 	assertRule(t, policy.ACLs[0], "accept", []string{"zeabur@"}, []string{"*:*"})
+}
+
+func TestGenerateTaggedHubSpokePolicy_ConstantSize(t *testing.T) {
+	for _, n := range []int{0, 1, 10, 2105} {
+		owners := make([]string, n)
+		for i := range owners {
+			owners[i] = fmt.Sprintf("u%d", i)
+		}
+
+		policy := GenerateTaggedHubSpokePolicy(owners)
+
+		want := 2
+		if n == 0 {
+			want = 1
+		}
+		if len(policy.ACLs) != want {
+			t.Errorf("n=%d: expected %d rules, got %d", n, want, len(policy.ACLs))
+		}
+	}
+}
+
+func TestGenerateTaggedHubSpokePolicy_RuleShape(t *testing.T) {
+	policy := GenerateTaggedHubSpokePolicy([]string{"zeabur"})
+
+	owners := policy.TagOwners[PrivilegedTag]
+	if len(owners) != 1 || owners[0] != "zeabur@" {
+		t.Errorf("tag owners: expected [zeabur@], got %v", owners)
+	}
+
+	assertRule(t, policy.ACLs[0], "accept", []string{PrivilegedTag}, []string{"*:*"})
+	// autogroup:self is only valid in destinations; the source must be
+	// autogroup:member, and the engine narrows it to the same user per node.
+	assertRule(t, policy.ACLs[1], "accept", []string{"autogroup:member"}, []string{"autogroup:self:*"})
+}
+
+func TestGenerateTaggedHubSpokePolicy_NoPrivileged(t *testing.T) {
+	policy := GenerateTaggedHubSpokePolicy(nil)
+
+	if len(policy.ACLs) != 1 {
+		t.Fatalf("expected 1 rule, got %d", len(policy.ACLs))
+	}
+	if policy.TagOwners != nil {
+		t.Errorf("expected no tag owners, got %v", policy.TagOwners)
+	}
+	assertRule(t, policy.ACLs[0], "accept", []string{"autogroup:member"}, []string{"autogroup:self:*"})
 }
 
 func assertRule(t *testing.T, rule ACLRule, action string, src, dst []string) {

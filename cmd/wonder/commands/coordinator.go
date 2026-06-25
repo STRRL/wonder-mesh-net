@@ -26,6 +26,7 @@ func NewCoordinatorCmd() *cobra.Command {
 	cmd.Flags().String("db-dsn", "", "Database connection string")
 	cmd.Flags().Bool("enable-admin-api", false, "Enable admin API endpoints")
 	cmd.Flags().StringArray("privileged-networks", nil, "Headscale usernames with hub-spoke access to all WonderNets (repeatable)")
+	cmd.Flags().Bool("use-tagged-acl", false, "Use constant-size tag-based ACL policy (recommended for many WonderNets)")
 
 	_ = viper.BindPFlag("coordinator.listen", cmd.Flags().Lookup("listen"))
 	_ = viper.BindPFlag("coordinator.public_url", cmd.Flags().Lookup("public-url"))
@@ -33,6 +34,7 @@ func NewCoordinatorCmd() *cobra.Command {
 	_ = viper.BindPFlag("coordinator.database_dsn", cmd.Flags().Lookup("db-dsn"))
 	_ = viper.BindPFlag("coordinator.enable_admin_api", cmd.Flags().Lookup("enable-admin-api"))
 	_ = viper.BindPFlag("coordinator.privileged_networks", cmd.Flags().Lookup("privileged-networks"))
+	_ = viper.BindPFlag("coordinator.use_tagged_acl", cmd.Flags().Lookup("use-tagged-acl"))
 
 	_ = viper.BindEnv("coordinator.listen", "LISTEN")
 	_ = viper.BindEnv("coordinator.public_url", "PUBLIC_URL")
@@ -48,6 +50,7 @@ func NewCoordinatorCmd() *cobra.Command {
 	_ = viper.BindEnv("coordinator.enable_admin_api", "ENABLE_ADMIN_API")
 	_ = viper.BindEnv("coordinator.admin_api_auth_token", "ADMIN_API_AUTH_TOKEN")
 	_ = viper.BindEnv("coordinator.privileged_networks", "PRIVILEGED_NETWORKS")
+	_ = viper.BindEnv("coordinator.use_tagged_acl", "USE_TAGGED_ACL")
 
 	return cmd
 }
@@ -71,6 +74,7 @@ func runCoordinator(cmd *cobra.Command, args []string) {
 	cfg.AdminAPIAuthToken = viper.GetString("coordinator.admin_api_auth_token")
 
 	cfg.PrivilegedNetworks = parseStringSlice(viper.Get("coordinator.privileged_networks"))
+	cfg.UseTaggedACL = viper.GetBool("coordinator.use_tagged_acl")
 
 	if cfg.HeadscaleURL == "" {
 		cfg.HeadscaleURL = coordinator.DefaultHeadscaleURL
@@ -108,7 +112,7 @@ func runCoordinator(cmd *cobra.Command, args []string) {
 	}
 
 	if len(cfg.PrivilegedNetworks) > 0 {
-		slog.Info("privileged networks configured", "networks", cfg.PrivilegedNetworks)
+		slog.Info("privileged networks configured", "networks", cfg.PrivilegedNetworks, "use_tagged_acl", cfg.UseTaggedACL)
 	}
 
 	server, err := coordinator.BootstrapNewServer(&cfg)

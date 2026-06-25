@@ -37,6 +37,12 @@ type Config struct {
 	// PrivilegedNetworks is the list of Headscale usernames that have access to all
 	// WonderNets (hub-spoke ACL model). When empty, pure isolation policy is used.
 	PrivilegedNetworks []string
+
+	// UseTaggedACL switches the coordinator to the constant-size tag-based ACL
+	// policy backed by node forced_tags. Required for clusters with many
+	// WonderNets, where the per-user policy grows O(users) and slows down
+	// Headscale's RegisterReq / peer-map rebuild. Default off until verified.
+	UseTaggedACL bool `mapstructure:"use_tagged_acl"`
 }
 
 const (
