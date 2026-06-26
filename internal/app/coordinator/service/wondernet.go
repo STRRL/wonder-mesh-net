@@ -19,11 +19,13 @@ var (
 
 // WonderNetService manages wonder net provisioning and Headscale integration.
 type WonderNetService struct {
-	wonderNetRepository *repository.WonderNetRepository
-	wonderNetManager    *headscale.WonderNetManager
-	aclManager          *headscale.ACLManager
-	publicURL           string
-	privilegedNetworks  []string
+	wonderNetRepository  *repository.WonderNetRepository
+	wonderNetManager     *headscale.WonderNetManager
+	aclManager           *headscale.ACLManager
+	publicURL            string
+	privilegedNetworks   []string
+	useTaggedACL         bool
+	strictPrivilegedTags bool
 }
 
 // NewWonderNetService creates a new WonderNetService.
@@ -33,13 +35,17 @@ func NewWonderNetService(
 	aclManager *headscale.ACLManager,
 	publicURL string,
 	privilegedNetworks []string,
+	useTaggedACL bool,
+	strictPrivilegedTags bool,
 ) *WonderNetService {
 	return &WonderNetService{
-		wonderNetRepository: wonderNetRepository,
-		wonderNetManager:    wonderNetManager,
-		aclManager:          aclManager,
-		publicURL:           publicURL,
-		privilegedNetworks:  privilegedNetworks,
+		wonderNetRepository:  wonderNetRepository,
+		wonderNetManager:     wonderNetManager,
+		aclManager:           aclManager,
+		publicURL:            publicURL,
+		privilegedNetworks:   privilegedNetworks,
+		useTaggedACL:         useTaggedACL,
+		strictPrivilegedTags: strictPrivilegedTags,
 	}
 }
 
@@ -65,8 +71,13 @@ func (s *WonderNetService) ProvisionWonderNet(ctx context.Context, userID, displ
 		return nil, err
 	}
 
-	if err := s.aclManager.AddWonderNetToPolicy(ctx, hsUserObj.GetName()); err != nil {
-		return nil, err
+	// In tagged mode the constant-size policy (autogroup:self) already covers
+	// every WonderNet, so no per-WonderNet policy mutation is needed. This also
+	// avoids the SetPolicy + peer-map rebuild cost on every signup.
+	if !s.useTaggedACL {
+		if err := s.aclManager.AddWonderNetToPolicy(ctx, hsUserObj.GetName()); err != nil {
+			return nil, err
+		}
 	}
 
 	return newWonderNet, nil
@@ -77,6 +88,10 @@ func (s *WonderNetService) EnsureHeadscaleWonderNet(ctx context.Context, headsca
 	hsUserObj, err := s.wonderNetManager.GetOrCreateWonderNet(ctx, headscaleUser)
 	if err != nil {
 		return err
+	}
+
+	if s.useTaggedACL {
+		return nil
 	}
 
 	return s.aclManager.AddWonderNetToPolicy(ctx, hsUserObj.GetName())
@@ -100,6 +115,23 @@ func (s *WonderNetService) GetPublicURL() string {
 // When a privileged network is configured, a hub-spoke policy is used;
 // otherwise, pure isolation policy is applied.
 func (s *WonderNetService) InitializeACLPolicy(ctx context.Context) error {
+	if s.useTaggedACL {
+		// Tag existing privileged nodes first so there is no transient window
+		// in which a privileged node lacks tag:privileged under the new policy,
+		// then switch to the constant-size policy. Tagging requires no node
+		// action; tags propagate through the next mapper poll.
+		if err := s.aclManager.EnsurePrivilegedTags(ctx, s.privilegedNetworks); err != nil {
+			if s.strictPrivilegedTags {
+				return fmt.Errorf("ensure privileged tags: %w", err)
+			}
+			// Non-strict (default): successfully tagged nodes are already
+			// applied and the constant-size policy is still correct, so log and
+			// continue rather than blocking coordinator startup on dirty nodes.
+			slog.Warn("ensure privileged tags (continuing in non-strict mode)", "error", err)
+		}
+		return s.aclManager.SetTaggedHubSpokePolicy(ctx, s.privilegedNetworks)
+	}
+
 	if len(s.privilegedNetworks) > 0 {
 		return s.aclManager.SetHubSpokePolicy(ctx, s.privilegedNetworks)
 	}

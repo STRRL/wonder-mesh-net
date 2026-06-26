@@ -4,10 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"slices"
 	"sync"
 
 	v1 "github.com/juanfont/headscale/gen/go/headscale/v1"
 )
+
+// PrivilegedTag is the Headscale tag carried by nodes that belong to a
+// privileged network. Nodes assigned this tag (via forced_tags) reach every
+// node in the mesh.
+const PrivilegedTag = "tag:privileged"
 
 // ACLPolicy represents a Headscale ACL policy
 type ACLPolicy struct {
@@ -66,6 +73,43 @@ func GenerateHubSpokePolicy(privilegedUsers []string, normalUsers []string) *ACL
 	}
 
 	return &ACLPolicy{ACLs: rules}
+}
+
+// GenerateTaggedHubSpokePolicy returns an ACL policy whose size is independent
+// of the WonderNet count: at most two rules regardless of how many users exist.
+//
+//	tag:privileged    -> *:*               (privileged nodes reach everything)
+//	autogroup:member  -> autogroup:self:*  (every normal node reaches only its own nodes)
+//
+// The self-isolation rule relies on Headscale's autogroup:self semantics:
+// although the source is autogroup:member (all untagged nodes), the policy
+// engine narrows both source and destination to the same user per node, so a
+// member only ever sees its own untagged devices. autogroup:self is only valid
+// in destinations, so the source must be autogroup:member.
+//
+// privilegedTagOwners is the list of Headscale usernames allowed to own
+// tag:privileged. Actual per-node tag assignment happens out of band via
+// SetTags (forced_tags) so existing nodes need not reconnect or re-register.
+func GenerateTaggedHubSpokePolicy(privilegedTagOwners []string) *ACLPolicy {
+	policy := &ACLPolicy{
+		ACLs: []ACLRule{
+			{Action: "accept", Sources: []string{"autogroup:member"}, Destinations: []string{"autogroup:self:*"}},
+		},
+	}
+
+	if len(privilegedTagOwners) > 0 {
+		owners := make([]string, len(privilegedTagOwners))
+		for i, u := range privilegedTagOwners {
+			owners[i] = u + "@"
+		}
+		policy.TagOwners = map[string][]string{PrivilegedTag: owners}
+		// Prepend the privileged rule so it is evaluated first.
+		policy.ACLs = append([]ACLRule{
+			{Action: "accept", Sources: []string{PrivilegedTag}, Destinations: []string{"*:*"}},
+		}, policy.ACLs...)
+	}
+
+	return policy
 }
 
 // ACLManager manages ACL policies in Headscale
@@ -139,7 +183,79 @@ func (am *ACLManager) SetHubSpokePolicy(ctx context.Context, privilegedUsers []s
 	return err
 }
 
-// AddWonderNetToPolicy adds a wonder net to the isolation policy
+// SetTaggedHubSpokePolicy writes the constant-size tag-based policy. It does
+// not touch any node's tags; use EnsurePrivilegedTags for that.
+func (am *ACLManager) SetTaggedHubSpokePolicy(ctx context.Context, privilegedUsers []string) error {
+	am.mu.Lock()
+	defer am.mu.Unlock()
+
+	policy := GenerateTaggedHubSpokePolicy(privilegedUsers)
+	policyJSON, err := json.Marshal(policy)
+	if err != nil {
+		return fmt.Errorf("marshal policy: %w", err)
+	}
+
+	_, err = am.client.SetPolicy(ctx, &v1.SetPolicyRequest{Policy: string(policyJSON)})
+	return err
+}
+
+// EnsurePrivilegedTags assigns PrivilegedTag to every node owned by a user in
+// privilegedUsers via Headscale's forced_tags mechanism. It is idempotent and
+// preserves any existing tags on each node. Tag changes propagate through the
+// next mapper poll, so nodes do not need to reconnect or re-register.
+func (am *ACLManager) EnsurePrivilegedTags(ctx context.Context, privilegedUsers []string) error {
+	am.mu.Lock()
+	defer am.mu.Unlock()
+
+	if len(privilegedUsers) == 0 {
+		return nil
+	}
+
+	privileged := make(map[string]struct{}, len(privilegedUsers))
+	for _, u := range privilegedUsers {
+		privileged[u] = struct{}{}
+	}
+
+	resp, err := am.client.ListNodes(ctx, &v1.ListNodesRequest{})
+	if err != nil {
+		return fmt.Errorf("list nodes: %w", err)
+	}
+
+	var tagged, skipped, failed int
+	for _, node := range resp.GetNodes() {
+		if _, ok := privileged[node.GetUser().GetName()]; !ok {
+			continue
+		}
+		if slices.Contains(node.GetForcedTags(), PrivilegedTag) {
+			skipped++
+			continue
+		}
+
+		newTags := append(slices.Clone(node.GetForcedTags()), PrivilegedTag)
+		if _, err := am.client.SetTags(ctx, &v1.SetTagsRequest{
+			NodeId: node.GetId(),
+			Tags:   newTags,
+		}); err != nil {
+			slog.Warn("set privileged tag", "node_id", node.GetId(), "user", node.GetUser().GetName(), "error", err)
+			failed++
+			continue
+		}
+		tagged++
+	}
+
+	slog.Info("privileged tag sync", "tagged", tagged, "skipped", skipped, "failed", failed)
+	if failed > 0 {
+		return fmt.Errorf("privileged tag sync: %d node(s) failed", failed)
+	}
+	return nil
+}
+
+// AddWonderNetToPolicy adds a wonder net to the isolation policy.
+//
+// Only the legacy per-user policy path calls this. When UseTaggedACL is
+// enabled the constant-size policy covers every WonderNet via autogroup:self,
+// so this is intentionally not invoked. Kept for the non-tagged (default) path
+// and for rollback; do not remove until the legacy path is retired.
 func (am *ACLManager) AddWonderNetToPolicy(ctx context.Context, username string) error {
 	am.mu.Lock()
 	defer am.mu.Unlock()
