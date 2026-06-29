@@ -107,6 +107,18 @@ func GenerateTaggedHubSpokePolicy(privilegedTagOwners []string) *ACLPolicy {
 		policy.ACLs = append([]ACLRule{
 			{Action: "accept", Sources: []string{PrivilegedTag}, Destinations: []string{"*:*"}},
 		}, policy.ACLs...)
+		// The privileged rule above is one-directional. Headscale's
+		// BuildPeerMap (autogroup:self branch) only makes two nodes mutual
+		// peers when each is a source toward the other, so tag:privileged ->
+		// *:* alone lets the privileged node see members but leaves members
+		// without the privileged node in their peer list ("no matching peer",
+		// no handshake). This symmetric rule makes members a source toward
+		// tag:privileged so the peer relationship resolves both ways. It does
+		// not widen member-to-member access (members stay isolated via
+		// autogroup:self).
+		policy.ACLs = append(policy.ACLs, ACLRule{
+			Action: "accept", Sources: []string{"autogroup:member"}, Destinations: []string{PrivilegedTag + ":*"},
+		})
 	}
 
 	return policy
