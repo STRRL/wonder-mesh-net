@@ -87,8 +87,9 @@ func TestGenerateTaggedHubSpokePolicy_RuleShape(t *testing.T) {
 	// autogroup:member, and the engine narrows it to the same user per node.
 	assertRule(t, policy.ACLs[1], "accept", []string{"autogroup:member"}, []string{"autogroup:self:*"})
 	// Symmetric rule so privileged and members resolve as mutual peers in
-	// Headscale's autogroup:self BuildPeerMap path (see acl_buildpeermap_test).
-	assertRule(t, policy.ACLs[2], "accept", []string{"autogroup:member"}, []string{PrivilegedTag + ":*"})
+	// Headscale's autogroup:self BuildPeerMap path (see acl_buildpeermap_test),
+	// scoped to the dead anchor port so no real service is exposed to members.
+	assertRule(t, policy.ACLs[2], "accept", []string{"autogroup:member"}, []string{fmt.Sprintf("%s:%d", PrivilegedTag, privilegedPeerAnchorPort)})
 }
 
 func TestGenerateTaggedHubSpokePolicy_NoPrivileged(t *testing.T) {
