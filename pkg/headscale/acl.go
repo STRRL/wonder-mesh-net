@@ -16,6 +16,18 @@ import (
 // node in the mesh.
 const PrivilegedTag = "tag:privileged"
 
+// privilegedPeerAnchorPort is a single, intentionally-unused destination port
+// used only to anchor the member<->privileged peer relationship. Headscale's
+// autogroup:self BuildPeerMap keys peer visibility off ACL access (CanAccess,
+// which matches on IP only), so members must be a source toward tag:privileged
+// for the privileged node to appear in their peer list. Granting that on one
+// dead port instead of ":*" keeps peering working while preventing members from
+// reaching any real service on privileged nodes — preserving the outbound-only
+// intent of the legacy hub-spoke policy. Privileged nodes MUST NOT bind this
+// port. Real privileged->member traffic flows over the tag:privileged -> *:*
+// rule; members never need to initiate to privileged nodes.
+const privilegedPeerAnchorPort = 47999
+
 // ACLPolicy represents a Headscale ACL policy
 type ACLPolicy struct {
 	ACLs      []ACLRule           `json:"acls,omitempty"`
@@ -107,6 +119,22 @@ func GenerateTaggedHubSpokePolicy(privilegedTagOwners []string) *ACLPolicy {
 		policy.ACLs = append([]ACLRule{
 			{Action: "accept", Sources: []string{PrivilegedTag}, Destinations: []string{"*:*"}},
 		}, policy.ACLs...)
+		// The privileged rule above is one-directional. Headscale's
+		// BuildPeerMap (autogroup:self branch) only makes two nodes mutual
+		// peers when each is a source toward the other, so tag:privileged ->
+		// *:* alone lets the privileged node see members but leaves members
+		// without the privileged node in their peer list ("no matching peer",
+		// no handshake). This rule makes members a source toward tag:privileged
+		// so the peer relationship resolves both ways. It is scoped to a single
+		// dead anchor port (see privilegedPeerAnchorPort) so it restores peering
+		// without granting members access to any real service on privileged
+		// nodes. It does not widen member-to-member access (members stay
+		// isolated via autogroup:self).
+		policy.ACLs = append(policy.ACLs, ACLRule{
+			Action:       "accept",
+			Sources:      []string{"autogroup:member"},
+			Destinations: []string{fmt.Sprintf("%s:%d", PrivilegedTag, privilegedPeerAnchorPort)},
+		})
 	}
 
 	return policy
